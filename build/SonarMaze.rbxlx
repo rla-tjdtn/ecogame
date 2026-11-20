@@ -1,0 +1,5808 @@
+<roblox version="4">
+  <Item class="Lighting" referent="0">
+    <Properties>
+      <string name="Name">Lighting</string>
+      <Color3 name="Ambient">
+        <R>0</R>
+        <G>0</G>
+        <B>0</B>
+      </Color3>
+      <float name="Brightness">0</float>
+      <float name="ClockTime">0</float>
+      <float name="EnvironmentDiffuseScale">0</float>
+      <float name="EnvironmentSpecularScale">0</float>
+      <float name="ExposureCompensation">0</float>
+      <float name="FogEnd">100000</float>
+      <bool name="GlobalShadows">false</bool>
+      <Color3 name="OutdoorAmbient">
+        <R>0</R>
+        <G>0</G>
+        <B>0</B>
+      </Color3>
+      <token name="Technology">4</token>
+    </Properties>
+    <Item class="BloomEffect" referent="1">
+      <Properties>
+        <string name="Name">Bloom</string>
+        <float name="Intensity">0.35</float>
+        <float name="Size">10</float>
+        <float name="Threshold">0.9</float>
+      </Properties>
+    </Item>
+    <Item class="Sky" referent="2">
+      <Properties>
+        <string name="Name">Sky</string>
+        <bool name="CelestialBodiesShown">false</bool>
+        <int name="StarCount">0</int>
+      </Properties>
+    </Item>
+  </Item>
+  <Item class="Players" referent="3">
+    <Properties>
+      <string name="Name">Players</string>
+      <bool name="CharacterAutoLoads">false</bool>
+      <int name="MaxPlayersInternal">4</int>
+    </Properties>
+  </Item>
+  <Item class="ReplicatedStorage" referent="4">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="5">
+      <Properties>
+        <string name="Name">Remotes</string>
+      </Properties>
+      <Item class="RemoteEvent" referent="6">
+        <Properties>
+          <string name="Name">RoundEvent</string>
+        </Properties>
+      </Item>
+      <Item class="RemoteEvent" referent="7">
+        <Properties>
+          <string name="Name">SetMoveMode</string>
+        </Properties>
+      </Item>
+      <Item class="RemoteEvent" referent="8">
+        <Properties>
+          <string name="Name">SonarFire</string>
+        </Properties>
+      </Item>
+      <Item class="RemoteEvent" referent="9">
+        <Properties>
+          <string name="Name">SonarPulse</string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="10">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="11">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[--!strict
+-- 게임 전체 설정값. 숫자는 모두 여기서 조정한다.
+-- (ReplicatedStorage.Shared.Config — 서버와 클라이언트가 같이 읽는다)
+
+local Config = {}
+
+-- ─────────────────────────────── 음파 ───────────────────────────────
+Config.Sonar = {
+	Radius = 35, -- 음파가 퍼지는 최대 거리(스터드, 벽을 돌아가는 경로 길이 기준)
+	Cooldown = 1.5, -- 발사 간격(초) — 서버가 같은 값으로 검증한다
+	ServerTolerance = 0.12, -- 네트워크 지연 허용치(초)
+	WaveSpeed = 40, -- 파동 전진 속도(스터드/초): 35스터드 끝까지 약 0.9초
+	Hold = 2.0, -- 선이 나타난 뒤 완전히 사라질 때까지(초)
+	FadeTime = 0.75, -- Hold 끝부분에서 서서히 사라지는 구간(초)
+	FlashTime = 0.15, -- 파동이 지나가는 순간 살짝 더 밝은 구간(초)
+	BaseLevel = 0.8, -- 플래시 이후 선 밝기(0~1)
+	FarLevel = 0.45, -- 반경 끝에 있는 선의 밝기 배율(가까울수록 1)
+	LineColor = Color3.fromRGB(235, 235, 235),
+	-- 선 굵기: 카메라와의 거리에 비례해 화면상 굵기가 거의 일정하게 보이도록
+	LineMinWidth = 0.035,
+	LineWidthPerStud = 0.0021,
+	LineMaxWidth = 0.12,
+	SegmentLength = 2.5, -- 긴 모서리를 이 길이 이하로 잘라 가까운 쪽부터 그려지게 한다
+	CellSize = 2, -- 파동 전파용 복셀 크기(스터드)
+	AttachDistance = 2.6, -- 선분이 이 거리 안의 빈 복셀을 통해 음파를 받는다
+	PoolSize = 4500, -- 동시에 존재할 수 있는 선 파트 최대 수(재사용)
+	RemoteViewDistance = 110, -- 다른 플레이어 음파를 그리는 최대 거리
+	ExpandBudget = 5000, -- 프레임당 파동 전파 연산량 상한(복셀 확장 수)
+	ThinCylinder = 0.3, -- 이보다 가는 원통은 끝 링 없이 실루엣 두 줄만
+}
+
+-- ─────────────────────────────── 이동 ───────────────────────────────
+Config.Move = {
+	Walk = 10,
+	Run = 18,
+	Crouch = 5,
+	CrouchCameraDrop = 1.6, -- 웅크릴 때 시점이 내려가는 높이
+	BobWalk = 0.045, -- 헤드밥 세기(스터드)
+	BobRun = 0.09,
+	BobCrouch = 0.02,
+}
+
+-- ─────────────────────────── 소리(괴물이 듣는 범위) ───────────────────────────
+Config.Noise = {
+	Crouch = 4,
+	Walk = 10,
+	Run = 25,
+	Sonar = 45,
+	Door = 16,
+	-- 서버가 실제 이동 속도로 발소리 종류를 판정하는 기준(스터드/초)
+	RunSpeedAbove = 13.5,
+	WalkSpeedAbove = 7,
+	MovingAbove = 0.8,
+	StepInterval = 0.3, -- 발소리 소음 이벤트 간격(초)
+	-- 벽 감쇠: 소리와 괴물 사이 벽 하나마다 들리는 거리에 곱한다(1이면 감쇠 없음)
+	WallAttenuation = 0.5,
+	MaxWallsCounted = 3,
+}
+
+-- ─────────────────────────────── 괴물 ───────────────────────────────
+Config.Monster = {
+	WanderSpeed = 6.5,
+	InvestigateSpeed = 10,
+	ChaseSpeed = 15.5, -- 달리기(18)보다 느리고 걷기(10)보다 빠르다
+	SightRange = 15, -- 시야(어둠 속 감각) 거리
+	SightRangeCrouch = 7,
+	SenseRange = 4.5, -- 이 거리 안이면 시야와 상관없이 알아챈다
+	CatchDistance = 3.4,
+	AlertTime = 0.8, -- 소리를 듣고 멈칫하는 시간
+	SearchTime = 9, -- 소리 난 곳 주변을 뒤지는 시간
+	SearchRadius = 14,
+	LoseTime = 4, -- 시야에서 이만큼 사라지면 놓친다
+	RepathChase = 0.5,
+	StartDelay = 4, -- 라운드 시작 후 움직이기까지
+	MinSpawnDistance = 70, -- 플레이어 시작점에서 이만큼 떨어진 곳에 등장
+	AgentRadius = 1.6,
+	AgentHeight = 8,
+}
+
+-- ─────────────────────────────── 라운드 ───────────────────────────────
+Config.Round = {
+	FirstStartDelay = 2,
+	ResultSeconds = 7, -- 클리어/실패 화면 뒤 다음 스테이지까지
+	DeadBodyLinger = 0.6,
+}
+
+-- ─────────────────────────────── 스테이지 ───────────────────────────────
+-- Module 은 ServerScriptService.Server.Stages 안의 레이아웃 모듈 이름
+Config.Stages = {
+	{ Id = 1, Name = "STAGE 1 — 지하 시설", Module = "Stage1", Monsters = 1 },
+	{ Id = 2, Name = "STAGE 2 — 물류 창고", Module = "Stage2", Monsters = 2 },
+	{ Id = 3, Name = "STAGE 3 — 하수도", Module = "Stage3", Monsters = 2 },
+	{ Id = 4, Name = "STAGE 4 — 폐병원", Module = "Stage4", Monsters = 3 },
+	{ Id = 5, Name = "STAGE 5 — 심층 미로", Module = "Stage5", Monsters = 4 },
+}
+
+-- ─────────────────────────────── 사운드 ───────────────────────────────
+-- 기본값은 Roblox 클라이언트에 기본 포함된 rbxasset:// 파일만 쓴다(외부 에셋 ID 없음).
+-- 더 어울리는 소리가 있으면 Id 를 "rbxassetid://숫자" 로 바꾸면 된다. Id = "" 이면 그 소리는 재생하지 않는다.
+Config.Sounds = {
+	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.35, Pitch = 0.85, Range = 40 },
+	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.6, Pitch = 0.95, Range = 70 },
+	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.12, Pitch = 0.75, Range = 18 },
+	Sonar = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.9, Pitch = 0.35, Range = 90 },
+	SonarEcho = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.35, Pitch = 0.28, Range = 90 },
+	Door = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.8, Pitch = 0.55, Range = 60 },
+	MonsterStep = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.9, Pitch = 0.5, Range = 95 },
+	MonsterIdle = { Id = "rbxasset://sounds/oof.ogg", Volume = 0.55, Pitch = 0.32, Range = 70 },
+	MonsterAlert = { Id = "rbxasset://sounds/ouch.ogg", Volume = 0.8, Pitch = 0.4, Range = 90 },
+	MonsterChase = { Id = "rbxasset://sounds/ouch.ogg", Volume = 1.0, Pitch = 0.27, Range = 110 },
+	AmbientHum = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.18, Pitch = 0.22, Range = 0 }, -- 환풍기·배관 진동(루프)
+	AmbientFan = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.5, Pitch = 0.4, Range = 45 }, -- 맵 안 환풍기 위치(루프)
+	AmbientDrip = { Id = "rbxasset://sounds/impact_water.mp3", Volume = 0.25, Pitch = 2.2, Range = 60 },
+	AmbientMetal = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.22, Pitch = 0.35, Range = 160 },
+	AmbientCreak = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.25, Pitch = 0.3, Range = 120 },
+	AmbientWater = { Id = "rbxasset://sounds/action_swim.mp3", Volume = 0.35, Pitch = 0.6, Range = 50 }, -- 하수도 물 흐름(루프)
+}
+
+-- 태그 이름
+Config.Tags = {
+	Renderable = "SonarRenderable", -- 이 태그가 붙은 파트(또는 모델 안 파트)는 음파 윤곽선 대상
+	Dynamic = "SonarDynamic", -- 움직이는 대상(문, 괴물): 음파가 닿는 순간의 모습으로 선을 만든다
+	Door = "SonarDoor",
+	Monster = "Monster",
+	AmbientEmitter = "AmbientEmitter",
+}
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="12">
+        <Properties>
+          <string name="Name">SonarGeometry</string>
+          <string name="Source"><![CDATA[--!strict
+-- 구조물 모양별 윤곽선(모서리) 데이터 생성.
+--   Box      : 상자의 12개 모서리 (속성 SonarEdgeAxis = "X"/"Y"/"Z" 이면 그 축 방향 4개만 — 아치 조각, 이어진 난간 등)
+--   Wedge    : 쐐기의 9개 모서리
+--   Cylinder : 양 끝 원 + (속성 SonarRings 개수만큼) 중간 원 / 보는 위치 기준 실루엣 2줄은 viewEdges 에서
+--   Ball     : 보는 위치 기준 실루엣 원(viewEdges)
+--   None     : 선 없음(속성 SonarShape = "None")
+-- MeshPart / Union 처럼 정확한 모서리를 얻기 어려운 것은 상자 프록시를 쓴다(SonarShape 속성으로 바꿀 수 있다).
+--
+-- 결과는 EdgeList 에 쌓는다: A[i]→B[i] 선분, N1[i]/N2[i] 는 그 모서리에 붙은 두 면의 바깥 법선
+-- (이음매 제거 판정에 쓰며, 원통의 원처럼 판정이 필요 없는 선은 nil).
+
+local Geo = {}
+
+export type EdgeList = {
+	A: { Vector3 },
+	B: { Vector3 },
+	N1: { Vector3 | false },
+	N2: { Vector3 | false },
+	n: number,
+}
+
+function Geo.newList(): EdgeList
+	return { A = {}, B = {}, N1 = {}, N2 = {}, n = 0 }
+end
+
+local function push(out: EdgeList, a: Vector3, b: Vector3, n1: Vector3?, n2: Vector3?)
+	local i = out.n + 1
+	out.n = i
+	out.A[i] = a
+	out.B[i] = b
+	out.N1[i] = n1 or false
+	out.N2[i] = n2 or false
+end
+
+function Geo.shapeOf(part: BasePart): string
+	local forced = part:GetAttribute("SonarShape")
+	if type(forced) == "string" then
+		return forced
+	end
+	if part:IsA("WedgePart") then
+		return "Wedge"
+	end
+	if part:IsA("Part") then
+		local s = (part :: Part).Shape
+		if s == Enum.PartType.Cylinder then
+			return "Cylinder"
+		elseif s == Enum.PartType.Ball then
+			return "Ball"
+		elseif s == Enum.PartType.Wedge then
+			return "Wedge"
+		end
+	end
+	return "Box"
+end
+
+local function ringSegments(r: number): number
+	return math.clamp(math.floor(r * 5) + 6, 8, 24)
+end
+
+-- 상자 모서리. axisOnly: "X"/"Y"/"Z" 이면 그 축과 평행한 모서리만.
+function Geo.boxEdges(cf: CFrame, size: Vector3, out: EdgeList, axisOnly: string?, noNormals: boolean?)
+	local hx, hy, hz = size.X / 2, size.Y / 2, size.Z / 2
+	local X, Y, Z = cf.XVector, cf.YVector, cf.ZVector
+	local p = cf.Position
+	for _, s1 in { -1, 1 } do
+		for _, s2 in { -1, 1 } do
+			-- X 방향 모서리 (y = s1, z = s2)
+			if axisOnly == nil or axisOnly == "X" then
+				local o = p + Y * (s1 * hy) + Z * (s2 * hz)
+				if noNormals then
+					push(out, o - X * hx, o + X * hx)
+				else
+					push(out, o - X * hx, o + X * hx, Y * s1, Z * s2)
+				end
+			end
+			-- Y 방향 모서리 (x = s1, z = s2)
+			if axisOnly == nil or axisOnly == "Y" then
+				local o = p + X * (s1 * hx) + Z * (s2 * hz)
+				if noNormals then
+					push(out, o - Y * hy, o + Y * hy)
+				else
+					push(out, o - Y * hy, o + Y * hy, X * s1, Z * s2)
+				end
+			end
+			-- Z 방향 모서리 (x = s1, y = s2)
+			if axisOnly == nil or axisOnly == "Z" then
+				local o = p + X * (s1 * hx) + Y * (s2 * hy)
+				if noNormals then
+					push(out, o - Z * hz, o + Z * hz)
+				else
+					push(out, o - Z * hz, o + Z * hz, X * s1, Y * s2)
+				end
+			end
+		end
+	end
+end
+
+-- 쐐기: 바닥(-Y) 전체, 뒷면(+Z) 전체 높이, 경사면은 앞(-Z) 아래쪽에서 뒤(+Z) 위쪽으로 올라간다.
+function Geo.wedgeEdges(cf: CFrame, size: Vector3, out: EdgeList, noNormals: boolean?)
+	local hx, hy, hz = size.X / 2, size.Y / 2, size.Z / 2
+	local X, Y, Z = cf.XVector, cf.YVector, cf.ZVector
+	local p = cf.Position
+	local slopeN = (Y * hz - Z * hy).Unit
+	local function v(x: number, y: number, z: number): Vector3
+		return p + X * x + Y * y + Z * z
+	end
+	local function e(a: Vector3, b: Vector3, n1: Vector3, n2: Vector3)
+		if noNormals then
+			push(out, a, b)
+		else
+			push(out, a, b, n1, n2)
+		end
+	end
+	e(v(-hx, -hy, -hz), v(hx, -hy, -hz), -Y, slopeN) -- 앞 아래
+	e(v(-hx, -hy, hz), v(hx, -hy, hz), -Y, Z) -- 뒤 아래
+	e(v(-hx, hy, hz), v(hx, hy, hz), Z, slopeN) -- 꼭대기
+	for _, s in { -1, 1 } do
+		local x = s * hx
+		e(v(x, -hy, hz), v(x, hy, hz), X * s, Z) -- 뒤 세로
+		e(v(x, -hy, -hz), v(x, -hy, hz), X * s, -Y) -- 옆 아래
+		e(v(x, -hy, -hz), v(x, hy, hz), X * s, slopeN) -- 옆 경사
+	end
+end
+
+local function circle(center: Vector3, u: Vector3, w: Vector3, r: number, segs: number, out: EdgeList)
+	local prev = center + u * r
+	for i = 1, segs do
+		local t = (i / segs) * math.pi * 2
+		local cur = center + u * (math.cos(t) * r) + w * (math.sin(t) * r)
+		push(out, prev, cur)
+		prev = cur
+	end
+end
+
+-- 원통(축 = 로컬 X): 양 끝 원과 중간 원
+function Geo.cylinderRings(cf: CFrame, size: Vector3, out: EdgeList, rings: number?)
+	local r = math.min(size.Y, size.Z) / 2
+	local hx = size.X / 2
+	local thin = r < 0.3
+	if thin then
+		return -- 가는 원통(난간, 기둥 살)은 실루엣만
+	end
+	local segs = ringSegments(r)
+	local count = (rings or 0)
+	for i = 0, count + 1 do
+		local x = -hx + (2 * hx) * (i / (count + 1))
+		circle(cf.Position + cf.XVector * x, cf.YVector, cf.ZVector, r, segs, out)
+	end
+end
+
+-- 원통의 실루엣 2줄(보는 위치 기준)
+function Geo.cylinderSilhouette(cf: CFrame, size: Vector3, view: Vector3, out: EdgeList)
+	local r = math.min(size.Y, size.Z) / 2
+	local hx = size.X / 2
+	local lv = cf:PointToObjectSpace(view)
+	local d = math.sqrt(lv.Y * lv.Y + lv.Z * lv.Z)
+	if d <= r * 1.02 then
+		return
+	end
+	local phi0 = math.atan2(lv.Z, lv.Y)
+	local theta = math.acos(r / d)
+	for _, s in { -1, 1 } do
+		local phi = phi0 + s * theta
+		local y, z = math.cos(phi) * r, math.sin(phi) * r
+		push(out, cf:PointToWorldSpace(Vector3.new(-hx, y, z)), cf:PointToWorldSpace(Vector3.new(hx, y, z)))
+	end
+	-- 가는 원통은 끝을 짧은 가로선으로 닫는다(난간 끝, 기둥 살 끝)
+	if r < 0.3 then
+		local a = Vector3.new(0, math.cos(phi0 + theta) * r, math.sin(phi0 + theta) * r)
+		local b = Vector3.new(0, math.cos(phi0 - theta) * r, math.sin(phi0 - theta) * r)
+		for _, x in { -hx, hx } do
+			local o = Vector3.new(x, 0, 0)
+			push(out, cf:PointToWorldSpace(o + a), cf:PointToWorldSpace(o + b))
+		end
+	end
+end
+
+-- 구의 실루엣 원(보는 위치 기준)
+function Geo.ballSilhouette(cf: CFrame, size: Vector3, view: Vector3, out: EdgeList)
+	local r = math.min(size.X, size.Y, size.Z) / 2
+	local c = cf.Position
+	local toC = c - view
+	local D = toC.Magnitude
+	if D <= r * 1.05 then
+		return
+	end
+	local dir = toC / D
+	local cc = c - dir * (r * r / D)
+	local rr = r * math.sqrt(1 - (r * r) / (D * D))
+	local u = dir:Cross(Vector3.yAxis)
+	if u.Magnitude < 0.01 then
+		u = dir:Cross(Vector3.xAxis)
+	end
+	u = u.Unit
+	local w = dir:Cross(u).Unit
+	circle(cc, u, w, rr, ringSegments(r), out)
+end
+
+-- 보는 위치와 상관없는 모서리(정적 데이터로 미리 만들어 둔다)
+function Geo.staticEdges(part: BasePart, out: EdgeList, noNormals: boolean?)
+	local shape = Geo.shapeOf(part)
+	local cf, size = part.CFrame, part.Size
+	if shape == "Box" then
+		local axis = part:GetAttribute("SonarEdgeAxis")
+		Geo.boxEdges(cf, size, out, if type(axis) == "string" then axis else nil, noNormals)
+	elseif shape == "Wedge" then
+		Geo.wedgeEdges(cf, size, out, noNormals)
+	elseif shape == "Cylinder" then
+		local rings = part:GetAttribute("SonarRings")
+		Geo.cylinderRings(cf, size, out, if type(rings) == "number" then rings else nil)
+	end
+end
+
+-- 보는 위치에 따라 달라지는 선(원통·구의 실루엣)
+function Geo.viewEdges(part: BasePart, view: Vector3, out: EdgeList)
+	local shape = Geo.shapeOf(part)
+	if shape == "Cylinder" then
+		Geo.cylinderSilhouette(part.CFrame, part.Size, view, out)
+	elseif shape == "Ball" then
+		Geo.ballSilhouette(part.CFrame, part.Size, view, out)
+	end
+end
+
+function Geo.hasViewEdges(part: BasePart): boolean
+	local shape = Geo.shapeOf(part)
+	return shape == "Cylinder" or shape == "Ball"
+end
+
+-- 점이 파트 안에 있는가(이음매 제거, 복셀화에 사용)
+function Geo.pointInside(part: BasePart, p: Vector3, pad: number?): boolean
+	local lp = part.CFrame:PointToObjectSpace(p)
+	local s = part.Size
+	local m = pad or 0
+	local shape = Geo.shapeOf(part)
+	if shape == "Cylinder" then
+		local r = math.min(s.Y, s.Z) / 2 + m
+		return math.abs(lp.X) <= s.X / 2 + m and (lp.Y * lp.Y + lp.Z * lp.Z) <= r * r
+	elseif shape == "Ball" then
+		local r = math.min(s.X, s.Y, s.Z) / 2 + m
+		return lp.Magnitude <= r
+	end
+	if math.abs(lp.X) > s.X / 2 + m or math.abs(lp.Y) > s.Y / 2 + m or math.abs(lp.Z) > s.Z / 2 + m then
+		return false
+	end
+	if shape == "Wedge" then
+		-- 경사면 아래(뒤)쪽만 속이 차 있다
+		local hy, hz = s.Y / 2, s.Z / 2
+		-- 경사면: (y + hy) * (2hz) <= (z + hz) * (2hy)
+		return (lp.Y + hy) * hz <= (lp.Z + hz) * hy + m * math.max(hy, hz) * 1.5
+	end
+	return true
+end
+
+return Geo
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="13">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="14">
+      <Properties>
+        <string name="Name">Server</string>
+      </Properties>
+      <Item class="ModuleScript" referent="15">
+        <Properties>
+          <string name="Name">Doors</string>
+          <string name="Source"><![CDATA[--!strict
+-- 문: E(ProximityPrompt)로 열고 닫는다. 경첩을 축으로 90도 회전.
+-- 문짝은 움직이므로 SonarDynamic(음파가 닿는 순간의 위치로 윤곽선), 닫혀 있으면 음파·소리를 막는다.
+-- 괴물은 문을 지나갈 수 있도록 경로 계산에서 문짝을 무시(PathfindingModifier.PassThrough)하고, 가까이 가면 연다.
+
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Kit = require(script.Parent.MapKit)
+local SoundBus = require(script.Parent.SoundBus)
+
+local Doors = {}
+
+type Door = {
+	model: Model,
+	panel: Part,
+	prompt: ProximityPrompt,
+	hinge: CFrame,
+	closedRel: CFrame,
+	swing: number,
+	open: boolean,
+	busy: boolean,
+}
+
+local doors: { Door } = {}
+
+local function setPose(d: Door, t: number)
+	local rot = CFrame.Angles(0, d.swing * (math.pi / 2) * t, 0)
+	d.panel.CFrame = d.hinge * rot * d.closedRel
+end
+
+function Doors.toggle(d: Door, source: Player?)
+	if d.busy then
+		return
+	end
+	d.busy = true
+	local opening = not d.open
+	d.open = opening
+	d.model:SetAttribute("Open", opening)
+	d.prompt.ActionText = if opening then "문 닫기" else "문 열기"
+	SoundBus.emit(d.panel.Position, Config.Noise.Door, source, "Door")
+	task.spawn(function()
+		local dur = 0.55
+		local t0 = os.clock()
+		while true do
+			local a = math.clamp((os.clock() - t0) / dur, 0, 1)
+			local e = 1 - (1 - a) * (1 - a)
+			setPose(d, if opening then e else 1 - e)
+			if a >= 1 then
+				break
+			end
+			RunService.Heartbeat:Wait()
+		end
+		d.busy = false
+	end)
+end
+
+-- hingeBottom: 경첩 아래 끝, along: 닫힌 문짝이 경첩에서 뻗는 방향(수평), swing: +1/-1 (여는 방향)
+function Doors.create(parent: Instance, hingeBottom: Vector3, along: Vector3, width: number, height: number, swing: number): Model
+	local model = Instance.new("Model")
+	model.Name = "Door"
+	model:SetAttribute("Open", false)
+	model:SetAttribute(Config.Tags.Dynamic, true)
+	model.Parent = parent
+	local dir = Vector3.new(along.X, 0, along.Z).Unit
+	local hinge = CFrame.fromMatrix(hingeBottom, dir, Vector3.yAxis)
+	local closedRel = CFrame.new(width / 2, height / 2, 0)
+	local panel = Kit.box(model, hinge * closedRel, Vector3.new(width - 0.1, height - 0.05, 0.3), { name = "Panel" })
+	panel:SetAttribute("ClosedCFrame", panel.CFrame)
+	-- 손잡이(가로 막대) + 판 무늬: 문으로 알아볼 수 있게
+	local handleY = height * 0.45
+	for _, side in { -1, 1 } do
+		local a = panel.CFrame * Vector3.new(width * 0.05, handleY - height / 2, side * 0.3)
+		local b = panel.CFrame * Vector3.new(width * 0.38, handleY - height / 2, side * 0.3)
+		local h = Kit.cylinder(model, a, b, 0.08, { collide = false, blocks = false })
+		h.Anchored = false
+		h.Massless = true
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = panel
+		w.Part1 = h
+		w.Parent = h
+	end
+	local inset = Kit.box(model, panel.CFrame * CFrame.new(0, height * 0.18, 0), Vector3.new(width * 0.62, height * 0.3, 0.42), { collide = false, blocks = false })
+	inset.Anchored = false
+	inset.Massless = true
+	local w2 = Instance.new("WeldConstraint")
+	w2.Part0 = panel
+	w2.Part1 = inset
+	w2.Parent = inset
+	local mod = Instance.new("PathfindingModifier")
+	mod.PassThrough = true
+	mod.Parent = panel
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "문 열기"
+	prompt.ObjectText = ""
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 7
+	prompt.RequiresLineOfSight = false
+	prompt.Style = Enum.ProximityPromptStyle.Custom
+	prompt.Parent = panel
+	CollectionService:AddTag(model, Config.Tags.Door)
+	local d: Door = {
+		model = model,
+		panel = panel,
+		prompt = prompt,
+		hinge = hinge,
+		closedRel = closedRel,
+		swing = swing,
+		open = false,
+		busy = false,
+	}
+	table.insert(doors, d)
+	prompt.Triggered:Connect(function(player)
+		if player:GetAttribute("Status") ~= "Alive" then
+			return
+		end
+		Doors.toggle(d, player)
+	end)
+	model.Destroying:Connect(function()
+		local i = table.find(doors, d)
+		if i then
+			table.remove(doors, i)
+		end
+	end)
+	return model
+end
+
+function Doors.all(): { Door }
+	return doors
+end
+
+-- 괴물용: pos 근처 닫힌 문을 연다
+function Doors.openNear(pos: Vector3, radius: number): boolean
+	local any = false
+	for _, d in doors do
+		if not d.open and not d.busy and (d.panel.Position - pos).Magnitude <= radius then
+			Doors.toggle(d, nil)
+			any = true
+		end
+	end
+	return any
+end
+
+function Doors.clear()
+	table.clear(doors)
+end
+
+return Doors
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="16">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[--!strict
+-- 서버 진입점(ServerScriptService.Server.Main)
+--   · 완전한 어둠 조명 강제
+--   · 음파 발사 검증(발사 간격·생존 여부, 위치는 서버가 캐릭터 머리에서 정한다) → 다른 클라이언트에 전달 + 괴물에게 소리
+--   · 이동 모드(걷기/달리기/웅크리기) 요청 처리
+--   · 라운드 루프 시작
+
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local SoundBus = require(script.Parent.SoundBus)
+local Round = require(script.Parent.Round)
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local SonarFire = Remotes:WaitForChild("SonarFire") :: RemoteEvent
+local SonarPulse = Remotes:WaitForChild("SonarPulse") :: RemoteEvent
+local SetMoveMode = Remotes:WaitForChild("SetMoveMode") :: RemoteEvent
+
+-- ── 어둠: 환경광·하늘빛·반사 없음 ──
+Lighting.Brightness = 0
+Lighting.Ambient = Color3.new(0, 0, 0)
+Lighting.OutdoorAmbient = Color3.new(0, 0, 0)
+Lighting.EnvironmentDiffuseScale = 0
+Lighting.EnvironmentSpecularScale = 0
+Lighting.ClockTime = 0
+Lighting.GlobalShadows = false
+Lighting.FogEnd = 100000
+for _, d in Lighting:GetChildren() do
+	if d:IsA("Atmosphere") or d:IsA("Clouds") then
+		d:Destroy()
+	end
+end
+
+-- ── 음파 ──
+local lastPulse: { [Player]: number } = {}
+local accepted: { [Player]: number } = {}
+local Sonar = {}
+Sonar.accepted = accepted
+
+SonarFire.OnServerEvent:Connect(function(player: Player)
+	if player:GetAttribute("Status") ~= "Alive" then
+		return
+	end
+	local char = player.Character
+	local head = char and (char:FindFirstChild("Head") :: BasePart?)
+	if not head then
+		return
+	end
+	local now = os.clock()
+	local last = lastPulse[player] or -math.huge
+	if now - last < Config.Sonar.Cooldown - Config.Sonar.ServerTolerance then
+		return -- 간격 위반: 무시(시각 효과는 그 클라이언트에만 있고 괴물·다른 플레이어에게는 없음)
+	end
+	lastPulse[player] = now
+	accepted[player] = (accepted[player] or 0) + 1
+	local origin = head.Position
+	for _, other in Players:GetPlayers() do
+		if other ~= player then
+			SonarPulse:FireClient(other, player.UserId, origin)
+		end
+	end
+	SoundBus.emit(origin, Config.Noise.Sonar, player, "Sonar")
+end)
+
+-- ── 이동 모드(소리·시점 표시용 속성. 실제 소음 크기는 서버가 속도로 판정) ──
+local MODES = { Walk = Config.Move.Walk, Run = Config.Move.Run, Crouch = Config.Move.Crouch }
+SetMoveMode.OnServerEvent:Connect(function(player: Player, mode: any)
+	if type(mode) ~= "string" or not MODES[mode] then
+		return
+	end
+	local char = player.Character
+	if not char or player:GetAttribute("Status") ~= "Alive" then
+		return
+	end
+	char:SetAttribute("MoveMode", mode)
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.WalkSpeed = MODES[mode]
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+	lastPulse[p] = nil
+	accepted[p] = nil
+end)
+
+-- 테스트 하네스가 읽는 값
+_G.SonarMaze = { Round = Round, Sonar = Sonar, SoundBus = SoundBus }
+
+task.spawn(Round.loop)
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="17">
+        <Properties>
+          <string name="Name">MapKit</string>
+          <string name="Source"><![CDATA[--!strict
+-- 모듈형 구조물 키트: 모든 스테이지가 같은 부품으로 맵을 짓는다.
+-- 모든 구조물은 검은색 무광, 조명 없음. SonarRenderable 태그가 붙어 음파 윤곽선 대상이 된다.
+-- 원통(파이프·난간)은 Shape = Cylinder 그대로라서 음파 렌더러가 원통 모양(끝 원 + 실루엣)으로 그린다.
+
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local Kit = {}
+local TAG = Config.Tags.Renderable
+local BLACK = Color3.new(0, 0, 0)
+
+export type Opts = {
+	collide: boolean?,
+	tag: boolean?, -- false 면 음파 대상 아님(보이지 않는 충돌 경사로 등)
+	invisible: boolean?,
+	shape: string?, -- SonarShape 속성
+	axis: string?, -- SonarEdgeAxis 속성
+	rings: number?,
+	blocks: boolean?, -- SonarBlocks: 음파·소리 전파를 막는가(nil 이면 크기로 판단)
+	name: string?,
+}
+
+local function base(p: BasePart, parent: Instance, opts: Opts?)
+	local o = opts or {}
+	p.Anchored = true
+	p.Color = BLACK
+	p.Material = Enum.Material.SmoothPlastic
+	p.Reflectance = 0
+	p.CastShadow = false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.CanCollide = if o.collide == nil then true else o.collide
+	p.CanTouch = false
+	if o.invisible then
+		p.Transparency = 1
+	end
+	if o.shape then
+		p:SetAttribute("SonarShape", o.shape)
+	end
+	if o.axis then
+		p:SetAttribute("SonarEdgeAxis", o.axis)
+	end
+	if o.rings then
+		p:SetAttribute("SonarRings", o.rings)
+	end
+	if o.blocks ~= nil then
+		p:SetAttribute("SonarBlocks", o.blocks)
+	end
+	if o.name then
+		p.Name = o.name
+	end
+	if o.tag ~= false and not o.invisible then
+		CollectionService:AddTag(p, TAG)
+	end
+	p.Parent = parent
+end
+
+function Kit.box(parent: Instance, cf: CFrame, size: Vector3, opts: Opts?): Part
+	local p = Instance.new("Part")
+	p.Size = size
+	p.CFrame = cf
+	base(p, parent, opts)
+	return p
+end
+
+-- 두 모서리 좌표(최소·최대)로 축 정렬 상자
+function Kit.span(parent: Instance, lo: Vector3, hi: Vector3, opts: Opts?): Part
+	local a = Vector3.new(math.min(lo.X, hi.X), math.min(lo.Y, hi.Y), math.min(lo.Z, hi.Z))
+	local b = Vector3.new(math.max(lo.X, hi.X), math.max(lo.Y, hi.Y), math.max(lo.Z, hi.Z))
+	return Kit.box(parent, CFrame.new((a + b) / 2), b - a, opts)
+end
+
+function Kit.wedge(parent: Instance, cf: CFrame, size: Vector3, opts: Opts?): WedgePart
+	local p = Instance.new("WedgePart")
+	p.Size = size
+	p.CFrame = cf
+	base(p, parent, opts)
+	return p
+end
+
+-- a 에서 b 까지 원통(반지름 r)
+function Kit.cylinder(parent: Instance, a: Vector3, b: Vector3, r: number, opts: Opts?): Part
+	local d = b - a
+	local len = d.Magnitude
+	local dir = d / len
+	local up = if math.abs(dir.Y) > 0.95 then Vector3.xAxis else Vector3.yAxis
+	local p = Instance.new("Part")
+	p.Shape = Enum.PartType.Cylinder
+	p.Size = Vector3.new(len, r * 2, r * 2)
+	p.CFrame = CFrame.fromMatrix((a + b) / 2, dir, dir:Cross(up).Unit:Cross(dir))
+	base(p, parent, opts)
+	return p
+end
+
+function Kit.ball(parent: Instance, c: Vector3, r: number, opts: Opts?): Part
+	local p = Instance.new("Part")
+	p.Shape = Enum.PartType.Ball
+	p.Size = Vector3.new(r * 2, r * 2, r * 2)
+	p.CFrame = CFrame.new(c)
+	base(p, parent, opts)
+	return p
+end
+
+-- 배관: 본체 + 양 끝 플랜지(+ 볼트). flangeEvery 마다 중간 플랜지.
+function Kit.pipe(parent: Instance, a: Vector3, b: Vector3, r: number, flangeAt: { number }?, bolts: boolean?)
+	local m = Instance.new("Model")
+	m.Name = "Pipe"
+	m.Parent = parent
+	Kit.cylinder(m, a, b, r, { blocks = r >= 0.9 })
+	local dir = (b - a).Unit
+	local len = (b - a).Magnitude
+	for _, t in flangeAt or { 0, 1 } do
+		local c = a + dir * (math.clamp(t * len, 0.2, len - 0.2))
+		local fr = r * 1.35 + 0.08
+		local fl = Kit.cylinder(m, c - dir * 0.18, c + dir * 0.18, fr, { blocks = false })
+		if bolts and fr >= 0.6 then
+			-- 볼트: 플랜지 둘레의 작은 원통 6개
+			local up = if math.abs(dir.Y) > 0.95 then Vector3.xAxis else Vector3.yAxis
+			local u = dir:Cross(up).Unit
+			local w = dir:Cross(u).Unit
+			for i = 0, 5 do
+				local ang = i / 6 * math.pi * 2 + 0.3
+				local bp = c + (u * math.cos(ang) + w * math.sin(ang)) * (fr - 0.17)
+				Kit.cylinder(m, bp - dir * 0.3, bp + dir * 0.3, 0.09, { blocks = false, collide = false })
+			end
+		end
+		local _ = fl
+	end
+	return m
+end
+
+-- 난간: a → b (바닥 높이 기준), 기둥 간격 step
+function Kit.railing(parent: Instance, a: Vector3, b: Vector3, height: number?, step: number?)
+	local h = height or 3.3
+	local st = step or 2.6
+	local m = Instance.new("Model")
+	m.Name = "Railing"
+	m.Parent = parent
+	local d = b - a
+	local len = d.Magnitude
+	local n = math.max(1, math.floor(len / st + 0.5))
+	for i = 0, n do
+		local p = a + d * (i / n)
+		Kit.cylinder(m, p, p + Vector3.new(0, h, 0), 0.11, { blocks = false })
+	end
+	local up = Vector3.new(0, h, 0)
+	Kit.cylinder(m, a + up, b + up, 0.13, { blocks = false })
+	Kit.cylinder(m, a + up * 0.5, b + up * 0.5, 0.09, { blocks = false })
+	-- 발끝 막이(얇은 판)
+	local dir = d.Unit
+	local cf = CFrame.lookAt((a + b) / 2 + Vector3.new(0, 0.2, 0), (a + b) / 2 + Vector3.new(0, 0.2, 0) + dir)
+	Kit.box(m, cf, Vector3.new(0.1, 0.4, len), { blocks = false, collide = false })
+	-- 보이지 않는 충돌 벽(떨어지지 않게)
+	Kit.box(m, CFrame.lookAt((a + b) / 2 + up / 2, (a + b) / 2 + up / 2 + dir), Vector3.new(0.3, h, len), { invisible = true, tag = false })
+	return m
+end
+
+-- 계단: bottomCenter(아래 첫 계단 앞 가운데, 바닥 높이) 에서 forward 방향으로 rise 만큼 올라간다.
+-- 보이는 계단 판은 충돌 없음, 걷는 면은 보이지 않는 경사로.
+function Kit.stairs(parent: Instance, bottomCenter: Vector3, forward: Vector3, width: number, rise: number, run: number, steps: number)
+	local m = Instance.new("Model")
+	m.Name = "Stairs"
+	m.Parent = parent
+	local f = Vector3.new(forward.X, 0, forward.Z).Unit
+	local stepH = rise / steps
+	local stepD = run / steps
+	for i = 0, steps - 1 do
+		local top = (i + 1) * stepH
+		local c = bottomCenter + f * (stepD * (i + 0.5)) + Vector3.new(0, top / 2, 0)
+		Kit.box(m, CFrame.lookAt(c, c + f), Vector3.new(width, top, stepD), { collide = false, blocks = i >= steps / 2 })
+	end
+	-- 경사로(쐐기): 경사가 forward 방향으로 올라가도록 뒤(+Z)를 forward 쪽으로
+	local mid = bottomCenter + f * (run / 2) + Vector3.new(0, rise / 2, 0)
+	Kit.wedge(m, CFrame.lookAt(mid, mid - f), Vector3.new(width, rise, run), { invisible = true, tag = false })
+	return m
+end
+
+-- 아치 리브: center = 바닥 가운데, right = 가로 방향, 개구부 폭 2*inner, 스프링 높이 spring
+-- 벽 사이에 걸치는 리브(기둥 + 반원 아치) 와 그 위 막힌 벽(header).
+function Kit.archPortal(parent: Instance, center: Vector3, right: Vector3, span: number, spring: number, ceiling: number, ribDepth: number?)
+	local m = Instance.new("Model")
+	m.Name = "Arch"
+	m.Parent = parent
+	local depth = ribDepth or 1.4
+	local r = right.Unit
+	local fwd = r:Cross(Vector3.yAxis).Unit
+	local half = span / 2
+	local pier = 0.7
+	local inner = half - pier
+	local ring = 0.7
+	local outer = inner + ring
+	local basis = CFrame.fromMatrix(center, r, Vector3.yAxis) -- X = 가로, Z = 진행 방향
+	-- 기둥(좌우)
+	for _, s in { -1, 1 } do
+		local x = s * (half - pier / 2)
+		Kit.box(m, basis * CFrame.new(x, spring / 2, 0), Vector3.new(pier, spring, depth))
+	end
+	-- 반원 아치 조각
+	local segs = 9
+	for i = 0, segs - 1 do
+		local a0 = math.pi * (i / segs)
+		local a1 = math.pi * ((i + 1) / segs)
+		local am = (a0 + a1) / 2
+		local rm = (inner + outer) / 2
+		local chord = 2 * outer * math.sin((a1 - a0) / 2)
+		local px, py = math.cos(am) * rm, spring + math.sin(am) * rm
+		local seg = basis * CFrame.new(px, py, 0) * CFrame.Angles(0, 0, am + math.pi / 2)
+		Kit.box(m, seg, Vector3.new(chord, ring, depth), { axis = "X" })
+	end
+	-- 아치 위 막힌 벽(리브보다 얇게 → 리브가 튀어나와 윤곽이 보인다), 선 없는 채움
+	local wallD = depth * 0.55
+	local topY = spring + outer
+	Kit.box(m, basis * CFrame.new(0, (topY + ceiling) / 2, 0), Vector3.new(span, ceiling - topY, wallD))
+	-- 아치 옆 삼각 부분(스팬드럴)을 세로 띠로 채움
+	local cols = 6
+	for i = 0, cols - 1 do
+		for _, s in { -1, 1 } do
+			local x0 = (i / cols) * outer
+			local x1 = ((i + 1) / cols) * outer
+			-- (띠 바닥은 띠 구간에서 가장 낮은 아치 바깥 높이: 구멍 없이 아치 조각과 겹친다)
+			local xm = math.min(x1, outer)
+			local yArc = spring + math.sqrt(math.max(0, outer * outer - xm * xm)) - 0.05
+			local h = topY - yArc
+			if h > 0.05 then
+				local cx = s * (x0 + x1) / 2
+				Kit.box(m, basis * CFrame.new(cx, yArc + h / 2, 0), Vector3.new(x1 - x0 + 0.02, h, wallD), { shape = "None" })
+			end
+		end
+		local _ = i
+	end
+	for _, s in { -1, 1 } do
+		-- 바깥 원과 기둥 사이
+		local x0, x1 = outer, half
+		if x1 - x0 > 0.05 then
+			Kit.box(m, basis * CFrame.new(s * (x0 + x1) / 2, (spring + topY) / 2, 0), Vector3.new(x1 - x0, topY - spring, wallD), { shape = "None" })
+		end
+	end
+	return m
+end
+
+-- 상자(나무 상자 느낌: 모서리 + 가로 띠)
+function Kit.crate(parent: Instance, bottom: Vector3, size: Vector3, yaw: number?)
+	local cf = CFrame.new(bottom + Vector3.new(0, size.Y / 2, 0)) * CFrame.Angles(0, yaw or 0, 0)
+	local b = Kit.box(parent, cf, size, { name = "Crate" })
+	-- 가운데 띠
+	Kit.box(parent, cf, Vector3.new(size.X + 0.12, 0.3, size.Z + 0.12), { blocks = false })
+	return b
+end
+
+-- 글자(EXIT 표지): 막대 조합. origin = 글자 왼쪽 아래, right/up = 벽면 방향, 글자 높이 h
+function Kit.letter(parent: Instance, ch: string, origin: Vector3, right: Vector3, out: Vector3, h: number)
+	local w = h * 0.62
+	local t = h * 0.14
+	local depth = 0.35
+	local up = Vector3.yAxis
+	local function bar(x0: number, y0: number, x1: number, y1: number)
+		local a = origin + right * x0 + up * y0 + out * (depth / 2)
+		local b = origin + right * x1 + up * y1 + out * (depth / 2)
+		local d = b - a
+		local len = d.Magnitude
+		local cf = CFrame.fromMatrix((a + b) / 2, d.Unit, out:Cross(d.Unit).Unit)
+		Kit.box(parent, cf, Vector3.new(len + t, t, depth), { blocks = false, collide = false })
+	end
+	local ht = t / 2
+	if ch == "E" then
+		bar(ht, ht, ht, h - ht)
+		bar(ht, h - ht, w - ht, h - ht)
+		bar(ht, h / 2, w * 0.8 - ht, h / 2)
+		bar(ht, ht, w - ht, ht)
+	elseif ch == "X" then
+		bar(ht, ht, w - ht, h - ht)
+		bar(ht, h - ht, w - ht, ht)
+	elseif ch == "I" then
+		bar(w / 2, ht, w / 2, h - ht)
+	elseif ch == "T" then
+		bar(ht, h - ht, w - ht, h - ht)
+		bar(w / 2, ht, w / 2, h - ht)
+	end
+	return w
+end
+
+function Kit.word(parent: Instance, text: string, center: Vector3, right: Vector3, out: Vector3, h: number)
+	local gap = h * 0.3
+	local w = h * 0.62
+	local total = #text * w + (#text - 1) * gap
+	local x = -total / 2
+	for i = 1, #text do
+		local ch = text:sub(i, i)
+		Kit.letter(parent, ch, center + right * x - Vector3.new(0, h / 2, 0), right, out, h)
+		x += w + gap
+	end
+end
+
+return Kit
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="18">
+        <Properties>
+          <string name="Name">Monster</string>
+          <string name="Source"><![CDATA[--!strict
+-- 괴물: 모델 생성 + AI(배회 → 소리 감지 → 수색 → 추격 → 추격 해제).
+-- 보이지 않는 검은 몸. 음파가 닿으면 클라이언트가 몸의 윤곽선을 그린다(SonarDynamic).
+-- 이동은 PathfindingService 경로만 따라가므로 벽을 통과하지 않는다. 막히면 경로를 다시 계산하고, 그래도 안 되면 목표를 바꾼다.
+
+local CollectionService = game:GetService("CollectionService")
+local PathfindingService = game:GetService("PathfindingService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Kit = require(script.Parent.MapKit)
+local Doors = require(script.Parent.Doors)
+local SoundBus = require(script.Parent.SoundBus)
+
+local MC = Config.Monster
+
+local Monster = {}
+Monster.__index = Monster
+
+export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase"
+
+-- ── 모델 ──
+local function buildModel(cf: CFrame): Model
+	local model = Instance.new("Model")
+	model.Name = "Monster"
+	model:SetAttribute(Config.Tags.Dynamic, true)
+	model:SetAttribute("State", "Wander")
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1.2)
+	root.Transparency = 1
+	root.CanCollide = true
+	root.CanTouch = false
+	root.CFrame = cf
+	root.Parent = model
+	model.PrimaryPart = root
+
+	local function limb(p: BasePart)
+		p.Anchored = false
+		p.CanCollide = false
+		p.CanQuery = false
+		p.Massless = true
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = root
+		w.Part1 = p
+		w.Parent = p
+	end
+	local function at(v: Vector3): Vector3
+		return cf:PointToWorldSpace(v)
+	end
+	-- 몸통(앞으로 숙인 마른 몸), 머리, 긴 팔, 다리. 루트 가운데 기준 바닥은 y = -5
+	local parts: { BasePart } = {}
+	local function add(p: BasePart)
+		table.insert(parts, p)
+	end
+	add(Kit.box(model, cf * CFrame.new(0, -0.6, 0), Vector3.new(1.5, 0.9, 0.9)))
+	add(Kit.box(model, cf * CFrame.new(0, 1.3, -0.35) * CFrame.Angles(math.rad(-18), 0, 0), Vector3.new(1.7, 3.0, 0.95)))
+	add(Kit.box(model, cf * CFrame.new(0, 2.7, -0.75) * CFrame.Angles(math.rad(-25), 0, 0), Vector3.new(2.3, 0.6, 1.0)))
+	add(Kit.cylinder(model, at(Vector3.new(0, 2.9, -0.8)), at(Vector3.new(0, 3.5, -1.3)), 0.22))
+	add(Kit.ball(model, at(Vector3.new(0, 3.8, -1.55)), 0.62))
+	add(Kit.box(model, cf * CFrame.new(0, 3.55, -2.0) * CFrame.Angles(math.rad(20), 0, 0), Vector3.new(0.7, 0.35, 0.7)))
+	for _, s in { -1, 1 } do
+		local sh = Vector3.new(1.15 * s, 2.75, -0.8)
+		local el = Vector3.new(1.45 * s, 0.4, -1.3)
+		local wr = Vector3.new(1.35 * s, -2.1, -1.5)
+		add(Kit.cylinder(model, at(sh), at(el), 0.2))
+		add(Kit.cylinder(model, at(el), at(wr), 0.16))
+		for k = -1, 1 do
+			local tip = wr + Vector3.new(0.18 * k, -1.1, -0.15 + 0.1 * k)
+			add(Kit.cylinder(model, at(wr), at(tip), 0.06))
+		end
+		local hip = Vector3.new(0.5 * s, -0.9, 0)
+		local knee = Vector3.new(0.62 * s, -3.0, -0.45)
+		local ankle = Vector3.new(0.55 * s, -4.75, 0.15)
+		add(Kit.cylinder(model, at(hip), at(knee), 0.25))
+		add(Kit.cylinder(model, at(knee), at(ankle), 0.19))
+		add(Kit.box(model, cf * CFrame.new(0.55 * s, -4.88, -0.25), Vector3.new(0.5, 0.25, 1.1)))
+	end
+	for _, p in parts do
+		p.Name = "Body"
+		limb(p)
+	end
+	-- 장애물 판정과 무관하게(검은 몸은 SonarRenderable 태그로 음파에만 드러난다)
+	local hum = Instance.new("Humanoid")
+	hum.RigType = Enum.HumanoidRigType.R15
+	hum.HipHeight = 4.0
+	hum.WalkSpeed = MC.WanderSpeed
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	hum.BreakJointsOnDeath = false
+	hum.MaxHealth = math.huge
+	hum.Health = math.huge
+	hum.AutoJumpEnabled = false
+	hum.UseJumpPower = true
+	hum.JumpPower = 0
+	hum.Parent = model
+	for _, st in { Enum.HumanoidStateType.Jumping, Enum.HumanoidStateType.Climbing, Enum.HumanoidStateType.Swimming, Enum.HumanoidStateType.FallingDown, Enum.HumanoidStateType.Ragdoll, Enum.HumanoidStateType.Seated, Enum.HumanoidStateType.Dead } do
+		hum:SetStateEnabled(st, false)
+	end
+	CollectionService:AddTag(model, Config.Tags.Monster)
+	return model
+end
+
+-- ── AI ──
+export type Monster = typeof(setmetatable({} :: {
+	model: Model,
+	root: BasePart,
+	hum: Humanoid,
+	state: State,
+	nodes: { Vector3 },
+	waypoints: { PathWaypoint },
+	wp: number,
+	goal: Vector3?,
+	target: Player?,
+	lastSeen: number,
+	lastKnown: Vector3?,
+	alertUntil: number,
+	searchCenter: Vector3?,
+	searchUntil: number,
+	lastRepath: number,
+	progressPos: Vector3,
+	progressT: number,
+	stuck: number,
+	alive: boolean,
+	path: Path,
+	rayParams: RaycastParams,
+	onCatch: (Player, Monster) -> (),
+	log: { string },
+	geometry: Instance,
+	startAt: number,
+	stateChanged: number,
+}, Monster))
+
+function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> ()): Monster
+	local model = buildModel(CFrame.new(spawnPos + Vector3.new(0, 2.2, 0)))
+	model.Parent = parent
+	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
+	pcall(function()
+		root:SetNetworkOwner(nil)
+	end)
+	local rp = RaycastParams.new()
+	rp.FilterType = Enum.RaycastFilterType.Include
+	rp.FilterDescendantsInstances = { geometry }
+	rp.RespectCanCollide = true
+	local self = setmetatable({
+		model = model,
+		root = root,
+		hum = model:FindFirstChildOfClass("Humanoid") :: Humanoid,
+		state = "Wander" :: State,
+		nodes = nodes,
+		waypoints = {},
+		wp = 1,
+		goal = nil,
+		target = nil,
+		lastSeen = 0,
+		lastKnown = nil,
+		alertUntil = 0,
+		searchCenter = nil,
+		searchUntil = 0,
+		lastRepath = 0,
+		progressPos = root.Position,
+		progressT = os.clock(),
+		stuck = 0,
+		alive = true,
+		path = PathfindingService:CreatePath({
+			AgentRadius = MC.AgentRadius,
+			AgentHeight = MC.AgentHeight,
+			AgentCanJump = false,
+			AgentCanClimb = false,
+			WaypointSpacing = 4,
+		}),
+		rayParams = rp,
+		onCatch = onCatch,
+		log = {},
+		geometry = geometry,
+		startAt = os.clock() + MC.StartDelay,
+		stateChanged = os.clock(),
+	}, Monster)
+	return self
+end
+
+function Monster.note(self: Monster, s: string)
+	table.insert(self.log, string.format("%.1f %s", os.clock(), s))
+	if #self.log > 40 then
+		table.remove(self.log, 1)
+	end
+end
+
+function Monster.setState(self: Monster, s: State)
+	if self.state ~= s then
+		self:note(self.state .. "->" .. s)
+		self.state = s
+		self.stateChanged = os.clock()
+		self.model:SetAttribute("State", s)
+	end
+	local speed = MC.WanderSpeed
+	if s == "Investigate" or s == "Search" then
+		speed = MC.InvestigateSpeed
+	elseif s == "Chase" then
+		speed = MC.ChaseSpeed
+	elseif s == "Alert" then
+		speed = 0
+	end
+	self.hum.WalkSpeed = speed
+end
+
+local function feet(p: Vector3): Vector3
+	return p - Vector3.new(0, 4.5, 0)
+end
+
+-- 경로 계산(양보 있음). 성공하면 true
+function Monster.pathTo(self: Monster, rawGoal: Vector3): boolean
+	self.lastRepath = os.clock()
+	-- 목표를 바닥 높이로 내린다(소리 위치는 머리 높이일 수 있다)
+	local goal = rawGoal
+	local down = workspace:Raycast(rawGoal + Vector3.new(0, 1, 0), Vector3.new(0, -14, 0), self.rayParams)
+	if down then
+		goal = down.Position + Vector3.new(0, 0.5, 0)
+	end
+	local ok = pcall(function()
+		self.path:ComputeAsync(feet(self.root.Position), goal)
+	end)
+	if not self.alive then
+		return false
+	end
+	if ok and self.path.Status == Enum.PathStatus.Success then
+		self.waypoints = self.path:GetWaypoints()
+		self.wp = math.min(2, #self.waypoints)
+		self.goal = goal
+		return true
+	end
+	self.waypoints = {}
+	self.wp = 1
+	return false
+end
+
+-- 경로를 따라 한 걸음. 끝에 도착하면 true
+function Monster.follow(self: Monster): boolean
+	local wps = self.waypoints
+	if #wps == 0 or self.wp > #wps then
+		return true
+	end
+	local wp = wps[self.wp]
+	local pos = self.root.Position
+	local flat = Vector3.new(wp.Position.X - pos.X, 0, wp.Position.Z - pos.Z)
+	if flat.Magnitude < 2.2 and math.abs(feet(pos).Y - wp.Position.Y) < 4 then
+		self.wp += 1
+		if self.wp > #wps then
+			return true
+		end
+		wp = wps[self.wp]
+	end
+	self.hum:MoveTo(wp.Position)
+	-- 앞에 닫힌 문이 있으면 연다
+	Doors.openNear(pos + self.root.CFrame.LookVector * 2, 6)
+	return false
+end
+
+function Monster.randomNode(self: Monster, awayFrom: Vector3?): Vector3
+	local best = self.nodes[math.random(1, #self.nodes)]
+	if awayFrom then
+		for _ = 1, 6 do
+			local n = self.nodes[math.random(1, #self.nodes)]
+			if (n - awayFrom).Magnitude > (best - awayFrom).Magnitude and (n - awayFrom).Magnitude < 90 then
+				best = n
+			end
+		end
+	end
+	return best
+end
+
+-- 머리에서 대상까지 벽에 막히지 않는가
+function Monster.lineOfSight(self: Monster, p: Vector3): boolean
+	local from = self.root.Position + Vector3.new(0, 2.5, 0)
+	local hit = workspace:Raycast(from, p - from, self.rayParams)
+	return hit == nil
+end
+
+local function alivePlayers(): { { player: Player, root: BasePart, char: Model } }
+	local out = {}
+	for _, p in Players:GetPlayers() do
+		if p:GetAttribute("Status") == "Alive" then
+			local char = p.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if char and root then
+				table.insert(out, { player = p, root = root, char = char })
+			end
+		end
+	end
+	return out
+end
+
+function Monster.startChase(self: Monster, p: Player, pos: Vector3)
+	if self.state ~= "Chase" then
+		self:note("chase " .. p.Name)
+	end
+	self.target = p
+	self.lastSeen = os.clock()
+	self.lastKnown = pos
+	self:setState("Chase")
+end
+
+function Monster.investigate(self: Monster, pos: Vector3)
+	self.searchCenter = pos
+	if self.state == "Wander" then
+		self:setState("Alert")
+		self.alertUntil = os.clock() + MC.AlertTime
+		self.goal = pos
+		return
+	end
+	if self.state == "Alert" then
+		self.goal = pos
+		return
+	end
+	-- 수색 중이거나 조사 중이면 새 위치로
+	self:setState("Investigate")
+	if not self.goal or (self.goal - pos).Magnitude > 4 or os.clock() - self.lastRepath > 1.5 then
+		self.goal = pos
+		self.waypoints = {}
+	end
+end
+
+-- 소리를 들었다(SoundBus)
+function Monster.hear(self: Monster, pos: Vector3, radius: number, source: Player?, kind: string)
+	if not self.alive or os.clock() < self.startAt then
+		return
+	end
+	if not SoundBus.canHear(pos, self.root.Position, radius) then
+		return
+	end
+	if self.state == "Chase" then
+		if source and source == self.target then
+			self.lastKnown = pos
+			self.lastSeen = math.max(self.lastSeen, os.clock() - MC.LoseTime * 0.5)
+		end
+		return
+	end
+	self:note("heard " .. kind .. " " .. (if source then source.Name else "-"))
+	self:investigate(pos)
+end
+
+-- 감각: 가까운 플레이어를 발견
+function Monster.sense(self: Monster)
+	local my = self.root.Position
+	local best: { player: Player, root: BasePart, char: Model }? = nil
+	local bestD = math.huge
+	for _, e in alivePlayers() do
+		local p = e.root.Position
+		local d = (p - my).Magnitude
+		local crouch = e.char:GetAttribute("MoveMode") == "Crouch"
+		local range = if crouch then MC.SightRangeCrouch else MC.SightRange
+		if d < bestD and math.abs(p.Y - my.Y) < 9 then
+			if d <= MC.SenseRange or (d <= range and self:lineOfSight(p + Vector3.new(0, 1, 0))) then
+				best = e
+				bestD = d
+			end
+		end
+	end
+	if best then
+		if self.state ~= "Chase" or self.target == best.player then
+			self:startChase(best.player, best.root.Position)
+		elseif bestD < 6 then
+			self:startChase(best.player, best.root.Position)
+		end
+	end
+end
+
+function Monster.checkStuck(self: Monster, moving: boolean)
+	local now = os.clock()
+	if now - self.progressT < 1.5 then
+		return
+	end
+	local moved = (self.root.Position - self.progressPos).Magnitude
+	self.progressPos = self.root.Position
+	self.progressT = now
+	if not moving or self.hum.WalkSpeed <= 0 then
+		self.stuck = 0
+		return
+	end
+	if moved < 1.0 then
+		self.stuck += 1
+		self:note("stuck " .. self.stuck)
+		self.waypoints = {}
+		if self.stuck >= 3 then
+			-- 목표를 포기하고 다른 곳으로
+			self.goal = nil
+			if self.state ~= "Chase" then
+				self:setState("Wander")
+			end
+		end
+		if self.stuck >= 6 then
+			-- 마지막 수단: 가장 가까운 배회 지점으로 옮긴다
+			local best, bd = self.nodes[1], math.huge
+			for _, n in self.nodes do
+				local d = (n - self.root.Position).Magnitude
+				if d < bd and d > 2 then
+					best, bd = n, d
+				end
+			end
+			self.model:PivotTo(CFrame.new(best + Vector3.new(0, 2.2, 0)))
+			self.stuck = 0
+		end
+	else
+		self.stuck = 0
+	end
+end
+
+function Monster.tick(self: Monster)
+	local now = os.clock()
+	if now < self.startAt then
+		return
+	end
+	self:sense()
+	local st = self.state
+	local moving = true
+	if st == "Chase" then
+		local t = self.target
+		local char = t and t.Character
+		local troot = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if not t or t:GetAttribute("Status") ~= "Alive" or not troot then
+			self.target = nil
+			self.searchCenter = self.lastKnown or self.root.Position
+			self.searchUntil = now + MC.SearchTime
+			self:setState("Search")
+			self.waypoints = {}
+			return
+		end
+		local tp = troot.Position
+		local d = (tp - self.root.Position).Magnitude
+		local los = d < 40 and self:lineOfSight(tp)
+		if los then
+			self.lastSeen = now
+			self.lastKnown = tp
+		end
+		if now - self.lastSeen > MC.LoseTime then
+			-- 놓쳤다: 마지막 위치로 가서 수색
+			self:note("lost target")
+			self.target = nil
+			self:setState("Investigate")
+			self.goal = self.lastKnown
+			self.searchCenter = self.lastKnown
+			self.waypoints = {}
+			return
+		end
+		if los and d < 14 and math.abs(tp.Y - self.root.Position.Y) < 3 then
+			self.waypoints = {}
+			self.hum:MoveTo(tp)
+			Doors.openNear(self.root.Position + self.root.CFrame.LookVector * 2, 6)
+		else
+			if #self.waypoints == 0 or now - self.lastRepath > MC.RepathChase then
+				local goal = self.lastKnown or tp
+				if not self:pathTo(goal) then
+					self.lastRepath = now
+				end
+			end
+			self:follow()
+		end
+	elseif st == "Alert" then
+		moving = false
+		if self.goal then
+			local look = Vector3.new(self.goal.X, self.root.Position.Y, self.goal.Z)
+			if (look - self.root.Position).Magnitude > 0.5 then
+				self.hum:MoveTo(self.root.Position + (look - self.root.Position).Unit * 0.5)
+			end
+		end
+		if now >= self.alertUntil then
+			self:setState("Investigate")
+			self.waypoints = {}
+		end
+	elseif st == "Investigate" then
+		local goal = self.goal or self.searchCenter
+		if not goal then
+			self:setState("Wander")
+			return
+		end
+		if #self.waypoints == 0 then
+			if not self:pathTo(goal) then
+				-- 그 자리로 갈 수 없다: 근처 배회 지점을 대신 조사
+				local best, bd = nil, math.huge
+				for _, n in self.nodes do
+					local dd = (n - goal).Magnitude
+					if dd < bd then
+						best, bd = n, dd
+					end
+				end
+				if best and (best - goal).Magnitude > 0.5 and bd < 20 then
+					self.goal = best
+					if not self:pathTo(best) then
+						self:setState("Wander")
+						return
+					end
+				else
+					self:setState("Wander")
+					return
+				end
+			end
+		end
+		local arrived = self:follow()
+		if arrived or (self.root.Position - goal).Magnitude < 4 then
+			self.searchCenter = goal
+			self.searchUntil = now + MC.SearchTime
+			self:setState("Search")
+			self.waypoints = {}
+		end
+	elseif st == "Search" then
+		if now > self.searchUntil then
+			self:setState("Wander")
+			self.waypoints = {}
+			return
+		end
+		if #self.waypoints == 0 or self:follow() then
+			local c = self.searchCenter or self.root.Position
+			local ok = false
+			for _ = 1, 4 do
+				local ang = math.random() * math.pi * 2
+				local r = MC.SearchRadius * (0.4 + math.random() * 0.6)
+				local p = c + Vector3.new(math.cos(ang) * r, 0, math.sin(ang) * r)
+				if self:pathTo(p) then
+					ok = true
+					break
+				end
+			end
+			if not ok then
+				self:setState("Wander")
+			end
+		end
+	else -- Wander
+		if #self.waypoints == 0 or self:follow() then
+			local n = self:randomNode(self.root.Position)
+			if not self:pathTo(n) then
+				self.waypoints = {}
+			end
+		end
+	end
+	self:checkStuck(moving)
+end
+
+-- 잡기 판정(매 프레임)
+function Monster.checkCatch(self: Monster)
+	if not self.alive or os.clock() < self.startAt then
+		return
+	end
+	local my = self.root.Position
+	for _, e in alivePlayers() do
+		local p = e.root.Position
+		local flat = Vector3.new(p.X - my.X, 0, p.Z - my.Z).Magnitude
+		if flat <= MC.CatchDistance and math.abs(p.Y - (my.Y - 1.5)) < 5 then
+			self:note("caught " .. e.player.Name)
+			self.onCatch(e.player, self)
+			-- 잡은 뒤에는 그 자리를 잠깐 뒤진다
+			self.target = nil
+			self.searchCenter = p
+			self.searchUntil = os.clock() + MC.SearchTime
+			self:setState("Search")
+			self.waypoints = {}
+		end
+	end
+end
+
+function Monster.run(self: Monster)
+	task.spawn(function()
+		while self.alive and self.model.Parent do
+			local ok, err = pcall(self.tick, self)
+			if not ok then
+				warn("[Monster] " .. tostring(err))
+				self.waypoints = {}
+			end
+			task.wait(0.1)
+		end
+	end)
+end
+
+function Monster.destroy(self: Monster)
+	self.alive = false
+	self.model:Destroy()
+end
+
+return Monster
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="19">
+        <Properties>
+          <string name="Name">Props</string>
+          <string name="Source"><![CDATA[--!strict
+-- 스테이지별 소품 타일(창고 선반·컨테이너, 하수도 수로·대형 배관, 병원 침대·책상·수술대·캐비닛).
+-- 각 함수는 StageBuilder 의 ctx 와 타일 좌표(i, j)를 받는다. 모두 MapKit 부품만 쓴다.
+
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Kit = require(script.Parent.MapKit)
+
+local Props = {}
+
+local function base(ctx, i: number, j: number): Vector3
+	return ctx.center(i, j) + Vector3.new(0, ctx.floorY(i, j), 0)
+end
+
+-- 타일에서 가장 가까운 벽 방향(없으면 nil)
+local function wallSide(ctx, i: number, j: number): Vector3?
+	for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+		if ctx.isWall(i + d[1], j + d[2]) then
+			return Vector3.new(d[1], 0, d[2])
+		end
+	end
+	return nil
+end
+
+local function emitter(parent: Instance, pos: Vector3, sound: string)
+	local em = Kit.box(parent, CFrame.new(pos), Vector3.new(0.2, 0.2, 0.2), { invisible = true, collide = false, tag = false })
+	em.CanQuery = false
+	em:SetAttribute("Sound", sound)
+	CollectionService:AddTag(em, Config.Tags.AmbientEmitter)
+end
+
+-- ── 창고 ──
+-- 대형 선반(랙): 기둥 + 3단 가로보 + 선반판 + 상자. axis = 선반이 뻗는 방향
+local function rack(ctx, i: number, j: number, axis: Vector3)
+	local p = base(ctx, i, j)
+	local across = Vector3.new(axis.Z, 0, -axis.X)
+	local len, depth, height = ctx.T - 0.4, 2.4, 10
+	local m = Instance.new("Model")
+	m.Name = "Rack"
+	m.Parent = ctx.props
+	for _, a in { -1, 0, 1 } do
+		for _, b in { -1, 1 } do
+			local c = p + axis * (a * (len / 2 - 0.15)) + across * (b * (depth / 2 - 0.15))
+			Kit.box(m, CFrame.lookAt(c + Vector3.new(0, height / 2, 0), c + Vector3.new(0, height / 2, 0) + axis), Vector3.new(0.3, height, 0.3), { blocks = false })
+		end
+	end
+	for k, y in { 0.4, 3.6, 6.8, 9.8 } do
+		for _, b in { -1, 1 } do
+			local c = p + across * (b * (depth / 2 - 0.15)) + Vector3.new(0, y, 0)
+			Kit.box(m, CFrame.lookAt(c, c + axis), Vector3.new(0.25, 0.4, len), { blocks = false })
+		end
+		local deck = p + Vector3.new(0, y + 0.25, 0)
+		Kit.box(m, CFrame.lookAt(deck, deck + axis), Vector3.new(depth - 0.3, 0.12, len - 0.3), { blocks = false, collide = k == 1 })
+		-- 상자들(층마다 위치를 바꿔서)
+		if k < 4 then
+			local h = ctx.hash(i * 3 + k, j, 5)
+			local n = 1 + math.floor(h * 3)
+			for q = 1, n do
+				local off = (q - (n + 1) / 2) * 2.3 + (h - 0.5) * 0.8
+				local sz = Vector3.new(1.6 + h * 0.6, 1.4 + ((q * 7 + k) % 3) * 0.4, 1.7)
+				local bp = deck + axis * off + Vector3.new(0, 0.06, 0)
+				local cf = CFrame.lookAt(bp + Vector3.new(0, sz.Y / 2, 0), bp + Vector3.new(0, sz.Y / 2, 0) + axis) * CFrame.Angles(0, (h - 0.5) * 0.3, 0)
+				Kit.box(m, cf, Vector3.new(sz.Z, sz.Y, sz.X), { blocks = false })
+			end
+		end
+	end
+	-- 보이지 않는 충돌(선반 사이로 들어가지 않게)
+	Kit.box(m, CFrame.lookAt(p + Vector3.new(0, 1.5, 0), p + Vector3.new(0, 1.5, 0) + axis), Vector3.new(depth, 3, len), { invisible = true, tag = false })
+end
+function Props.RackX(ctx, i, j)
+	rack(ctx, i, j, Vector3.new(1, 0, 0))
+end
+function Props.RackZ(ctx, i, j)
+	rack(ctx, i, j, Vector3.new(0, 0, 1))
+end
+
+-- 컨테이너: 골판 리브 + 한쪽 끝 문짝과 잠금 막대. stacked 면 두 단
+function Props.Container(ctx, i: number, j: number, stacked: boolean?)
+	local p = base(ctx, i, j)
+	local axis = if ctx.hash(i, j, 9) < 0.5 then Vector3.new(1, 0, 0) else Vector3.new(0, 0, 1)
+	local across = Vector3.new(axis.Z, 0, -axis.X)
+	local len, w, h = 7.4, 6.2, 6.4
+	local levels = if stacked then 2 else 1
+	for lv = 0, levels - 1 do
+		local y0 = lv * (h + 0.05)
+		local c = p + Vector3.new(0, y0 + h / 2, 0)
+		local m = Instance.new("Model")
+		m.Name = "Container"
+		m.Parent = ctx.props
+		Kit.box(m, CFrame.lookAt(c, c + axis), Vector3.new(w, h, len))
+		-- 옆면 세로 리브
+		for k = -3, 3 do
+			for _, s in { -1, 1 } do
+				local rp = c + axis * (k * 1.0) + across * (s * (w / 2 + 0.06))
+				Kit.box(m, CFrame.lookAt(rp, rp + axis), Vector3.new(0.12, h - 0.6, 0.35), { blocks = false, collide = false })
+			end
+		end
+		-- 문 쪽(앞) 잠금 막대
+		local front = c + axis * (len / 2 + 0.12)
+		for _, s in { -1.6, -0.6, 0.6, 1.6 } do
+			local a = front + across * s - Vector3.new(0, h / 2 - 0.3, 0)
+			Kit.cylinder(m, a, a + Vector3.new(0, h - 0.6, 0), 0.09, { blocks = false, collide = false })
+		end
+		Kit.box(m, CFrame.lookAt(front, front + axis), Vector3.new(0.12, h - 0.4, 0.08), { blocks = false, collide = false })
+	end
+end
+function Props.ContainerStack(ctx, i, j)
+	Props.Container(ctx, i, j, true)
+end
+
+-- ── 하수도 ──
+-- 수로: 아래층 바닥 위 얕은 물(선 없음, 걸어서 지나갈 수 있음) + 물소리
+function Props.Water(ctx, i: number, j: number)
+	local c = ctx.center(i, j)
+	local s = Kit.box(ctx.props, CFrame.new(c + Vector3.new(0, ctx.PIT_Y + 0.6, 0)), Vector3.new(ctx.T, 1.2, ctx.T), { collide = false, shape = "None", blocks = false })
+	s.CanQuery = false
+	if (i + j) % 3 == 0 then
+		emitter(ctx.props, c + Vector3.new(0, ctx.PIT_Y + 1, 0), "AmbientWater")
+	end
+end
+
+-- 대형 배관(머리 위, 타일을 가로지른다)
+function Props.BigPipe(ctx, i: number, j: number)
+	local c = ctx.center(i, j)
+	local axis = Vector3.new(1, 0, 0)
+	if ctx.isWall(i - 1, j) and ctx.isWall(i + 1, j) then
+		axis = Vector3.new(0, 0, 1)
+	end
+	local y = ctx.floorY(i, j) + 10
+	local a = c - axis * (ctx.T / 2) + Vector3.new(0, y, 0)
+	local b = c + axis * (ctx.T / 2) + Vector3.new(0, y, 0)
+	Kit.pipe(ctx.props, a, b, 1.7, { 0 }, true)
+	-- 받침(바닥까지 내려오는 H 프레임)
+	local across = Vector3.new(axis.Z, 0, -axis.X)
+	for _, s in { -1, 1 } do
+		local leg = c + across * (s * 2.4) + Vector3.new(0, ctx.floorY(i, j) + (y - 1.7) / 2, 0)
+		Kit.box(ctx.props, CFrame.new(leg), Vector3.new(0.4, y - 1.7, 0.4), { blocks = false })
+	end
+	local cross = c + Vector3.new(0, ctx.floorY(i, j) + y - 1.9, 0)
+	Kit.box(ctx.props, CFrame.lookAt(cross, cross + axis), Vector3.new(5.2, 0.4, 0.5), { blocks = false })
+end
+
+-- ── 병원 ──
+-- 침대: 벽에 머리를 붙인 철제 침대(다리, 매트리스, 머리판, 난간)
+function Props.Bed(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j) or Vector3.new(0, 0, -1)
+	local head = p + side * (ctx.T / 2 - 0.4)
+	local foot = head - side * 6.6
+	local across = Vector3.new(side.Z, 0, -side.X)
+	local mid = (head + foot) / 2
+	local m = Instance.new("Model")
+	m.Name = "Bed"
+	m.Parent = ctx.props
+	Kit.box(m, CFrame.lookAt(mid + Vector3.new(0, 2.0, 0), mid + Vector3.new(0, 2.0, 0) + side), Vector3.new(3.0, 0.7, 6.2), { blocks = false })
+	Kit.box(m, CFrame.lookAt(mid + Vector3.new(0, 1.5, 0), mid + Vector3.new(0, 1.5, 0) + side), Vector3.new(3.2, 0.25, 6.4), { blocks = false })
+	for _, e in { head, foot } do
+		for _, s in { -1, 1 } do
+			local leg = e + across * (s * 1.5) - side * (if e == head then 0.15 else -0.15)
+			Kit.cylinder(m, leg, leg + Vector3.new(0, if e == head then 3.6 else 2.8, 0), 0.1, { blocks = false })
+		end
+	end
+	local hb = head - side * 0.15 + Vector3.new(0, 2.9, 0)
+	Kit.box(m, CFrame.lookAt(hb, hb + side), Vector3.new(3.0, 1.2, 0.12), { blocks = false })
+	local fb = foot + side * 0.15 + Vector3.new(0, 2.45, 0)
+	Kit.box(m, CFrame.lookAt(fb, fb + side), Vector3.new(3.0, 0.7, 0.12), { blocks = false })
+	for _, s in { -1, 1 } do
+		local a = head - side * 1.2 + across * (s * 1.65) + Vector3.new(0, 2.8, 0)
+		Kit.cylinder(m, a, a - side * 3.2, 0.06, { blocks = false, collide = false })
+	end
+	Kit.box(m, CFrame.lookAt(mid + Vector3.new(0, 1.5, 0), mid + Vector3.new(0, 1.5, 0) + side), Vector3.new(3.2, 3, 6.4), { invisible = true, tag = false })
+end
+
+-- 책상 + 의자
+function Props.Desk(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local yaw = ctx.hash(i, j, 3) * 0.6 - 0.3
+	local cf = CFrame.new(p) * CFrame.Angles(0, yaw, 0)
+	local m = Instance.new("Model")
+	m.Name = "Desk"
+	m.Parent = ctx.props
+	Kit.box(m, cf * CFrame.new(0, 3.1, 0), Vector3.new(4.6, 0.2, 2.4), { blocks = false })
+	for _, x in { -2.1, 2.1 } do
+		for _, z in { -1.0, 1.0 } do
+			Kit.box(m, cf * CFrame.new(x, 1.5, z), Vector3.new(0.2, 3.0, 0.2), { blocks = false })
+		end
+	end
+	Kit.box(m, cf * CFrame.new(1.4, 2.2, 0), Vector3.new(1.4, 1.5, 2.0), { blocks = false })
+	-- 의자
+	local ch = cf * CFrame.new(-0.6, 0, 2.2) * CFrame.Angles(0, 0.4, 0)
+	Kit.box(m, ch * CFrame.new(0, 1.8, 0), Vector3.new(1.6, 0.18, 1.6), { blocks = false })
+	Kit.box(m, ch * CFrame.new(0, 2.8, 0.75), Vector3.new(1.6, 1.8, 0.15), { blocks = false })
+	for _, x in { -0.7, 0.7 } do
+		for _, z in { -0.7, 0.7 } do
+			Kit.box(m, ch * CFrame.new(x, 0.9, z), Vector3.new(0.12, 1.8, 0.12), { blocks = false })
+		end
+	end
+	Kit.box(m, cf * CFrame.new(0, 1.5, 0), Vector3.new(4.6, 3, 2.4), { invisible = true, tag = false })
+end
+
+-- 수술대 + 천장 원형 조명(꺼진) + 기구 카트
+function Props.Surgery(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = Instance.new("Model")
+	m.Name = "Surgery"
+	m.Parent = ctx.props
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 3.0, 0)), Vector3.new(2.4, 0.4, 6.0), { blocks = false })
+	Kit.cylinder(m, p + Vector3.new(0, 0, 0), p + Vector3.new(0, 2.8, 0), 0.45, { blocks = false })
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 0.15, 0)), Vector3.new(2.2, 0.3, 2.8), { blocks = false })
+	local lamp = p + Vector3.new(0, ctx.H - ctx.floorY(i, j) - 4.2, 0)
+	Kit.cylinder(m, lamp + Vector3.new(0, 4.2, 0), lamp + Vector3.new(0, 1.0, 0), 0.12, { blocks = false, collide = false })
+	Kit.cylinder(m, lamp, lamp + Vector3.new(0, 1.0, 0), 1.6, { blocks = false, collide = false })
+	Kit.cylinder(m, lamp + Vector3.new(2.6, 0.2, 1), lamp + Vector3.new(2.6, 0.9, 1), 0.9, { blocks = false, collide = false })
+	Kit.cylinder(m, lamp + Vector3.new(0, 1.0, 0), lamp + Vector3.new(2.6, 0.9, 1), 0.1, { blocks = false, collide = false })
+	local cart = p + Vector3.new(3.0, 0, -2.0)
+	Kit.box(m, CFrame.new(cart + Vector3.new(0, 2.6, 0)), Vector3.new(1.4, 0.15, 2.0), { blocks = false })
+	Kit.box(m, CFrame.new(cart + Vector3.new(0, 1.2, 0)), Vector3.new(1.4, 0.15, 2.0), { blocks = false })
+	for _, x in { -0.6, 0.6 } do
+		for _, z in { -0.9, 0.9 } do
+			Kit.cylinder(m, cart + Vector3.new(x, 0, z), cart + Vector3.new(x, 2.6, z), 0.06, { blocks = false })
+		end
+	end
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 1.5, 0)), Vector3.new(2.4, 3, 6), { invisible = true, tag = false })
+end
+
+-- 캐비닛(벽에 붙은 키 큰 수납장)
+function Props.Cabinet(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j) or Vector3.new(1, 0, 0)
+	local c = p + side * (ctx.T / 2 - 1.0) + Vector3.new(0, 3.5, 0)
+	local m = Instance.new("Model")
+	m.Name = "Cabinet"
+	m.Parent = ctx.props
+	Kit.box(m, CFrame.lookAt(c, c - side), Vector3.new(3.6, 7, 1.8))
+	local face = c - side * 0.95
+	Kit.box(m, CFrame.lookAt(face, face - side), Vector3.new(0.08, 6.4, 0.1), { blocks = false, collide = false })
+	Kit.box(m, CFrame.lookAt(face + Vector3.new(0, 0.6, 0), face + Vector3.new(0, 0.6, 0) - side) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(0.08, 3.4, 0.1), { blocks = false, collide = false })
+end
+
+return Props
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="20">
+        <Properties>
+          <string name="Name">Round</string>
+          <string name="Source"><![CDATA[--!strict
+-- 라운드(스테이지) 진행: 스테이지 짓기 → 플레이어 배치 → 괴물 → 탈출/사망 판정 → 다음 스테이지 또는 재시작.
+-- 플레이어 상태(Player 속성 "Status"): "Waiting" | "Alive" | "Dead" | "Escaped"
+-- ReplicatedStorage 속성: StageIndex, StageName, RoundState("Waiting"|"Playing"|"Result"), RoundId
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Builder = require(script.Parent.StageBuilder)
+local Doors = require(script.Parent.Doors)
+local SoundBus = require(script.Parent.SoundBus)
+local Monster = require(script.Parent.Monster)
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
+
+local Round = {}
+Round.stageIndex = 1
+Round.state = "Waiting"
+Round.roundId = 0
+Round.info = nil :: Builder.StageInfo?
+Round.monsters = {} :: { any }
+Round.autoLoop = true -- 테스트가 끌 수 있다
+Round.lastOutcome = "" :: string
+Round.events = {} :: { string }
+
+local stageFolder: Folder? = nil
+local spawnCursor = 0
+local monsterFolder: Folder = Instance.new("Folder")
+monsterFolder.Name = "Monsters"
+monsterFolder.Parent = workspace
+
+local function note(s: string)
+	table.insert(Round.events, string.format("%.1f %s", os.clock(), s))
+	if #Round.events > 80 then
+		table.remove(Round.events, 1)
+	end
+end
+
+local function setStatus(p: Player, s: string)
+	p:SetAttribute("Status", s)
+end
+
+function Round.status(p: Player): string
+	return (p:GetAttribute("Status") :: string?) or "Waiting"
+end
+
+function Round.alivePlayers(): { Player }
+	local out = {}
+	for _, p in Players:GetPlayers() do
+		if Round.status(p) == "Alive" then
+			table.insert(out, p)
+		end
+	end
+	return out
+end
+
+local function stageDef(i: number)
+	return Config.Stages[i]
+end
+
+local function stageModule(i: number): any?
+	local def = stageDef(i)
+	if not def then
+		return nil
+	end
+	local m = script.Parent.Stages:FindFirstChild(def.Module)
+	if not m then
+		return nil
+	end
+	return require(m :: ModuleScript)
+end
+
+function Round.buildStage(i: number)
+	if stageFolder then
+		stageFolder:Destroy()
+		stageFolder = nil
+	end
+	Doors.clear()
+	local layout = stageModule(i)
+	assert(layout, "stage module missing: " .. tostring(i))
+	local info = Builder.build(layout, workspace, "Stage")
+	local folder = info.folder
+	local count = 0
+	for _, d in folder:GetDescendants() do
+		if d:IsA("BasePart") then
+			count += 1
+		end
+	end
+	Round.roundId += 1
+	folder:SetAttribute("PartCount", count)
+	folder:SetAttribute("BuildId", Round.roundId)
+	folder:SetAttribute("BoundsMin", info.bounds.min)
+	folder:SetAttribute("BoundsMax", info.bounds.max)
+	folder.Parent = workspace
+	stageFolder = folder
+	Round.info = info
+	SoundBus.setGeometry(folder)
+	note("built stage " .. i .. " parts=" .. count)
+end
+
+local function nextSpawn(): CFrame
+	local info = Round.info :: Builder.StageInfo
+	spawnCursor += 1
+	return info.spawns[((spawnCursor - 1) % #info.spawns) + 1]
+end
+
+function Round.spawnPlayer(p: Player)
+	if not Round.info then
+		return
+	end
+	setStatus(p, "Alive")
+	p:LoadCharacter()
+	local char = p.Character
+	if not char or Round.status(p) ~= "Alive" then
+		return
+	end
+	local hum = char:WaitForChild("Humanoid", 5) :: Humanoid?
+	local root = char:WaitForChild("HumanoidRootPart", 5) :: BasePart?
+	if not hum or not root then
+		return
+	end
+	hum.WalkSpeed = Config.Move.Walk
+	hum.UseJumpPower = true
+	hum.JumpPower = 0
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	hum.BreakJointsOnDeath = false
+	char:SetAttribute("MoveMode", "Walk")
+	char:PivotTo(nextSpawn())
+	-- 다른 원인으로 죽어도(맵 밖 등) 사망 처리
+	hum.Died:Connect(function()
+		if Round.status(p) == "Alive" and p.Character == char then
+			Round.kill(p, "fell")
+		end
+	end)
+end
+
+function Round.kill(p: Player, why: string?)
+	if Round.status(p) ~= "Alive" then
+		return
+	end
+	setStatus(p, "Dead")
+	note("dead " .. p.Name .. " " .. (why or ""))
+	local others = #Round.alivePlayers()
+	RoundEvent:FireAllClients("Died", { userId = p.UserId, solo = #Players:GetPlayers() == 1, othersAlive = others })
+	local char = p.Character
+	if char then
+		local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if root then
+			root.Anchored = true
+		end
+		task.delay(Config.Round.DeadBodyLinger, function()
+			if p.Character == char then
+				p.Character = nil
+			end
+			char:Destroy()
+		end)
+	end
+end
+
+function Round.escape(p: Player)
+	if Round.status(p) ~= "Alive" then
+		return
+	end
+	setStatus(p, "Escaped")
+	note("escaped " .. p.Name)
+	RoundEvent:FireAllClients("Escaped", { userId = p.UserId, othersAlive = #Round.alivePlayers() })
+	local char = p.Character
+	if char then
+		p.Character = nil
+		char:Destroy()
+	end
+end
+
+local function clearMonsters()
+	for _, m in Round.monsters do
+		m:destroy()
+	end
+	table.clear(Round.monsters)
+	monsterFolder:ClearAllChildren()
+end
+
+function Round.spawnMonsters(count: number)
+	local info = Round.info :: Builder.StageInfo
+	local spawnPos = info.spawns[1].Position
+	local candidates = {}
+	for _, n in info.nodes do
+		if (n - spawnPos).Magnitude >= Config.Monster.MinSpawnDistance then
+			table.insert(candidates, n)
+		end
+	end
+	if #candidates == 0 then
+		candidates = info.nodes
+	end
+	table.sort(candidates, function(a, b)
+		return (a - spawnPos).Magnitude > (b - spawnPos).Magnitude
+	end)
+	for k = 1, count do
+		-- 멀리 있는 지점들 중 서로 떨어진 곳
+		local pick = candidates[math.min(#candidates, 1 + (k - 1) * math.max(1, math.floor(#candidates / (count + 1))))]
+		local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
+			Round.kill(player, "monster")
+		end)
+		table.insert(Round.monsters, m)
+		m:run()
+	end
+	note("monsters " .. count)
+end
+
+function Round.startStage(i: number)
+	clearMonsters()
+	Round.stageIndex = i
+	Round.state = "Loading"
+	ReplicatedStorage:SetAttribute("RoundState", "Loading")
+	for _, p in Players:GetPlayers() do
+		setStatus(p, "Waiting")
+		if p.Character then
+			p.Character:Destroy()
+			p.Character = nil
+		end
+	end
+	Round.buildStage(i)
+	local def = stageDef(i)
+	ReplicatedStorage:SetAttribute("StageIndex", i)
+	ReplicatedStorage:SetAttribute("StageName", def.Name)
+	ReplicatedStorage:SetAttribute("RoundId", Round.roundId)
+	spawnCursor = 0
+	for _, p in Players:GetPlayers() do
+		task.spawn(Round.spawnPlayer, p)
+	end
+	Round.state = "Playing"
+	ReplicatedStorage:SetAttribute("RoundState", "Playing")
+	RoundEvent:FireAllClients("Start", { stage = i, name = def.Name })
+	Round.spawnMonsters(def.Monsters)
+	note("start " .. i)
+end
+
+-- 라운드가 끝났는가: 살아 있는 플레이어가 없다
+function Round.finished(): boolean
+	if Round.state ~= "Playing" then
+		return false
+	end
+	if #Players:GetPlayers() == 0 then
+		return true
+	end
+	for _, p in Players:GetPlayers() do
+		local s = Round.status(p)
+		if s == "Alive" or s == "Waiting" then
+			return false
+		end
+	end
+	return true
+end
+
+function Round.finish(): string
+	local anyEscaped = false
+	for _, p in Players:GetPlayers() do
+		if Round.status(p) == "Escaped" then
+			anyEscaped = true
+		end
+	end
+	Round.state = "Result"
+	ReplicatedStorage:SetAttribute("RoundState", "Result")
+	clearMonsters()
+	local i = Round.stageIndex
+	local outcome
+	if anyEscaped then
+		local nextI = i + 1
+		local allClear = nextI > #Config.Stages or stageModule(nextI) == nil
+		if allClear then
+			nextI = 1
+		end
+		outcome = "Clear"
+		RoundEvent:FireAllClients("Clear", { stage = i, nextStage = nextI, nextName = stageDef(nextI).Name, allClear = allClear, seconds = Config.Round.ResultSeconds })
+		Round.stageIndex = nextI
+	else
+		outcome = "Failed"
+		RoundEvent:FireAllClients("Failed", { stage = i, nextName = stageDef(i).Name, seconds = Config.Round.ResultSeconds })
+	end
+	Round.lastOutcome = outcome
+	note("finish " .. outcome)
+	return outcome
+end
+
+-- 출구·잡기 판정
+RunService.Heartbeat:Connect(function()
+	if Round.state ~= "Playing" then
+		return
+	end
+	for _, m in Round.monsters do
+		m:checkCatch()
+	end
+	local info = Round.info
+	if not info then
+		return
+	end
+	for _, p in Players:GetPlayers() do
+		if Round.status(p) == "Alive" then
+			local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if root then
+				local lp = info.exitCFrame:PointToObjectSpace(root.Position)
+				local s = info.exitSize / 2
+				if math.abs(lp.X) <= s.X and math.abs(lp.Y) <= s.Y and math.abs(lp.Z) <= s.Z then
+					Round.escape(p)
+				end
+			end
+		end
+	end
+end)
+
+-- 발소리 소음: 서버가 실제 이동 속도로 판정(클라이언트 값을 믿지 않는다)
+task.spawn(function()
+	local N = Config.Noise
+	while true do
+		task.wait(N.StepInterval)
+		if Round.state == "Playing" then
+			for _, p in Players:GetPlayers() do
+				if Round.status(p) == "Alive" then
+					local char = p.Character
+					local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+					if char and root then
+						local v = root.AssemblyLinearVelocity
+						local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+						if speed > N.MovingAbove then
+							local radius, kind = N.Crouch, "StepCrouch"
+							if speed > N.RunSpeedAbove then
+								radius, kind = N.Run, "StepRun"
+							elseif speed > N.WalkSpeedAbove then
+								radius, kind = N.Walk, "StepWalk"
+							end
+							SoundBus.emit(root.Position - Vector3.new(0, 2.5, 0), radius, p, kind)
+						end
+					end
+				end
+			end
+		end
+	end
+end)
+
+SoundBus.listen(function(pos, radius, source, kind)
+	for _, m in Round.monsters do
+		m:hear(pos, radius, source, kind)
+	end
+end)
+
+Players.PlayerAdded:Connect(function(p)
+	setStatus(p, "Waiting")
+	if Round.state == "Playing" then
+		-- 늦게 들어온 플레이어도 시작 지점에서 함께 한다
+		task.defer(Round.spawnPlayer, p)
+	end
+end)
+
+function Round.loop()
+	while true do
+		while #Players:GetPlayers() == 0 do
+			task.wait(0.5)
+		end
+		task.wait(Config.Round.FirstStartDelay)
+		Round.startStage(Round.stageIndex)
+		while not Round.finished() do
+			task.wait(0.2)
+		end
+		Round.finish()
+		task.wait(Config.Round.ResultSeconds)
+		while not Round.autoLoop do
+			task.wait(0.2)
+		end
+	end
+end
+
+return Round
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="21">
+        <Properties>
+          <string name="Name">SoundBus</string>
+          <string name="Source"><![CDATA[--!strict
+-- 서버의 소리 이벤트 통로. 음파·발소리·문 소리가 여기로 들어오고, 괴물들이 듣는다.
+-- 들리는 거리 = 소리 크기(반경) × (벽 감쇠 ^ 사이에 낀 벽 수).
+-- 지금은 거리 + 벽 개수 감쇠. 나중에 경로 길이 기반 전파 등으로 바꾸려면 heardRange 만 고치면 된다.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local SoundBus = {}
+
+export type Listener = (pos: Vector3, radius: number, source: Player?, kind: string) -> ()
+
+local listeners: { Listener } = {}
+SoundBus.recent = {} :: { { pos: Vector3, radius: number, kind: string, t: number, source: string } }
+
+local geometry: Instance? = nil
+local params = RaycastParams.new()
+params.FilterType = Enum.RaycastFilterType.Include
+params.RespectCanCollide = true
+
+function SoundBus.setGeometry(folder: Instance?)
+	geometry = folder
+	if folder then
+		params.FilterDescendantsInstances = { folder }
+	end
+end
+
+function SoundBus.listen(fn: Listener): () -> ()
+	table.insert(listeners, fn)
+	return function()
+		local i = table.find(listeners, fn)
+		if i then
+			table.remove(listeners, i)
+		end
+	end
+end
+
+-- a 와 b 사이의 벽(충돌 파트) 수, 최대 MaxWallsCounted
+function SoundBus.wallsBetween(a: Vector3, b: Vector3): number
+	if not geometry then
+		return 0
+	end
+	local count = 0
+	local from = a
+	for _ = 1, Config.Noise.MaxWallsCounted do
+		local d = b - from
+		if d.Magnitude < 0.1 then
+			break
+		end
+		local hit = workspace:Raycast(from, d, params)
+		if not hit then
+			break
+		end
+		count += 1
+		-- (파트 안에서 시작한 레이는 그 파트를 다시 맞히지 않으므로 다음 레이는 벽 너머로 나간다)
+		from = hit.Position + d.Unit * 0.05
+	end
+	return count
+end
+
+-- 소리(pos, radius)가 listenerPos 에서 들리는 최대 거리
+function SoundBus.heardRange(pos: Vector3, listenerPos: Vector3, radius: number): number
+	if (pos - listenerPos).Magnitude > radius then
+		return radius -- 이미 범위 밖: 벽 계산 생략
+	end
+	local walls = SoundBus.wallsBetween(pos + Vector3.new(0, 0.5, 0), listenerPos)
+	return radius * (Config.Noise.WallAttenuation ^ walls)
+end
+
+function SoundBus.canHear(pos: Vector3, listenerPos: Vector3, radius: number): boolean
+	local d = (pos - listenerPos).Magnitude
+	if d > radius then
+		return false
+	end
+	return d <= SoundBus.heardRange(pos, listenerPos, radius)
+end
+
+function SoundBus.emit(pos: Vector3, radius: number, source: Player?, kind: string)
+	table.insert(SoundBus.recent, { pos = pos, radius = radius, kind = kind, t = os.clock(), source = if source then source.Name else "" })
+	if #SoundBus.recent > 50 then
+		table.remove(SoundBus.recent, 1)
+	end
+	for _, fn in table.clone(listeners) do
+		local ok, err = pcall(fn, pos, radius, source, kind)
+		if not ok then
+			warn("[SoundBus] listener error: " .. tostring(err))
+		end
+	end
+end
+
+return SoundBus
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="22">
+        <Properties>
+          <string name="Name">StageBuilder</string>
+          <string name="Source"><![CDATA[--!strict
+-- 타일 레이아웃(문자 격자)으로 스테이지 지형을 짓는다. 모든 스테이지가 같은 빌더와 MapKit 부품을 쓴다.
+-- 타일 1칸 = 8스터드. 위층 바닥 y=0, 구덩이(아래층) 바닥 y=-6, 천장 y=14.
+--
+-- 공통 타일 문자
+--   #  벽            .  바닥          S  시작 지점       E  출구
+--   D  문(복도를 가로지르는 벽 + 문)   A  아치 리브       O  기둥
+--   c  상자 더미      m  기계 설비     v  수직 배관 묶음  f  천장 환풍기
+--   p  구덩이(아래층) b  구덩이 위 철제 다리             s  계단(구덩이 ↔ 위층)
+-- 스테이지별 추가 타일은 레이아웃 모듈의 Props 함수로 짓는다(같은 ctx 를 받는다).
+
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Kit = require(script.Parent.MapKit)
+local Doors = require(script.Parent.Doors)
+
+local Builder = {}
+
+local T = 8
+local H = 14
+local PIT_Y = -6
+local BOTTOM = -10
+Builder.Tile = T
+Builder.Height = H
+Builder.PitY = PIT_Y
+
+export type Layout = {
+	Rows: { string },
+	Props: { [string]: (ctx: any, i: number, j: number) -> () }?,
+	Walkable: { [string]: boolean }?, -- Props 타일 중 괴물 배회 지점으로 쓸 수 있는 것
+	PitTiles: { [string]: boolean }?, -- Props 타일 중 아래층 높이인 것
+	PipeChance: number?,
+	Seed: number?,
+}
+
+export type StageInfo = {
+	folder: Folder,
+	spawns: { CFrame },
+	exitCFrame: CFrame,
+	exitSize: Vector3,
+	nodes: { Vector3 },
+	bounds: { min: Vector3, max: Vector3 },
+}
+
+local PIT = { p = true, b = true, s = true, n = true }
+local function bridgeChar(c: string): boolean
+	return c == "b" or c == "n"
+end
+
+local function hash(a: number, b: number, c: number): number
+	local h = bit32.bxor(bit32.bxor((a * 73856093) % 4294967296, (b * 19349663) % 4294967296), (c * 83492791) % 4294967296)
+	return (h % 1000) / 1000
+end
+
+function Builder.build(layout: Layout, parent: Instance, name: string): StageInfo
+	local rows = layout.Rows
+	local nz = #rows
+	local nx = #rows[1]
+	local grid: { { string } } = {}
+	for j = 1, nz do
+		grid[j] = {}
+		for i = 1, nx do
+			grid[j][i] = rows[j]:sub(i, i)
+		end
+	end
+	local function at(i: number, j: number): string
+		if j < 1 or j > nz or i < 1 or i > nx then
+			return "#"
+		end
+		return grid[j][i]
+	end
+	local pitSet = table.clone(PIT)
+	for k, v in layout.PitTiles or {} do
+		pitSet[k] = v
+	end
+	local function isWall(i: number, j: number): boolean
+		return at(i, j) == "#"
+	end
+	local function isPit(i: number, j: number): boolean
+		return pitSet[at(i, j)] == true
+	end
+	local function floorY(i: number, j: number): number
+		return if isPit(i, j) then PIT_Y else 0
+	end
+	-- 타일 (i, j) 의 가운데(바닥 높이 0 기준 x,z). i = 열(x), j = 행(z)
+	local function center(i: number, j: number): Vector3
+		return Vector3.new((i - 1) * T + T / 2, 0, (j - 1) * T + T / 2)
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = name
+	local geo = Instance.new("Folder")
+	geo.Name = "Geometry"
+	geo.Parent = folder
+	local props = Instance.new("Folder")
+	props.Name = "Props"
+	props.Parent = folder
+
+	-- ── 직사각형 병합(같은 종류 타일을 큰 상자 하나로) ──
+	local function merge(pred: (i: number, j: number) -> boolean): { { number } }
+		local used: { [number]: boolean } = {}
+		local rects = {}
+		for j = 1, nz do
+			for i = 1, nx do
+				if not used[j * 1000 + i] and pred(i, j) then
+					local i1 = i
+					while i1 + 1 <= nx and pred(i1 + 1, j) and not used[j * 1000 + i1 + 1] do
+						i1 += 1
+					end
+					local j1 = j
+					local grow = true
+					while grow and j1 + 1 <= nz do
+						for x = i, i1 do
+							if not pred(x, j1 + 1) or used[(j1 + 1) * 1000 + x] then
+								grow = false
+								break
+							end
+						end
+						if grow then
+							j1 += 1
+						end
+					end
+					for y = j, j1 do
+						for x = i, i1 do
+							used[y * 1000 + x] = true
+						end
+					end
+					table.insert(rects, { i, j, i1, j1 })
+				end
+			end
+		end
+		return rects
+	end
+	local function rectSpan(r: { number }, y0: number, y1: number, opts: Kit.Opts?)
+		local lo = Vector3.new((r[1] - 1) * T, y0, (r[2] - 1) * T)
+		local hi = Vector3.new(r[3] * T, y1, r[4] * T)
+		return Kit.span(geo, lo, hi, opts)
+	end
+
+	-- 벽 덩어리, 위층 바닥(벽 아래 포함), 아래층 바닥, 천장
+	for _, r in merge(function(i, j) return isWall(i, j) end) do
+		rectSpan(r, 0, H, { name = "Wall" })
+	end
+	for _, r in merge(function(i, j) return not isPit(i, j) end) do
+		rectSpan(r, BOTTOM, 0, { name = "Floor" })
+	end
+	for _, r in merge(function(i, j) return isPit(i, j) end) do
+		rectSpan(r, BOTTOM, PIT_Y, { name = "PitFloor" })
+	end
+	Kit.span(geo, Vector3.new(0, H, 0), Vector3.new(nx * T, H + 2, nz * T), { name = "Ceiling" })
+
+	local dirs = {
+		{ di = 1, dj = 0, v = Vector3.new(1, 0, 0) },
+		{ di = -1, dj = 0, v = Vector3.new(-1, 0, 0) },
+		{ di = 0, dj = 1, v = Vector3.new(0, 0, 1) },
+		{ di = 0, dj = -1, v = Vector3.new(0, 0, -1) },
+	}
+
+	local info: StageInfo = {
+		folder = folder,
+		spawns = {},
+		exitCFrame = CFrame.new(),
+		exitSize = Vector3.new(6, 8, 6),
+		nodes = {},
+		bounds = { min = Vector3.new(0, BOTTOM, 0), max = Vector3.new(nx * T, H + 2, nz * T) },
+	}
+
+	local ctx = {
+		Kit = Kit,
+		Doors = Doors,
+		props = props,
+		geo = geo,
+		at = at,
+		center = center,
+		floorY = floorY,
+		isWall = isWall,
+		isPit = isPit,
+		T = T,
+		H = H,
+		PIT_Y = PIT_Y,
+		info = info,
+		hash = hash,
+	}
+
+	-- 이 타일에서 벽이 있는 방향 목록
+	local function wallSides(i: number, j: number)
+		local out = {}
+		for _, d in dirs do
+			if isWall(i + d.di, j + d.dj) then
+				table.insert(out, d)
+			end
+		end
+		return out
+	end
+	-- 복도 방향: 양옆이 벽이면 진행 방향 벡터
+	local function corridorAxis(i: number, j: number): Vector3?
+		local wx = isWall(i - 1, j) and isWall(i + 1, j)
+		local wz = isWall(i, j - 1) and isWall(i, j + 1)
+		if wx and not wz then
+			return Vector3.new(0, 0, 1)
+		elseif wz and not wx then
+			return Vector3.new(1, 0, 0)
+		end
+		return nil
+	end
+
+	-- ── 벽면 장식: 벽기둥(필라스터), 천장 모서리 경사, 벽 배관 ──
+	local pipeChance = layout.PipeChance or 0.55
+	local seed = layout.Seed or 1
+	for j = 1, nz do
+		for i = 1, nx do
+			local ch = at(i, j)
+			if ch ~= "#" then
+				local fy = floorY(i, j)
+				local c = center(i, j)
+				for _, d in wallSides(i, j) do
+					local n = -d.v -- 벽면이 방을 향하는 법선
+					local along = Vector3.new(d.v.Z, 0, -d.v.X) -- 벽을 따라가는 방향
+					local face = c + d.v * (T / 2) -- 벽면 가운데(바닥 높이 0)
+					-- 벽기둥: 이 타일의 시작 모서리에, 다음 타일도 같은 쪽에 벽이 있을 때
+					local ni, nj = i - math.round(along.X), j - math.round(along.Z)
+					if at(ni, nj) ~= "#" and isWall(ni + d.di, nj + d.dj) and floorY(ni, nj) == fy then
+						local p = face - along * (T / 2) + n * 0.25
+						Kit.box(geo, CFrame.lookAt(p + Vector3.new(0, (fy + H) / 2, 0), p + Vector3.new(0, (fy + H) / 2, 0) + n), Vector3.new(1.1, H - fy, 0.5), { name = "Pilaster" })
+					end
+					-- 천장 모서리 경사(쐐기): 바닥면이 천장에, 뒷면이 벽에 붙는다
+					if ch ~= "D" and ch ~= "A" and ch ~= "E" then
+						local s = 1.4
+						local pos = face + n * (s / 2) + Vector3.new(0, H - s / 2, 0)
+						local vY = Vector3.new(0, -1, 0)
+						local vZ = -n
+						Kit.wedge(geo, CFrame.fromMatrix(pos, vY:Cross(vZ), vY, vZ), Vector3.new(T, s, s), { name = "Haunch", collide = false, blocks = false })
+					end
+					-- 벽 배관: 같은 벽 줄(행/열 + 방향)마다 정해진 확률로, 줄 전체에 이어진다
+					local lineKey = if math.abs(d.v.X) > 0 then i * 2 + (if d.v.X > 0 then 1 else 0) else j * 2 + (if d.v.Z > 0 then 1 else 0)
+					local axisKey = if math.abs(d.v.X) > 0 then 1 else 2
+					if hash(lineKey, axisKey, seed) < pipeChance and ch ~= "D" and ch ~= "A" and ch ~= "E" and ch ~= "S" then
+						local r = 0.5
+						local y = H - 3
+						local off = n * (r + 0.9)
+						local a = face - along * (T / 2) + off + Vector3.new(0, y, 0)
+						local b = face + along * (T / 2) + off + Vector3.new(0, y, 0)
+						Kit.pipe(props, a, b, r, { 0 }, true)
+						-- 벽 고정 브래킷
+						local bc = face + n * 0.6 + Vector3.new(0, y, 0)
+						Kit.box(props, CFrame.lookAt(bc, bc + n), Vector3.new(0.3, 0.3, 1.2), { blocks = false, collide = false })
+						-- 다음 타일에서 벽이 끊기면 배관을 벽 속으로 꺾어 넣는다
+						for _, sgn in { -1, 1 } do
+							local ti, tj = i + math.round(along.X) * sgn, j + math.round(along.Z) * sgn
+							local continues = at(ti, tj) ~= "#" and isWall(ti + d.di, tj + d.dj) and not (at(ti, tj) == "D" or at(ti, tj) == "A" or at(ti, tj) == "E" or at(ti, tj) == "S")
+							if not continues then
+								local endP = if sgn > 0 then b else a
+								local inner = endP - along * sgn * 0.6
+								if isWall(ti, tj) then
+									-- 앞이 벽이면 그 벽으로 들어간다(배관이 이미 닿음)
+									local _ = inner
+								else
+									Kit.cylinder(props, inner, inner - n * (r + 1.2), r, { blocks = false })
+								end
+							end
+						end
+						-- 가는 전선관(위쪽)
+						if hash(lineKey, axisKey, seed + 7) < 0.5 then
+							local off2 = n * 0.45
+							local a2 = face - along * (T / 2) + off2 + Vector3.new(0, H - 1.9, 0)
+							local b2 = face + along * (T / 2) + off2 + Vector3.new(0, H - 1.9, 0)
+							Kit.cylinder(props, a2, b2, 0.16, { blocks = false, collide = false })
+						end
+					end
+				end
+			end
+		end
+	end
+
+	-- ── 타일별 구조물 ──
+	for j = 1, nz do
+		for i = 1, nx do
+			local ch = at(i, j)
+			local c = center(i, j)
+			local fy = floorY(i, j)
+			local axis = corridorAxis(i, j)
+			if ch == "S" then
+				local look = Vector3.new(nx * T / 2, 0, nz * T / 2)
+				local p = c + Vector3.new(0, 3.2, 0)
+				for k = 0, 1 do
+					local off = Vector3.new(if k == 0 then -1.6 else 1.6, 0, 0)
+					table.insert(info.spawns, CFrame.lookAt(p + off, Vector3.new(look.X, p.Y, look.Z)))
+				end
+			elseif ch == "E" then
+				-- 들어오는 방향(바닥 이웃)
+				local entry = dirs[1]
+				for _, d in dirs do
+					if not isWall(i + d.di, j + d.dj) then
+						entry = d
+					end
+				end
+				local back = -entry.v -- 출구 안쪽 끝 벽 방향
+				local right = Vector3.new(back.Z, 0, -back.X)
+				-- 입구 문틀(두꺼운 이중 프레임)
+				local gate = c + entry.v * (T / 2 - 0.6)
+				for _, s in { -1, 1 } do
+					for k = 0, 1 do
+						local p = gate + right * s * (3.2 + k * 0.6) + Vector3.new(0, 5, 0) - entry.v * k * 0.4
+						Kit.box(geo, CFrame.lookAt(p, p + entry.v), Vector3.new(0.5, 10, 1.2), { name = "ExitFrame" })
+					end
+				end
+				Kit.box(geo, CFrame.lookAt(gate + Vector3.new(0, 10.4, 0), gate + Vector3.new(0, 10.4, 0) + entry.v), Vector3.new(8, 0.8, 1.2), { name = "ExitLintel" })
+				Kit.box(geo, CFrame.lookAt(gate + Vector3.new(0, 11.6, 0), gate + Vector3.new(0, 11.6, 0) + entry.v), Vector3.new(8, 1.6, 0.6))
+				-- EXIT 글자(안쪽 벽)
+				local wallFace = c + back * (T / 2 - 0.01)
+				Kit.word(props, "EXIT", wallFace + Vector3.new(0, 8.5, 0) - right * 0.7, -right, -back, 1.4)
+				-- 사다리와 천장 해치
+				local lad = wallFace - back * 0.6 + right * 3.0
+				for _, s in { -0.7, 0.7 } do
+					Kit.cylinder(props, lad + right * s, lad + right * s + Vector3.new(0, H, 0), 0.1, { blocks = false })
+				end
+				for y = 1, H - 1, 1.2 do
+					Kit.cylinder(props, lad + right * -0.7 + Vector3.new(0, y, 0), lad + right * 0.7 + Vector3.new(0, y, 0), 0.07, { blocks = false, collide = false })
+				end
+				local hatch = lad + back * 0.4 + Vector3.new(0, H - 0.2, 0)
+				for _, s in { -1, 1 } do
+					Kit.box(props, CFrame.lookAt(hatch + right * s * 1.4, hatch + right * s * 1.4 + back), Vector3.new(0.3, 0.4, 3.0), { blocks = false, collide = false })
+					Kit.box(props, CFrame.lookAt(hatch + back * s * 1.4, hatch + back * s * 1.4 + right), Vector3.new(0.3, 0.4, 3.0), { blocks = false, collide = false })
+				end
+				info.exitCFrame = CFrame.lookAt(c + Vector3.new(0, 4, 0) + back * 0.8, c + Vector3.new(0, 4, 0) + back * 2)
+				info.exitSize = Vector3.new(T - 1, 8, T - 2.5)
+			elseif ch == "D" then
+				local ax = axis or Vector3.new(1, 0, 0)
+				local across = Vector3.new(ax.Z, 0, -ax.X)
+				local doorW, doorH, thick = 5, 9, 2
+				-- 문 벽: 문 양옆과 문 위
+				local sideW = (T - doorW) / 2
+				for _, s in { -1, 1 } do
+					local p = c + across * s * (doorW / 2 + sideW / 2) + Vector3.new(0, H / 2, 0)
+					Kit.box(geo, CFrame.lookAt(p, p + ax), Vector3.new(sideW, H, thick), { name = "DoorWall" })
+					-- 문틀(양쪽으로 튀어나온 문설주)
+					local jp = c + across * s * (doorW / 2 + 0.25) + Vector3.new(0, doorH / 2, 0)
+					Kit.box(geo, CFrame.lookAt(jp, jp + ax), Vector3.new(0.5, doorH, thick + 0.5), { name = "DoorJamb" })
+				end
+				local top = c + Vector3.new(0, (doorH + H) / 2, 0)
+				Kit.box(geo, CFrame.lookAt(top, top + ax), Vector3.new(doorW, H - doorH, thick), { name = "DoorWall" })
+				local lint = c + Vector3.new(0, doorH + 0.25, 0)
+				Kit.box(geo, CFrame.lookAt(lint, lint + ax), Vector3.new(doorW + 1, 0.5, thick + 0.5), { name = "DoorHead" })
+				local hingeBottom = c - across * (doorW / 2) + ax * (thick / 2 - 0.15) + Vector3.new(0, 0.02, 0)
+				local swing = if hash(i, j, seed) < 0.5 then 1 else -1
+				-- (문짝은 경첩에서 across 방향으로 뻗는다. swing 부호에 따라 ax 쪽이나 반대쪽으로 열린다)
+				Doors.create(props, hingeBottom, across, doorW, doorH, swing)
+			elseif ch == "A" then
+				local ax = axis or Vector3.new(1, 0, 0)
+				local across = Vector3.new(ax.Z, 0, -ax.X)
+				Kit.archPortal(geo, c + Vector3.new(0, fy, 0), across, T, 6, H - fy)
+			elseif ch == "O" then
+				local p = c + Vector3.new(0, fy, 0)
+				Kit.box(geo, CFrame.new(p + Vector3.new(0, (H - fy) / 2, 0)), Vector3.new(2.4, H - fy, 2.4), { name = "Pillar" })
+				Kit.box(geo, CFrame.new(p + Vector3.new(0, 0.4, 0)), Vector3.new(3.4, 0.8, 3.4), { name = "PillarBase" })
+				Kit.box(geo, CFrame.new(p + Vector3.new(0, H - fy - 0.6, 0)), Vector3.new(3.2, 1.2, 3.2), { name = "PillarCap" })
+			elseif ch == "c" then
+				-- 벽 쪽으로 붙인 상자 더미
+				local side = Vector3.new(-1, 0, 0)
+				for _, d in dirs do
+					if isWall(i + d.di, j + d.dj) then
+						side = d.v
+						break
+					end
+				end
+				local along = Vector3.new(side.Z, 0, -side.X)
+				local base = c + side * (T / 2 - 1.8) + Vector3.new(0, fy, 0)
+				local yaw = math.atan2(side.X, side.Z)
+				Kit.crate(props, base - along * 1.8, Vector3.new(3, 3, 3), yaw)
+				Kit.crate(props, base - along * 1.8 + Vector3.new(0, 3, 0), Vector3.new(2.2, 2.2, 2.2), yaw + 0.25)
+				Kit.crate(props, base + along * 1.7, Vector3.new(3.2, 2.2, 2.6), yaw - 0.1)
+				Kit.box(props, CFrame.new(base + along * 1.7 + Vector3.new(0, 0.12, 0)) * CFrame.Angles(0, yaw, 0), Vector3.new(3.6, 0.24, 3.0), { blocks = false })
+			elseif ch == "m" then
+				local p = c + Vector3.new(0, fy, 0)
+				Kit.box(props, CFrame.new(p + Vector3.new(0, 0.4, 0)), Vector3.new(5.4, 0.8, 4.2), { name = "MachineBase" })
+				Kit.box(props, CFrame.new(p + Vector3.new(-0.6, 2.4, 0)), Vector3.new(3.6, 3.2, 3.4), { name = "Machine" })
+				Kit.box(props, CFrame.new(p + Vector3.new(1.9, 1.9, 0)), Vector3.new(1.0, 2.2, 1.6), { name = "Panel" })
+				Kit.pipe(props, p + Vector3.new(-2.4, 5.2, 0), p + Vector3.new(1.6, 5.2, 0), 1.1, { 0, 1 }, true)
+				Kit.pipe(props, p + Vector3.new(1.0, 6.3, 0), p + Vector3.new(1.0, H - fy, 0), 0.45, { 0.05, 0.95 }, false)
+				for _, s in { -1, 1 } do
+					Kit.box(props, CFrame.new(p + Vector3.new(-0.4 + s * 1.4, 4.4, 0)), Vector3.new(0.4, 1.0, 2.2), { blocks = false })
+				end
+				local em = Kit.box(props, CFrame.new(p + Vector3.new(0, 3, 0)), Vector3.new(0.2, 0.2, 0.2), { invisible = true, collide = false, tag = false })
+				em.CanQuery = false
+				em:SetAttribute("Sound", "AmbientFan")
+				CollectionService:AddTag(em, Config.Tags.AmbientEmitter)
+			elseif ch == "v" then
+				local p = c + Vector3.new(0, fy, 0)
+				local spots = { Vector3.new(-2.2, 0, -2.2), Vector3.new(-2.4, 0, 1.6), Vector3.new(1.8, 0, -2.6) }
+				local radii = { 1.0, 0.6, 0.7 }
+				for k, o in spots do
+					Kit.pipe(props, p + o, p + o + Vector3.new(0, H - fy, 0), radii[k], { 0.07, 0.5, 0.93 }, true)
+				end
+				Kit.pipe(props, p + spots[1] + Vector3.new(0, 10, 0), p + spots[3] + Vector3.new(0, 10, 0), 0.4, { 0.5 }, false)
+			elseif ch == "f" then
+				local p = c + Vector3.new(0, H, 0)
+				Kit.cylinder(props, p - Vector3.new(0, 1.2, 0), p, 2.4, { blocks = false, collide = false, rings = 1 })
+				for k = 0, 3 do
+					local a = k * math.pi / 2 + 0.4
+					local bp = p - Vector3.new(0, 1.0, 0) + Vector3.new(math.cos(a), 0, math.sin(a)) * 1.05
+					Kit.box(props, CFrame.lookAt(bp, bp + Vector3.new(math.cos(a), 0, math.sin(a))) * CFrame.Angles(0, 0, 0.35), Vector3.new(0.7, 0.08, 1.8), { blocks = false, collide = false })
+				end
+				local em = Kit.box(props, CFrame.new(p - Vector3.new(0, 1.5, 0)), Vector3.new(0.2, 0.2, 0.2), { invisible = true, collide = false, tag = false })
+				em.CanQuery = false
+				em:SetAttribute("Sound", "AmbientFan")
+				CollectionService:AddTag(em, Config.Tags.AmbientEmitter)
+			elseif ch == "b" or ch == "n" then
+				-- 다리 방향: 다리/위층과 이어진 축
+				local bx = (bridgeChar(at(i - 1, j)) or (not isPit(i - 1, j) and not isWall(i - 1, j))) and (bridgeChar(at(i + 1, j)) or (not isPit(i + 1, j) and not isWall(i + 1, j)))
+				local ax = if bx then Vector3.new(1, 0, 0) else Vector3.new(0, 0, 1)
+				local across = Vector3.new(ax.Z, 0, -ax.X)
+				local w = if ch == "n" then 3.2 else 5 -- (좁은 다리 n: 괴물은 지나갈 수 없다)
+				local deck = c + Vector3.new(0, -0.25, 0)
+				Kit.box(geo, CFrame.lookAt(deck, deck + ax), Vector3.new(w, 0.5, T), { name = "Catwalk" })
+				for _, s in { -1, 1 } do
+					local beam = c + across * s * (w / 2 - 0.3) + Vector3.new(0, -0.9, 0)
+					Kit.box(props, CFrame.lookAt(beam, beam + ax), Vector3.new(0.4, 0.8, T), { blocks = false })
+					local ra = c + across * s * (w / 2 - 0.15) - ax * (T / 2)
+					Kit.railing(props, ra, ra + ax * T, 3.3, 2.65)
+				end
+				Kit.box(props, CFrame.lookAt(c + Vector3.new(0, -1.0, 0), c + Vector3.new(0, -1.0, 0) + across), Vector3.new(0.4, 0.6, w), { blocks = false })
+				if (i + j) % 2 == 0 then
+					for _, s in { -1, 1 } do
+						local col = c + across * s * (w / 2 - 0.3)
+						Kit.box(props, CFrame.new(col + Vector3.new(0, (PIT_Y - 1.3) / 2, 0)), Vector3.new(0.5, -1.3 - PIT_Y, 0.5), { blocks = false })
+					end
+				end
+			elseif ch == "s" then
+				-- 계단: 위층 이웃 쪽으로 올라간다
+				local up = dirs[1]
+				for _, d in dirs do
+					local n = at(i + d.di, j + d.dj)
+					if n ~= "#" and not isPit(i + d.di, j + d.dj) then
+						up = d
+					end
+				end
+				local across = Vector3.new(up.v.Z, 0, -up.v.X)
+				local bottom = c - up.v * (T / 2) + Vector3.new(0, PIT_Y, 0)
+				Kit.stairs(props, bottom, up.v, 6, -PIT_Y, T, 8)
+				-- 계단 옆이 구덩이면 기울어진 난간
+				for _, s in { -1, 1 } do
+					local si, sj = i + math.round(across.X * s), j + math.round(across.Z * s)
+					if not isWall(si, sj) then
+						local a = bottom + across * s * 2.9
+						local b = a + up.v * T + Vector3.new(0, -PIT_Y, 0)
+						Kit.railing(props, a, b, 3.3, 2.7)
+					end
+				end
+			end
+			local pf = layout.Props and layout.Props[ch]
+			if pf then
+				pf(ctx, i, j)
+			end
+		end
+	end
+
+	-- ── 구덩이 가장자리 난간(위층 쪽) ──
+	for j = 1, nz do
+		for i = 1, nx do
+			if not isWall(i, j) and not isPit(i, j) then
+				for _, d in dirs do
+					local ni, nj = i + d.di, j + d.dj
+					local n = at(ni, nj)
+					if isPit(ni, nj) then
+						local open = false
+						if n == "s" then
+							-- 그 계단이 이 타일로 올라오면 난간 없음
+							local best = nil
+							for _, d2 in dirs do
+								local m = at(ni + d2.di, nj + d2.dj)
+								if m ~= "#" and not isPit(ni + d2.di, nj + d2.dj) then
+									best = d2
+								end
+							end
+							open = best ~= nil and best.di == -d.di and best.dj == -d.dj
+						elseif bridgeChar(n) then
+							local bx = (bridgeChar(at(ni - 1, nj)) or (not isPit(ni - 1, nj) and not isWall(ni - 1, nj))) and (bridgeChar(at(ni + 1, nj)) or (not isPit(ni + 1, nj) and not isWall(ni + 1, nj)))
+							open = (bx and d.dj == 0) or (not bx and d.di == 0)
+						end
+						if open and bridgeChar(n) then
+							-- 다리 입구 양옆은 난간
+							local c = center(i, j)
+							local edge = c + d.v * (T / 2 - 0.3)
+							local across = Vector3.new(d.v.Z, 0, -d.v.X)
+							local bw = if n == "n" then 1.75 else 2.6
+							for _, s in { -1, 1 } do
+								Kit.railing(props, edge + across * s * bw, edge + across * s * (T / 2 - 0.3), 3.3, 2.6)
+							end
+						elseif not open then
+							local c = center(i, j)
+							local edge = c + d.v * (T / 2 - 0.3)
+							local across = Vector3.new(d.v.Z, 0, -d.v.X)
+							Kit.railing(props, edge - across * (T / 2 - 0.3), edge + across * (T / 2 - 0.3), 3.3, 2.6)
+						end
+					end
+				end
+			end
+		end
+	end
+
+	-- ── 괴물 배회 지점 ──
+	local walk = layout.Walkable or {}
+	for j = 1, nz do
+		for i = 1, nx do
+			local ch = at(i, j)
+			if ch == "." or ch == "p" or ch == "b" or ch == "f" or ch == "D" or ch == "A" or walk[ch] then
+				local c = center(i, j)
+				local y = if ch == "b" then 0 else floorY(i, j)
+				table.insert(info.nodes, c + Vector3.new(0, y + 3, 0))
+			end
+		end
+	end
+
+	-- 바닥 아래 낙하 방지(맵 밖)
+	local kill = Kit.span(folder, Vector3.new(-20, BOTTOM - 4, -20), Vector3.new(nx * T + 20, BOTTOM - 2, nz * T + 20), { tag = false, invisible = true })
+	kill.Name = "Underfloor"
+
+	return info
+end
+
+return Builder
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Folder" referent="23">
+        <Properties>
+          <string name="Name">Stages</string>
+        </Properties>
+        <Item class="ModuleScript" referent="24">
+          <Properties>
+            <string name="Name">Stage1</string>
+            <string name="Source"><![CDATA[--!strict
+-- STAGE 1 — 지하 시설
+-- 콘크리트 벽, 벽 배관, 기둥, 아치 리브, 문, 구덩이 위 철제 다리와 계단, 기계 설비.
+-- 시작(S, 왼쪽 위) → 출구(E, 오른쪽 아래). 여러 갈래, 막다른 길, 순환 통로, 구덩이 아래 우회로가 있다.
+return {
+	Seed = 11,
+	PipeChance = 0.55,
+	Rows = {
+		"####################",
+		"#S..#.......#...f..#",
+		"#S..D..O.O..A..cc..#",
+		"#...#.......#......#",
+		"##.###A######.####D#",
+		"#...#....#....#....#",
+		"#.c.#.##.#.##.#.m..#",
+		"#...A.#..A..#.A....#",
+		"###.###.#####.###.##",
+		"#.......#pppppppp..#",
+		"#.#####..bbbbbbbb..#",
+		"#.#...#.#ppppppps..#",
+		"#.#.m.#..spppppp#..#",
+		"#.#...D.#########D##",
+		"#.##.##.#....#.....#",
+		"#.......A.cc.A..O..#",
+		"#####.###.v..#.....#",
+		"#.....#.##D####.####",
+		"#.c.....#.......A.E#",
+		"####################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="25">
+          <Properties>
+            <string name="Name">Stage2</string>
+            <string name="Source"><![CDATA[--!strict
+-- STAGE 2 — 물류 창고
+-- 대형 선반(H 가로 / h 세로)이 줄지어 좁은 통로를 만들고, 컨테이너(K, 2단 Q)와 상자 더미가 넓은 창고를 나눈다.
+local Props = require(script.Parent.Parent.Props)
+return {
+	Seed = 23,
+	PipeChance = 0.3,
+	Props = { H = Props.RackX, h = Props.RackZ, K = Props.Container, Q = Props.ContainerStack },
+	Rows = {
+		"######################",
+		"#SS.#.....HHHH....cc.#",
+		"#...D................#",
+		"#SS.#..HHHH...KK.HHH.#",
+		"##.##............HHH.#",
+		"#.......HHHH..Q......#",
+		"#.cc.#...........KK..#",
+		"#######D######.#######",
+		"#.....h..h..h......m.#",
+		"#.K...h..h..h..KK....#",
+		"#.K...h..h..h......c.#",
+		"#.....h..h..h...QQ...#",
+		"###A##########.####D##",
+		"#......c.......#.....#",
+		"#.HHHH....KK...A..K..#",
+		"#...........Q..#.....#",
+		"#.HHHH..cc.....###.###",
+		"#..............#....E#",
+		"#..KK......HHH.D....##",
+		"######################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="26">
+          <Properties>
+            <string name="Name">Stage3</string>
+            <string name="Source"><![CDATA[--!strict
+-- STAGE 3 — 하수도
+-- 가운데를 가로지르는 지하 수로(w, 아래층 + 물소리) 위로 철제 다리(b)와 좁은 다리(n), 수로로 내려가는 계단(s).
+-- 머리 위 대형 배관(P), 아치 터널(A), 여러 갈래 터널.
+local Props = require(script.Parent.Parent.Props)
+return {
+	Seed = 37,
+	PipeChance = 0.75,
+	Props = { w = Props.Water, P = Props.BigPipe },
+	PitTiles = { w = true },
+	Walkable = { w = true, P = true },
+	Rows = {
+		"######################",
+		"#SS..#....PPPP...#...#",
+		"#....A...........#.m.#",
+		"#SS..#..##.###.###...#",
+		"###.##..#...#........#",
+		"#.......#.v.#.##.##..#",
+		"#.###A###...A..#.....#",
+		"#...........#..#..v..#",
+		"#....................#",
+		"#wwswwbwwswwnwwwbwwww#",
+		"#wwwwwbwwwwwnswwbwsww#",
+		"#...P.........P......#",
+		"#...P..######.P.##A###",
+		"#.##.####.....#......#",
+		"#...#...#..##.#.v.##.#",
+		"#.v.#.m.A..A..#..#...#",
+		"#...#...#..####..#.#.#",
+		"#.#####.#..........#.#",
+		"#.........PPPP..#..#E#",
+		"######################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="27">
+          <Properties>
+            <string name="Name">Stage4</string>
+            <string name="Source"><![CDATA[--!strict
+-- STAGE 4 — 폐병원
+-- 긴 복도와 문이 달린 병실(R 침대), 진료실(T 책상, k 캐비닛), 수술실(X), 아래층 병동으로 내려가는 계단.
+local Props = require(script.Parent.Parent.Props)
+return {
+	Seed = 41,
+	PipeChance = 0.25,
+	Props = { R = Props.Bed, T = Props.Desk, X = Props.Surgery, k = Props.Cabinet },
+	Walkable = { R = true, k = true },
+	Rows = {
+		"######################",
+		"#R.R#R.R#T.k#X.X#R.R.#",
+		"#...#...#...#...#....#",
+		"#...#...#T..#...#R.R.#",
+		"##D###D###D###D###D###",
+		"#S...................#",
+		"#S......O.....O......#",
+		"##D#####D###.##D###D##",
+		"#...#.....#...#..#...#",
+		"#R..#.T.T.#.T.#..#R.R#",
+		"#...D.....#...D..D...#",
+		"#k..#.T.T.#.k.#..#...#",
+		"######D####D#####.####",
+		"#....................#",
+		"#..O.....O.....O.....#",
+		"###D####.#####.###D###",
+		"#pps#pppp#.....#.....#",
+		"#ppp#pXpp#.R.R.#.T.T##",
+		"#pppppppsD.....D....E#",
+		"######################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="28">
+          <Properties>
+            <string name="Name">Stage5</string>
+            <string name="Source"><![CDATA[--!strict
+-- STAGE 5 — 심층 미로
+-- 거대한 지하 구조물: 큰 구덩이 여러 개를 잇는 다리(b)와 괴물이 건널 수 없는 좁은 다리(n), 계단(s)으로 오르내리는 복층,
+-- 대형 기둥(B), 수직 배관, 긴 복도. 괴물 4마리가 여러 방향에서 접근한다.
+local Props = require(script.Parent.Parent.Props)
+
+local function bigPillar(ctx, i, j)
+	local Kit = ctx.Kit
+	local p = ctx.center(i, j) + Vector3.new(0, ctx.floorY(i, j), 0)
+	local h = ctx.H - ctx.floorY(i, j)
+	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, h / 2, 0)), Vector3.new(4.4, h, 4.4), { name = "BigPillar" })
+	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, 0.6, 0)), Vector3.new(6, 1.2, 6))
+	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, 1.6, 0)), Vector3.new(5.2, 0.8, 5.2))
+	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, h - 1.2, 0)), Vector3.new(6, 2.4, 6))
+	for _, s in { -1, 1 } do
+		Kit.box(ctx.geo, CFrame.new(p + Vector3.new(s * 2.4, h / 2, 0)), Vector3.new(0.5, h - 4, 1.4), { blocks = false })
+		Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, h / 2, s * 2.4)), Vector3.new(1.4, h - 4, 0.5), { blocks = false })
+	end
+end
+
+return {
+	Seed = 53,
+	PipeChance = 0.5,
+	Props = { B = bigPillar, P = Props.BigPipe },
+	Walkable = { P = true },
+	Rows = {
+		"########################",
+		"#SS..#........#........#",
+		"#....D..B..B..A..v..B..#",
+		"#SS..#........#........#",
+		"###.#####.##.###.####.##",
+		"#.......#...........#..#",
+		"#.B.....A..ppsppppp.A..#",
+		"#.......#..nnnnnnnn.#..#",
+		"####.####..psppppsp.#..#",
+		"#......................#",
+		"####.###.####.#####.####",
+		"#..........#...........#",
+		"#.pppppspppppp.#.......#",
+		"#.bbbbbbbbbbbb.D.......#",
+		"#.spppppppppps.#..B....#",
+		"##############.#####.###",
+		"#.v....A....#.PPPP.m...#",
+		"#.B....#....D.....###.##",
+		"#......#....#......A..E#",
+		"########################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Script" referent="29">
+        <Properties>
+          <string name="Name">TestHarness</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[--!nonstrict
+-- 자동 플레이 테스트. Studio 가 StudioTestService 로 플레이를 시작했을 때만 동작한다(tools/studio-test.js).
+-- 일반 플레이·게시된 게임에서는 아무것도 하지 않는다. 모든 테스트 플레이어는 음소거(TestMute).
+--   core  : 1인 — 어둠, 음파 퍼짐·유지·소멸, 벽/닫힌 문 가림, 발사 간격, 이동 속도, 괴물 청각·경로·추격·사망, 출구
+--   multi : 여러 클라이언트 — 동시 음파, 서로의 음파 수신, 프레임 시간
+
+local RunService = game:GetService("RunService")
+if not RunService:IsStudio() then
+	return
+end
+local StudioTestService = game:GetService("StudioTestService")
+local okArgs, args = pcall(function()
+	return StudioTestService:GetTestArgs()
+end)
+if not okArgs or type(args) ~= "table" or not args.Test then
+	return
+end
+
+local Players = game:GetService("Players")
+local LogService = game:GetService("LogService")
+local PathfindingService = game:GetService("PathfindingService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Round = require(script.Parent.Round)
+local Doors = require(script.Parent.Doors)
+local SoundBus = require(script.Parent.SoundBus)
+
+local R = { test = args.Test, finished = false, checks = {}, log = {}, errors = {}, info = {} }
+local t0 = os.clock()
+local function log(s)
+	table.insert(R.log, string.format("%6.1f %s", os.clock() - t0, s))
+end
+local function check(name, ok, info)
+	table.insert(R.checks, { name = name, ok = ok == true, info = if info ~= nil then tostring(info) else nil })
+	log((if ok then "PASS " else "FAIL ") .. name .. (if info ~= nil then " (" .. tostring(info) .. ")" else ""))
+end
+LogService.MessageOut:Connect(function(msg, kind)
+	if kind == Enum.MessageType.MessageError or (kind == Enum.MessageType.MessageWarning and (msg:find("%[Monster%]") or msg:find("%[SoundBus%]"))) then
+		if #R.errors < 30 then
+			table.insert(R.errors, msg:sub(1, 300))
+		end
+	end
+end)
+
+-- 테스트 설정: 괴물은 시험할 때만 움직이고, 결과 화면은 짧게
+Config.Monster.StartDelay = 1e6
+Config.Round.ResultSeconds = 2
+Config.Round.FirstStartDelay = 1
+
+for _, p in Players:GetPlayers() do
+	p:SetAttribute("TestMute", true)
+end
+Players.PlayerAdded:Connect(function(p)
+	p:SetAttribute("TestMute", true)
+end)
+local probe = Instance.new("RemoteFunction")
+probe.Name = "TestProbe"
+probe.Parent = ReplicatedStorage
+
+local function ask(p, cmd, arg)
+	-- (클라이언트가 응답하지 않아도 10초 뒤 nil)
+	local done, ok, res = false, false, nil
+	task.spawn(function()
+		ok, res = pcall(function()
+			return probe:InvokeClient(p, cmd, arg)
+		end)
+		done = true
+	end)
+	local t = os.clock()
+	while not done and os.clock() - t < 10 do
+		task.wait()
+	end
+	if not done then
+		log("probe timeout " .. cmd)
+		return nil
+	end
+	if not ok then
+		log("probe error " .. cmd .. ": " .. tostring(res))
+		return nil
+	end
+	return res
+end
+
+local function waitFor(fn, timeout)
+	local t = os.clock()
+	while os.clock() - t < timeout do
+		local v = fn()
+		if v then
+			return v
+		end
+		task.wait(0.1)
+	end
+	return nil
+end
+
+local function root(p)
+	return p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+end
+
+local function place(p, pos, look)
+	local char = p.Character
+	if char then
+		char:PivotTo(CFrame.lookAt(pos, look or (pos + Vector3.new(1, 0, 0))))
+		local r = root(p)
+		if r then
+			r.AssemblyLinearVelocity = Vector3.zero
+		end
+	end
+end
+
+local function tile(i, j, y)
+	return Vector3.new((i - 1) * 8 + 4, y or 3, (j - 1) * 8 + 4)
+end
+
+local function readyPlayers(n)
+	return waitFor(function()
+		local ps = Players:GetPlayers()
+		if #ps < n or Round.state ~= "Playing" then
+			return nil
+		end
+		for _, p in ps do
+			if p:GetAttribute("Status") ~= "Alive" or not root(p) then
+				return nil
+			end
+			local st = ask(p, "stats")
+			local stage = workspace:FindFirstChild("Stage")
+			if not st or not st.ready or not stage or st.buildId ~= stage:GetAttribute("BuildId") then
+				return nil
+			end
+		end
+		return ps
+	end, if n > 1 then 240 else 90)
+end
+
+local function stageFolder()
+	return workspace:FindFirstChild("Stage")
+end
+
+-- ─────────────────────────────── core ───────────────────────────────
+local function core()
+	local ps = readyPlayers(1)
+	check("player spawned and sonar world built", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local stage = stageFolder()
+	local st = ask(p, "stats")
+	R.info.world = st and { segs = st.segs, culled = st.culled, unattached = st.unattached, viewParts = st.viewParts, grid = st.grid }
+	check("outline segments generated", st and st.segs > 1000, st and st.segs)
+	check("almost every segment can receive the wave", st and st.unattached < st.segs * 0.08, st and (st.unattached .. "/" .. st.segs))
+	check("seams removed (coplanar/buried edges culled)", st and st.culled > 0, st and st.culled)
+
+	-- 1. 어둠
+	local L = game:GetService("Lighting")
+	local lights = 0
+	for _, d in workspace:GetDescendants() do
+		if d:IsA("Light") then
+			lights += 1
+		end
+	end
+	local bright = 0
+	local neon = 0
+	for _, d in stage:GetDescendants() do
+		if d:IsA("BasePart") then
+			if d.Transparency < 1 and (d.Color.R + d.Color.G + d.Color.B) > 0.001 then
+				bright += 1
+			end
+			if d.Material == Enum.Material.Neon then
+				neon += 1
+			end
+		end
+	end
+	check("darkness: no ambient/brightness, no lights", L.Brightness == 0 and L.Ambient == Color3.new() and L.OutdoorAmbient == Color3.new() and lights == 0, "lights=" .. lights)
+	check("darkness: every structure is black and unlit", bright == 0 and neon == 0, "nonblack=" .. bright .. " neon=" .. neon)
+	check("client lighting is dark too", st and st.lighting.brightness == 0, st and st.lighting.brightness)
+	task.wait(3)
+	local idle = ask(p, "stats")
+	check("nothing visible before a pulse", idle and idle.lines.lit == 0, idle and idle.lines.lit)
+
+	-- 계단 경사로 방향(쐐기 방향 확인)
+	local stairs = stage:FindFirstChild("Props") and stage.Props:FindFirstChild("Stairs")
+	if stairs then
+		local ramp = stairs:FindFirstChildWhichIsA("WedgePart")
+		local f = ramp.CFrame.ZVector
+		local rp = RaycastParams.new()
+		rp.FilterType = Enum.RaycastFilterType.Include
+		rp.FilterDescendantsInstances = { ramp }
+		local function h(off)
+			local o = ramp.Position + f * off + Vector3.new(0, 10, 0)
+			local hit = workspace:Raycast(o, Vector3.new(0, -30, 0), rp)
+			return hit and hit.Position.Y
+		end
+		local hi, lo = h(2.5), h(-2.5)
+		check("stairs ramp rises toward the upper floor", hi and lo and hi > lo + 2, tostring(hi) .. " vs " .. tostring(lo))
+	end
+
+	-- 걸을 수 있는 미로: 시작 → 출구 경로
+	for _, agent in { { name = "player", r = 1.2, h = 5.5 }, { name = "monster", r = Config.Monster.AgentRadius, h = Config.Monster.AgentHeight } } do
+		local path = PathfindingService:CreatePath({ AgentRadius = agent.r, AgentHeight = agent.h, AgentCanJump = false })
+		local from = Round.info.spawns[1].Position - Vector3.new(0, 2.5, 0)
+		local to = Round.info.exitCFrame.Position - Vector3.new(0, 3.5, 0)
+		pcall(function()
+			path:ComputeAsync(from, to)
+		end)
+		check("path start -> exit exists (" .. agent.name .. " size)", path.Status == Enum.PathStatus.Success, path.Status.Name .. " wps=" .. #path:GetWaypoints())
+	end
+
+	-- 2~4. 음파: 가까운 곳부터, 유지, 소멸
+	place(p, tile(3, 3, 3), tile(3, 6, 3))
+	task.wait(0.5)
+	ask(p, "resetCooldown")
+	local fired = ask(p, "fire")
+	check("left-click pulse fires", fired == true)
+	local samples = {}
+	for _, t in { 0.1, 0.35, 0.7, 1.2 } do
+		task.wait(t - (samples.t or 0))
+		samples.t = t
+		local s = ask(p, "stats")
+		table.insert(samples, s and s.lines.lit or -1)
+	end
+	log("lit over time: " .. table.concat(samples, ", "))
+	check("outline appears progressively (grows over time)", samples[1] < samples[2] and samples[2] <= samples[3] and samples[3] > 0, table.concat(samples, ","))
+	local tr = ask(p, "trace")
+	if tr and tr.trace and #tr.trace > 20 then
+		local n = #tr.trace
+		local early, late = 0, 0
+		local k = math.max(1, n // 10)
+		for i = 1, k do
+			early += tr.trace[i][2]
+			late += tr.trace[n - k + i][2]
+		end
+		early /= k
+		late /= k
+		local lastT = tr.trace[n][1]
+		check("near structures revealed first, far last", early < late - 8, string.format("first10%%=%.1f last10%%=%.1f studs", early, late))
+		check("wave reaches the far edge in ~R/speed", lastT > 0.5 and lastT < 1.4, string.format("%.2fs", lastT))
+		-- 시간과 거리의 관계: 늦게 나타난 선일수록 멀다
+		local monotone = 0
+		for i = 2, n do
+			if tr.trace[i][2] + 1.5 >= tr.trace[i - 1][2] then
+				monotone += 1
+			end
+		end
+		check("reveal order follows distance", monotone / (n - 1) > 0.97, string.format("%.3f", monotone / (n - 1)))
+		R.info.pulse = { revealed = n, lastT = lastT }
+	else
+		check("pulse trace recorded", false, tr and #tr.trace)
+	end
+	task.wait(0.6) -- t≈1.8
+	local mid = ask(p, "stats")
+	check("outline still visible ~1.8s after the pulse", mid and mid.lines.lit > 0, mid and mid.lines.lit)
+	task.wait(1.6) -- t≈3.4 (가장 먼 선은 0.9초에 나타나 2초 뒤 사라짐)
+	local after = ask(p, "stats")
+	check("outline gone again (~2s after reveal)", after and after.lines.lit == 0 and after.lines.active == 0, after and (after.lines.lit .. "/" .. after.lines.active))
+
+	-- 5. 벽·닫힌 문 너머는 보이지 않는다
+	local pillar = tile(8, 3, 0)
+	local pillarSegs = ask(p, "segsNear", { pillar + Vector3.new(0, 6, 0), 3.5 }) or {}
+	check("pillar behind the door has outline segments", #pillarSegs > 4, #pillarSegs)
+	local door
+	for _, d in Doors.all() do
+		if (d.panel.Position - tile(5, 3, 4.5)).Magnitude < 4 then
+			door = d
+		end
+	end
+	check("test door found", door ~= nil)
+	local function revealedFrom(pos)
+		ask(p, "resetCooldown")
+		place(p, pos, pillar + Vector3.new(0, 3, 0))
+		task.wait(0.4)
+		ask(p, "fire")
+		task.wait(1.3)
+		local t = ask(p, "trace")
+		local set = {}
+		for _, e in (t and t.trace) or {} do
+			set[e[3]] = true
+		end
+		local hits = 0
+		for _, id in pillarSegs do
+			if set[id] then
+				hits += 1
+			end
+		end
+		return hits, (t and #t.trace) or 0
+	end
+	if door then
+		if door.open then
+			Doors.toggle(door)
+			task.wait(0.8)
+		end
+		local hits, total = revealedFrom(Vector3.new(29, 3, 20))
+		check("closed door: structures behind it are NOT revealed", hits == 0 and total > 50, "pillar hits=" .. hits .. " total=" .. total)
+		Doors.toggle(door)
+		task.wait(0.9)
+		local hits2, total2 = revealedFrom(Vector3.new(29, 3, 20))
+		check("open door: the wave passes through the doorway", hits2 > 0, "pillar hits=" .. hits2 .. " total=" .. total2)
+		Doors.toggle(door)
+		task.wait(0.8)
+	end
+	-- 두꺼운 벽 너머(옆방)도 보이지 않는다: 시작 방 동쪽 8스터드 벽 너머 방의 북쪽 벽면(직선 거리 32, 문을 돌아가면 36 이상)
+	do
+		local crate = Vector3.new(44, 12.5, 9.5) -- (북쪽 벽-천장 모서리와 경사)
+		local segs = ask(p, "segsNear", { crate, 3.5 }) or {}
+		ask(p, "resetCooldown")
+		place(p, tile(2, 2, 3), crate)
+		task.wait(0.4)
+		ask(p, "fire")
+		task.wait(1.3)
+		local t = ask(p, "trace")
+		local set = {}
+		for _, e in (t and t.trace) or {} do
+			set[e[3]] = true
+		end
+		local hits = 0
+		for _, id in segs do
+			if set[id] then
+				hits += 1
+			end
+		end
+				check("room behind a wall is not revealed", #segs > 0 and hits == 0, "segs=" .. #segs .. " hits=" .. hits)
+	end
+
+	-- 6. 서버의 발사 간격 검증
+	task.wait(1.6)
+	local Main = _G.SonarMaze
+	local before = Main.Sonar.accepted[p] or 0
+	ask(p, "rawFire")
+	task.wait(0.15)
+	ask(p, "rawFire")
+	task.wait(0.15)
+	ask(p, "rawFire")
+	task.wait(0.4)
+	local mid1 = Main.Sonar.accepted[p] or 0
+	task.wait(1.4)
+	ask(p, "rawFire")
+	task.wait(0.4)
+	local mid2 = Main.Sonar.accepted[p] or 0
+	check("server enforces the 1.5s pulse interval", mid1 - before == 1 and mid2 - mid1 == 1, string.format("burst accepted %d, after 1.8s %d", mid1 - before, mid2 - mid1))
+
+	-- 13. 반복 발사해도 쌓이지 않는다
+	task.wait(2.5)
+	local function burst()
+		for _ = 1, 12 do
+			ask(p, "pulseAt", root(p).Position + Vector3.new(0, 1.5, 0))
+			task.wait(0.25)
+		end
+	end
+	burst()
+	local s1 = ask(p, "stats")
+	task.wait(3)
+	local s1b = ask(p, "stats")
+	burst()
+	local s2 = ask(p, "stats")
+	task.wait(3)
+	local s3 = ask(p, "stats")
+	log(string.format("burst lines: active %d created %d / after %d / burst2 active %d created %d / after %d", s1.lines.active, s1.lines.created, s1b.lines.active, s2.lines.active, s2.lines.created, s3.lines.active))
+	check("repeated pulses reuse lines (no pile-up)", s2.lines.created <= s1.lines.created * 1.15 + 20 and s2.lines.active < Config.Sonar.PoolSize, string.format("created %d -> %d, active %d", s1.lines.created, s2.lines.created, s2.lines.active))
+	check("all lines released after the burst", s1b.lines.active == 0 and s3.lines.active == 0, s3.lines.active)
+
+	-- 7. 걷기·달리기·웅크리기
+	local speeds = {}
+	for _, m in { "Run", "Crouch", "Walk" } do
+		ask(p, "setMode", m)
+		task.wait(0.5)
+		local s = ask(p, "stats")
+		local hum = p.Character:FindFirstChildOfClass("Humanoid")
+		speeds[m] = { s and s.walkSpeed, p.Character:GetAttribute("MoveMode"), hum.WalkSpeed }
+	end
+	ask(p, "setMode", nil)
+	check("run speed 18 (client+server)", speeds.Run[1] == 18 and speeds.Run[2] == "Run" and speeds.Run[3] == 18, table.concat({ tostring(speeds.Run[1]), tostring(speeds.Run[2]) }, " "))
+	check("crouch speed 5", speeds.Crouch[1] == 5 and speeds.Crouch[2] == "Crouch", tostring(speeds.Crouch[1]))
+	check("walk speed 10", speeds.Walk[1] == 10 and speeds.Walk[2] == "Walk", tostring(speeds.Walk[1]))
+	-- 실제로 걸어서 발소리 소음이 나는가(서버가 속도로 판정)
+	place(p, tile(2, 6, 3), tile(2, 8, 3))
+	task.wait(0.3)
+	local n0 = #SoundBus.recent
+	ask(p, "setMode", "Run")
+	ask(p, "move", tile(2, 8, 3))
+	task.wait(1.0)
+	local kinds = {}
+	for i = n0 + 1, #SoundBus.recent do
+		kinds[SoundBus.recent[i].kind] = true
+	end
+	ask(p, "setMode", nil)
+	check("running makes loud footstep noise (server-measured)", kinds.StepRun == true, (function()
+		local t = {}
+		for k in kinds do
+			table.insert(t, k)
+		end
+		return table.concat(t, ",")
+	end)())
+
+	-- 소리 감쇠
+	local a, b = tile(2, 3, 3), tile(2, 5, 3) -- 시작 방과 그 아래(벽 사이)
+	local walls = SoundBus.wallsBetween(a, b)
+	check("sound attenuation counts walls between", walls >= 1, walls)
+	check("hearing ranges: crouch 4 < walk 10 < run 25 < sonar 45", Config.Noise.Crouch == 4 and Config.Noise.Walk == 10 and Config.Noise.Run == 25 and Config.Noise.Sonar == 45)
+
+	-- 8~9. 괴물: 소리 감지 → 이동(벽 통과 없음)
+	local m = Round.monsters[1]
+	check("monster exists", m ~= nil)
+	if not m then
+		return
+	end
+	-- 플레이어는 멀리(출구 쪽 반대 구석)
+	place(p, tile(2, 3, 3))
+	local geo = stage:FindFirstChild("Geometry")
+	local wallParams = RaycastParams.new()
+	wallParams.FilterType = Enum.RaycastFilterType.Include
+	wallParams.FilterDescendantsInstances = { geo }
+	wallParams.RespectCanCollide = true
+	local startNode = tile(10, 16, 5.2)
+	local soundAt = tile(15, 16, 4.5)
+	m.model:PivotTo(CFrame.new(startNode))
+	m.waypoints = {}
+	m:setState("Wander")
+	m.startAt = 0
+	task.wait(0.5)
+	SoundBus.emit(soundAt, Config.Noise.Sonar, nil, "Sonar")
+	local heard = waitFor(function()
+		return m.state == "Alert" or m.state == "Investigate"
+	end, 2)
+	check("monster reacts to a sonar pulse 40 studs away", heard ~= nil, m.state)
+	local prev = m.root.Position
+	local through = 0
+	local maxStep = 0
+	local reached = waitFor(function()
+		local cur = m.root.Position
+		local d = cur - prev
+		if d.Magnitude > 0.05 then
+			maxStep = math.max(maxStep, d.Magnitude)
+			local hit = workspace:Raycast(prev, d, wallParams)
+			if hit then
+				through += 1
+			end
+		end
+		prev = cur
+		return (cur - soundAt).Magnitude < 7 or m.state == "Search"
+	end, 25)
+	check("monster walks to the sound position", reached ~= nil, string.format("dist=%.1f state=%s", (m.root.Position - soundAt).Magnitude, m.state))
+	check("monster never passes through walls", through == 0, "crossings=" .. through .. " maxStep=" .. string.format("%.2f", maxStep))
+	-- 수색 → 배회 복귀
+	local searching = waitFor(function()
+		return m.state == "Search"
+	end, 5)
+	check("monster searches around the sound", searching ~= nil, m.state)
+	R.info.monsterLog = m.log
+
+	-- 걷는 소리는 가까이에서만 들린다
+	m:setState("Wander")
+	m.waypoints = {}
+	local mp = m.root.Position
+	local far = mp + Vector3.new(30, 0, 0)
+	check("monster does not hear walking 30 studs away", not SoundBus.canHear(far, mp, Config.Noise.Walk))
+
+	-- 13. 출구 → 탈출 → STAGE CLEAR
+	m.startAt = 1e9
+	m:setState("Wander")
+	place(p, Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
+	local esc = waitFor(function()
+		return p:GetAttribute("Status") == "Escaped"
+	end, 3)
+	check("reaching the exit escapes", esc ~= nil, p:GetAttribute("Status"))
+	local cleared = waitFor(function()
+		return Round.lastOutcome == "Clear"
+	end, 4)
+	check("stage clear when all survivors escaped", cleared ~= nil, Round.lastOutcome)
+	check("clear advances to the next stage", Round.stageIndex == 2 or (Round.stageIndex == 1 and #Config.Stages >= 1), Round.stageIndex)
+	Round.stageIndex = 1 -- (사망 시험은 스테이지 1 좌표로)
+	task.wait(0.8)
+	local ui = ask(p, "stats")
+	check("STAGE CLEAR screen shown", ui and ui.ui.overlayTitle == "STAGE CLEAR", ui and ui.ui.overlayTitle)
+
+	-- 10. 다음 라운드에서 잡히기 → 사망 → (혼자) 재시작
+	Round.lastOutcome = ""
+	local again = readyPlayers(1)
+	check("next round starts and player respawns", again ~= nil, ReplicatedStorage:GetAttribute("StageName"))
+	if not again then
+		return
+	end
+	local m2 = Round.monsters[1]
+	-- 직선 통로에서 12스터드 떨어져 마주 본다
+	place(p, tile(3, 10, 3), tile(6, 10, 3))
+	m2.model:PivotTo(CFrame.lookAt(tile(5, 10, 5.2) - Vector3.new(4, 0, 0), tile(3, 10, 5.2)))
+	m2.waypoints = {}
+	m2.startAt = 0
+	local chased = waitFor(function()
+		return m2.state == "Chase"
+	end, 3)
+	check("monster spots a nearby player and chases", chased ~= nil, m2.state)
+	local died = waitFor(function()
+		return p:GetAttribute("Status") == "Dead"
+	end, 8)
+	check("caught by the monster -> death", died ~= nil, p:GetAttribute("Status"))
+	task.wait(1.2)
+	local dui = ask(p, "stats")
+	check("YOU DIED screen shown", dui and dui.ui.overlayTitle == "YOU DIED", dui and dui.ui.overlayTitle)
+	local failed = waitFor(function()
+		return Round.lastOutcome == "Failed"
+	end, 4)
+	check("solo death restarts the stage", failed ~= nil, Round.lastOutcome)
+	local back = readyPlayers(1)
+	check("respawned after restart", back ~= nil)
+	local fs = ask(p, "stats")
+	R.info.frame = fs and { avg = fs.avgFrame, worst = fs.worstFrame }
+end
+
+-- ─────────────────────────────── multi ───────────────────────────────
+local function multi()
+	local want = tonumber(args.Players) or 2
+	local ps = readyPlayers(want)
+	check("all " .. want .. " players spawned with sonar ready", ps ~= nil, #Players:GetPlayers())
+	if not ps then
+		return
+	end
+	-- 모두 시작 방 근처에 모은다
+	for k, p in ps do
+		place(p, tile(2 + (k - 1) % 3, 2 + (k - 1) // 3 * 2, 3))
+	end
+	task.wait(1)
+	local base = {}
+	for _, p in ps do
+		base[p] = ask(p, "stats").pulsesStarted
+		ask(p, "resetPerf")
+	end
+	local rounds = 6
+	for _ = 1, rounds do
+		for _, p in ps do
+			task.spawn(ask, p, "fire")
+		end
+		task.wait(1.7)
+	end
+	task.wait(3)
+	local worst, sumAvg = 0, 0
+	local luaAvg, luaWorst = 0, 0
+	for _, p in ps do
+		local s = ask(p, "stats")
+		local got = s.pulsesStarted - base[p]
+		check(p.Name .. " saw own + others' pulses", got >= rounds * #ps * 0.9, got .. "/" .. rounds * #ps)
+		check(p.Name .. " lines released afterwards", s.lines.active == 0, s.lines.active)
+		worst = math.max(worst, s.worstFrame)
+		sumAvg += s.avgFrame
+		luaAvg += s.lua.avg
+		luaWorst = math.max(luaWorst, s.lua.worst)
+		R.info[p.Name] = { avgFrame = s.avgFrame, worstFrame = s.worstFrame, created = s.lines.created }
+	end
+	-- (Studio 테스트 창은 모두 비활성 창이라 15fps 로 묶인다: 화면 프레임 대신 음파 스크립트 비용을 본다)
+	check("sonar script cost with " .. #ps .. " players pulsing together < 4ms/frame", luaAvg / #ps < 0.004, string.format("lua avg %.2fms worst %.2fms (window frame avg %.1fms)", luaAvg / #ps * 1000, luaWorst * 1000, sumAvg / #ps * 1000))
+	-- 한 명이 죽으면 관전, 나머지는 계속
+	local victim = ps[1]
+	Round.kill(victim, "test")
+	task.wait(3)
+	local s = ask(victim, "stats")
+	check("dead player spectates a teammate", s and s.ui.spectate ~= nil and s.ui.spectate:find("관전 중") ~= nil, s and s.ui.spectate)
+	check("round continues while others live", Round.state == "Playing")
+	-- 남은 사람 탈출 → 클리어
+	for k = 2, #ps do
+		place(ps[k], Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
+		task.wait(0.4)
+	end
+	local cleared = waitFor(function()
+		return Round.lastOutcome == "Clear"
+	end, 5)
+	check("survivors escape -> stage clear (with one dead)", cleared ~= nil, Round.lastOutcome)
+end
+
+-- ─────────────────────────────── perf ───────────────────────────────
+local function perf()
+	local ps = readyPlayers(tonumber(args.Players) or 1)
+	if not ps then
+		check("ready", false)
+		return
+	end
+	local p = ps[1]
+	place(p, tile(3, 3, 3), tile(3, 6, 3))
+	task.wait(2)
+	ask(p, "resetPerf")
+	task.wait(3)
+	local idle = ask(p, "stats")
+	ask(p, "resetPerf")
+	for _ = 1, 4 do
+		for _, q in ps do
+			ask(q, "resetCooldown")
+			task.spawn(ask, q, "fire")
+		end
+		task.wait(1.55)
+	end
+	local busy = ask(p, "stats")
+	R.info.perf = {
+		idleFrameMs = idle.avgFrame * 1000, idleWorstMs = idle.worstFrame * 1000, idleLuaMs = idle.lua.avg * 1000,
+		busyFrameMs = busy.avgFrame * 1000, busyWorstMs = busy.worstFrame * 1000, busyLuaMs = busy.lua.avg * 1000, busyLuaWorstMs = busy.lua.worst * 1000,
+		lines = busy.lines,
+	}
+	check("sonar script cost per frame (avg) < 4ms", busy.lua.avg < 0.004, string.format("%.2fms avg, %.2fms worst", busy.lua.avg * 1000, busy.lua.worst * 1000))
+end
+
+-- ─────────────────────────────── stages ───────────────────────────────
+-- 스테이지 1~5 를 차례로 지어: 오류 없이 지어지는가, 시작→출구 경로, 괴물 수, 음파 선이 나오는가
+local function stages()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	for i = 1, #Config.Stages do
+		local errBefore = #R.errors
+		Round.startStage(i)
+		local ok = readyPlayers(1)
+		check(string.format("stage %d built and player spawned", i), ok ~= nil and #R.errors == errBefore, Config.Stages[i].Name)
+		if ok then
+			local st = ask(p, "stats")
+			local paths = {}
+			for _, agent in { { r = 1.2, h = 5.5 }, { r = Config.Monster.AgentRadius, h = Config.Monster.AgentHeight } } do
+				local path = PathfindingService:CreatePath({ AgentRadius = agent.r, AgentHeight = agent.h, AgentCanJump = false })
+				pcall(function()
+					path:ComputeAsync(Round.info.spawns[1].Position - Vector3.new(0, 2.5, 0), Round.info.exitCFrame.Position - Vector3.new(0, 3.5, 0))
+				end)
+				table.insert(paths, path.Status.Name)
+			end
+			check(string.format("stage %d: start -> exit walkable (player, monster)", i), paths[1] == "Success" and paths[2] == "Success", table.concat(paths, ","))
+			check(string.format("stage %d: %d monster(s)", i, Config.Stages[i].Monsters), #Round.monsters == Config.Stages[i].Monsters, #Round.monsters)
+			ask(p, "resetCooldown")
+			ask(p, "fire")
+			task.wait(1.2)
+			local s2 = ask(p, "stats")
+			check(string.format("stage %d: sonar reveals outlines", i), s2 and s2.lines.lit > 100, s2 and string.format("segs=%d lit=%d unattached=%d", st.segs, s2.lines.lit, st.unattached))
+			R.info["stage" .. i] = st and { segs = st.segs, culled = st.culled, unattached = st.unattached, parts = workspace.Stage:GetAttribute("PartCount") }
+			task.wait(2.2)
+		end
+	end
+end
+
+task.spawn(function()
+	local ok, err = pcall(function()
+		if args.Test == "multi" then
+			multi()
+		elseif args.Test == "perf" then
+			perf()
+		elseif args.Test == "stages" then
+			stages()
+		else
+			core()
+		end
+	end)
+	if not ok then
+		check("test script ran", false, err)
+	end
+	R.finished = true
+	R.events = Round.events
+	log("done")
+	StudioTestService:EndTest(R)
+end)
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="SoundService" referent="30">
+    <Properties>
+      <string name="Name">SoundService</string>
+      <token name="AmbientReverb">11</token>
+    </Properties>
+  </Item>
+  <Item class="StarterPlayer" referent="31">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+      <bool name="AutoJumpEnabled">false</bool>
+      <float name="CameraMaxZoomDistance">0.5</float>
+      <float name="CameraMinZoomDistance">0.5</float>
+      <token name="CameraMode">1</token>
+      <float name="CharacterJumpPower">0</float>
+      <bool name="CharacterUseJumpPower">true</bool>
+      <float name="CharacterWalkSpeed">10</float>
+      <bool name="EnableMouseLockOption">false</bool>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="32">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="ModuleScript" referent="33">
+        <Properties>
+          <string name="Name">Audio</string>
+          <string name="Source"><![CDATA[--!strict
+-- 클라이언트 사운드: 발소리(모든 캐릭터, 3D), 음파, 문, 괴물 발소리·반응음, 환경음.
+-- 네트워크를 쓰지 않는다: 각 클라이언트가 복제된 위치·속성(MoveMode, State, Open)을 보고 스스로 재생한다.
+-- 소리는 Config.Sounds 에서 교체한다. Id 가 "" 이면 재생하지 않는다.
+-- 플레이어 속성 TestMute 가 켜지면(자동 테스트) 전체 음소거.
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local Audio = {}
+local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number } }
+local player = Players.LocalPlayer
+
+local master = Instance.new("SoundGroup")
+master.Name = "SonarMaster"
+master.Volume = 1
+master.Parent = SoundService
+
+local function applyMute()
+	master.Volume = if player:GetAttribute("TestMute") then 0 else 1
+end
+applyMute()
+player:GetAttributeChangedSignal("TestMute"):Connect(applyMute)
+
+local function makeSound(name: string, parent: Instance, looped: boolean?): Sound?
+	local def = SND[name]
+	if not def or def.Id == "" then
+		return nil
+	end
+	local s = Instance.new("Sound")
+	s.Name = name
+	s.SoundId = def.Id
+	s.Volume = def.Volume
+	s.PlaybackSpeed = def.Pitch
+	s.Looped = looped == true
+	s.SoundGroup = master
+	if def.Range > 0 then
+		s.RollOffMode = Enum.RollOffMode.InverseTapered
+		s.RollOffMinDistance = 5
+		s.RollOffMaxDistance = def.Range
+	end
+	s.Parent = parent
+	return s
+end
+
+-- 한 번 재생하고 지운다. at 이 Vector3 이면 그 위치에서(3D), Instance 면 거기 붙여서, nil 이면 2D.
+function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?)
+	local parent: Instance
+	local holder: Attachment? = nil
+	if typeof(at) == "Vector3" then
+		local a = Instance.new("Attachment")
+		a.WorldPosition = at :: Vector3
+		a.Parent = workspace.Terrain
+		holder = a
+		parent = a
+	elseif typeof(at) == "Instance" then
+		parent = at :: Instance
+	else
+		parent = SoundService
+	end
+	local s = makeSound(name, parent)
+	if not s then
+		if holder then
+			holder:Destroy()
+		end
+		return
+	end
+	if pitchJitter then
+		s.PlaybackSpeed *= 1 + (math.random() * 2 - 1) * pitchJitter
+	end
+	if volumeScale then
+		s.Volume *= volumeScale
+	end
+	s:Play()
+	task.delay(6, function()
+		s:Destroy()
+		if holder then
+			holder:Destroy()
+		end
+	end)
+end
+
+function Audio.sonar(localShot: boolean, origin: Vector3)
+	if localShot then
+		Audio.play("Sonar", nil, 0.03)
+		task.delay(0.35, Audio.play, "SonarEcho", nil, 0.03)
+	else
+		Audio.play("Sonar", origin, 0.03)
+		task.delay(0.35, Audio.play, "SonarEcho", origin, 0.03)
+	end
+end
+
+-- ── 발소리(캐릭터마다 이동 거리 누적) ──
+type Tracker = { last: Vector3, acc: number, root: BasePart }
+local trackers: { [Model]: Tracker } = {}
+local STRIDE = { Walk = 3.6, Run = 5.0, Crouch = 2.4 }
+
+local function stepFor(model: Model, root: BasePart, isMonster: boolean)
+	local tr = trackers[model]
+	if not tr or tr.root ~= root then
+		tr = { last = root.Position, acc = 0, root = root }
+		trackers[model] = tr
+	end
+	local p = root.Position
+	local d = Vector3.new(p.X - tr.last.X, 0, p.Z - tr.last.Z).Magnitude
+	tr.last = p
+	if d > 6 then
+		return -- 순간 이동
+	end
+	tr.acc += d
+	if isMonster then
+		if tr.acc >= 3.4 then
+			tr.acc = 0
+			Audio.play("MonsterStep", root, 0.08)
+		end
+	else
+		local mode = (model:GetAttribute("MoveMode") :: string?) or "Walk"
+		local stride = STRIDE[mode] or 3.6
+		if tr.acc >= stride then
+			tr.acc = 0
+			local name = if mode == "Run" then "FootRun" elseif mode == "Crouch" then "FootCrouch" else "FootWalk"
+			Audio.play(name, root, 0.1)
+		end
+	end
+end
+
+-- ── 괴물 상태 반응음 ──
+local monsterConns: { [Model]: { RBXScriptConnection } } = {}
+local idleAt: { [Model]: number } = {}
+local function watchMonster(m: Instance)
+	if not m:IsA("Model") or monsterConns[m] then
+		return
+	end
+	local model = m :: Model
+	local conns = {}
+	table.insert(conns, model:GetAttributeChangedSignal("State"):Connect(function()
+		local st = model:GetAttribute("State")
+		local root = model.PrimaryPart
+		if not root then
+			return
+		end
+		if st == "Alert" then
+			Audio.play("MonsterAlert", root, 0.05)
+		elseif st == "Chase" then
+			Audio.play("MonsterChase", root, 0.05)
+		end
+	end))
+	monsterConns[model] = conns
+	idleAt[model] = os.clock() + 5 + math.random() * 6
+	model.Destroying:Connect(function()
+		for _, c in conns do
+			c:Disconnect()
+		end
+		monsterConns[model] = nil
+		idleAt[model] = nil
+		trackers[model] = nil
+	end)
+end
+CollectionService:GetInstanceAddedSignal(Config.Tags.Monster):Connect(watchMonster)
+for _, m in CollectionService:GetTagged(Config.Tags.Monster) do
+	watchMonster(m)
+end
+
+-- ── 문 ──
+local function watchDoor(m: Instance)
+	if not m:IsA("Model") then
+		return
+	end
+	m:GetAttributeChangedSignal("Open"):Connect(function()
+		local panel = m:FindFirstChild("Panel")
+		if panel then
+			Audio.play("Door", (panel :: BasePart).Position, 0.08)
+		end
+	end)
+end
+CollectionService:GetInstanceAddedSignal(Config.Tags.Door):Connect(watchDoor)
+for _, m in CollectionService:GetTagged(Config.Tags.Door) do
+	watchDoor(m)
+end
+
+-- ── 환경음 ──
+local hum: Sound? = makeSound("AmbientHum", SoundService, true)
+if hum then
+	hum:Play()
+end
+local emitters: { [Instance]: Sound } = {}
+local function addEmitter(e: Instance)
+	if emitters[e] or not e:IsA("BasePart") then
+		return
+	end
+	local name = (e:GetAttribute("Sound") :: string?) or "AmbientFan"
+	local s = makeSound(name, e, true)
+	if s then
+		s.TimePosition = math.random() * 2
+		s:Play()
+		emitters[e] = s
+	end
+	e.Destroying:Connect(function()
+		emitters[e] = nil
+	end)
+end
+CollectionService:GetInstanceAddedSignal(Config.Tags.AmbientEmitter):Connect(addEmitter)
+for _, e in CollectionService:GetTagged(Config.Tags.AmbientEmitter) do
+	addEmitter(e)
+end
+
+local nextAmbient = os.clock() + 4
+local ONE_SHOTS = { "AmbientDrip", "AmbientDrip", "AmbientMetal", "AmbientCreak" }
+
+function Audio.update()
+	-- 발소리
+	for _, plr in Players:GetPlayers() do
+		local char = plr.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if char and root and plr:GetAttribute("Status") == "Alive" then
+			stepFor(char, root, false)
+		end
+	end
+	local now = os.clock()
+	for _, m in CollectionService:GetTagged(Config.Tags.Monster) do
+		if m:IsA("Model") and m.PrimaryPart then
+			stepFor(m, m.PrimaryPart, true)
+			if m:GetAttribute("State") == "Wander" and idleAt[m] and now > idleAt[m] then
+				idleAt[m] = now + 7 + math.random() * 9
+				Audio.play("MonsterIdle", m.PrimaryPart, 0.1)
+			end
+		end
+	end
+	-- 먼 곳의 물방울·금속음·구조물 삐걱임(무작위 위치)
+	if now > nextAmbient then
+		nextAmbient = now + 4 + math.random() * 8
+		local cam = workspace.CurrentCamera
+		if cam then
+			local ang = math.random() * math.pi * 2
+			local r = 15 + math.random() * 35
+			local p = cam.CFrame.Position + Vector3.new(math.cos(ang) * r, math.random() * 6 - 2, math.sin(ang) * r)
+			Audio.play(ONE_SHOTS[math.random(1, #ONE_SHOTS)], p, 0.15)
+		end
+	end
+	for model, _ in trackers do
+		if not model.Parent then
+			trackers[model] = nil
+		end
+	end
+end
+
+return Audio
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="LocalScript" referent="34">
+        <Properties>
+          <string name="Name">Main</string>
+          <string name="Source"><![CDATA[--!strict
+-- 클라이언트 진입점(StarterPlayerScripts.Main)
+--   좌클릭 → 음파(즉시 로컬 표시 + 서버에 알림), 다른 플레이어 음파 표시, 스테이지 로드 대기 → 음파 월드 빌드,
+--   사망·탈출 후 관전, 결과 화면, 상호작용 안내.
+
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Config = require(ReplicatedStorage.Shared.Config)
+local World = require(script.Parent:WaitForChild("SonarWorld"))
+local Lines = require(script.Parent:WaitForChild("SonarLines"))
+local Pulses = require(script.Parent:WaitForChild("SonarPulses"))
+local Movement = require(script.Parent:WaitForChild("Movement"))
+local Audio = require(script.Parent:WaitForChild("Audio"))
+local UI = require(script.Parent:WaitForChild("UI"))
+
+local player = Players.LocalPlayer
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local SonarFire = Remotes:WaitForChild("SonarFire") :: RemoteEvent
+local SonarPulse = Remotes:WaitForChild("SonarPulse") :: RemoteEvent
+local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
+
+local lastFire = -math.huge
+local spectateIndex = 1
+local building = false
+local frameTimes: { number } = {}
+local luaTimes: { number } = {}
+
+-- ── 스테이지 로드 → 음파 월드 ──
+local function tryBuild()
+	local stage = workspace:FindFirstChild("Stage") :: Folder?
+	if not stage or building then
+		return
+	end
+	local id = stage:GetAttribute("BuildId")
+	if not id or (World.ready and World.buildId == id and World.stage == stage) then
+		return
+	end
+	building = true
+	task.spawn(function()
+		-- 모든 파트가 복제될 때까지
+		local want = (stage:GetAttribute("PartCount") :: number?) or 0
+		local t0 = os.clock()
+		while os.clock() - t0 < 20 do
+			local n = 0
+			for _, d in stage:GetDescendants() do
+				if d:IsA("BasePart") then
+					n += 1
+				end
+			end
+			if n >= want then
+				break
+			end
+			task.wait(0.2)
+		end
+		Pulses.clear()
+		Lines.clear()
+		World.build(stage)
+		building = false
+		if stage:GetAttribute("BuildId") ~= World.buildId then
+			tryBuild()
+		end
+	end)
+end
+workspace.ChildAdded:Connect(function(c)
+	if c.Name == "Stage" then
+		c:GetAttributeChangedSignal("BuildId"):Connect(tryBuild)
+		task.defer(tryBuild)
+	end
+end)
+local existing = workspace:FindFirstChild("Stage")
+if existing then
+	existing:GetAttributeChangedSignal("BuildId"):Connect(tryBuild)
+	tryBuild()
+end
+
+-- ── 음파 발사 ──
+local function alive(): boolean
+	return player:GetAttribute("Status") == "Alive"
+end
+
+local function fire(): boolean
+	if not alive() or not World.ready then
+		return false
+	end
+	local now = os.clock()
+	if now - lastFire < Config.Sonar.Cooldown then
+		return false
+	end
+	local char = player.Character
+	local head = char and char:FindFirstChild("Head") :: BasePart?
+	if not head then
+		return false
+	end
+	lastFire = now
+	Pulses.start(head.Position, char, true)
+	SonarFire:FireServer()
+	Audio.sonar(true, head.Position)
+	return true
+end
+
+local function charOf(userId: number): Model?
+	local p = Players:GetPlayerByUserId(userId)
+	return p and p.Character
+end
+
+SonarPulse.OnClientEvent:Connect(function(userId: number, origin: Vector3)
+	if typeof(origin) ~= "Vector3" then
+		return
+	end
+	local cam = workspace.CurrentCamera
+	if cam and (cam.CFrame.Position - origin).Magnitude > Config.Sonar.RemoteViewDistance then
+		return
+	end
+	Pulses.start(origin, charOf(userId), false)
+	Audio.sonar(false, origin)
+end)
+
+-- ── 관전 ──
+local function spectateTargets(): { Player }
+	local out = {}
+	for _, p in Players:GetPlayers() do
+		if p ~= player and p:GetAttribute("Status") == "Alive" and p.Character and p.Character:FindFirstChild("Head") then
+			table.insert(out, p)
+		end
+	end
+	return out
+end
+
+local function spectating(): boolean
+	local st = player:GetAttribute("Status")
+	return (st == "Dead" or st == "Escaped") and ReplicatedStorage:GetAttribute("RoundState") == "Playing"
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if spectating() then
+			spectateIndex += 1
+		else
+			fire()
+		end
+	end
+end)
+
+-- ── 상호작용 안내(문) ──
+ProximityPromptService.PromptShown:Connect(function(prompt)
+	if prompt.Style == Enum.ProximityPromptStyle.Custom then
+		UI.setPrompt("E   " .. prompt.ActionText)
+		local conn
+		conn = prompt:GetPropertyChangedSignal("ActionText"):Connect(function()
+			UI.setPrompt("E   " .. prompt.ActionText)
+		end)
+		prompt.PromptHidden:Once(function()
+			conn:Disconnect()
+			UI.setPrompt(nil)
+		end)
+	end
+end)
+
+-- ── 라운드 이벤트 ──
+local function resetCamera()
+	local cam = workspace.CurrentCamera
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if cam then
+		cam.CameraType = Enum.CameraType.Custom
+		if hum then
+			cam.CameraSubject = hum
+		end
+	end
+	UI.setSpectate(nil)
+end
+
+player.CharacterAdded:Connect(function()
+	Movement.reset()
+	task.defer(resetCamera)
+	UI.hideOverlay(true)
+end)
+
+RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
+	if kind == "Start" then
+		UI.hideOverlay(false)
+		UI.setStage(data.name)
+		if data.stage == 1 then
+			task.delay(2.5, UI.hint, "좌클릭 — 음파      Shift — 달리기      Ctrl — 웅크리기", 7)
+		end
+	elseif kind == "Died" then
+		if data.userId == player.UserId then
+			if data.othersAlive > 0 then
+				UI.overlay("YOU DIED", "관전으로 전환합니다", true)
+				task.delay(2.5, function()
+					if spectating() then
+						UI.liftOverlay()
+					end
+				end)
+			else
+				UI.overlay("YOU DIED", "스테이지를 다시 시작합니다", true)
+			end
+		end
+	elseif kind == "Escaped" then
+		if data.userId == player.UserId then
+			UI.overlay("ESCAPED", if data.othersAlive > 0 then "다른 생존자를 기다립니다" else "", true)
+			task.delay(2.5, function()
+				if spectating() then
+					UI.liftOverlay()
+				end
+			end)
+		end
+	elseif kind == "Clear" then
+		local sub = if data.allClear then "모든 스테이지를 탈출했습니다 — 처음부터 다시 시작합니다" else ("다음: " .. data.nextName)
+		UI.overlay("STAGE CLEAR", sub, true)
+		UI.setSpectate(nil)
+	elseif kind == "Failed" then
+		local solo = #Players:GetPlayers() == 1
+		UI.overlay("YOU DIED", if solo then "스테이지를 다시 시작합니다" else "모두 사망했습니다 — 스테이지를 다시 시작합니다", true)
+		UI.setSpectate(nil)
+	end
+end)
+
+-- ── 매 프레임 ──
+RunService.RenderStepped:Connect(function(dt)
+	local now = os.clock()
+	table.insert(frameTimes, dt)
+	if #frameTimes > 240 then
+		table.remove(frameTimes, 1)
+	end
+	Movement.update(dt)
+	Pulses.update(now)
+	Lines.update(now)
+	table.insert(luaTimes, os.clock() - now)
+	if #luaTimes > 240 then
+		table.remove(luaTimes, 1)
+	end
+	UI.setCooldown((now - lastFire) / Config.Sonar.Cooldown)
+	-- 관전 카메라: 살아 있는 동료의 1인칭 시점
+	local cam = workspace.CurrentCamera
+	if spectating() and cam then
+		local targets = spectateTargets()
+		if #targets > 0 then
+			local t = targets[((spectateIndex - 1) % #targets) + 1]
+			local head = t.Character and t.Character:FindFirstChild("Head") :: BasePart?
+			if head then
+				cam.CameraType = Enum.CameraType.Scriptable
+				cam.CFrame = head.CFrame * CFrame.new(0, 0.3, 0)
+				UI.setSpectate("관전 중: " .. t.DisplayName .. "   (좌클릭: 대상 변경)")
+			end
+		else
+			UI.setSpectate("관전할 생존자가 없습니다")
+		end
+	end
+end)
+RunService.Heartbeat:Connect(function()
+	Audio.update()
+end)
+
+-- ── 자동 테스트 응답(Studio 테스트 하네스가 만든 TestProbe 가 있을 때만) ──
+task.spawn(function()
+	local probe = ReplicatedStorage:WaitForChild("TestProbe", 30) :: RemoteFunction?
+	if not probe then
+		return
+	end
+	probe.OnClientInvoke = function(cmd: string, arg: any)
+		if cmd == "stats" then
+			local sum, worst = 0, 0
+			for _, t in frameTimes do
+				sum += t
+				worst = math.max(worst, t)
+			end
+			local ls = Lines.stats()
+			return {
+				ready = World.ready,
+				buildId = World.buildId,
+				segs = World.segCount,
+				culled = World.culled,
+				unattached = World.unattached,
+				viewParts = #World.viewParts,
+				grid = { World.nx, World.ny, World.nz },
+				lines = ls,
+				pulses = Pulses.active(),
+				pulsesStarted = Pulses.started,
+				avgFrame = if #frameTimes > 0 then sum / #frameTimes else 0,
+				lua = (function()
+					local s2, w2 = 0, 0
+					for _, t in luaTimes do
+						s2 += t
+						w2 = math.max(w2, t)
+					end
+					return { avg = if #luaTimes > 0 then s2 / #luaTimes else 0, worst = w2 }
+				end)(),
+				worstFrame = worst,
+				ui = UI.state(),
+				mode = Movement.mode,
+				walkSpeed = (function()
+					local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+					return h and h.WalkSpeed or 0
+				end)(),
+				lighting = {
+					brightness = game:GetService("Lighting").Brightness,
+					ambient = game:GetService("Lighting").Ambient,
+					outdoor = game:GetService("Lighting").OutdoorAmbient,
+				},
+			}
+		elseif cmd == "fire" then
+			return fire()
+		elseif cmd == "rawFire" then
+			-- 로컬 대기시간을 무시하고 서버에 바로 요청(서버 검증 시험)
+			SonarFire:FireServer()
+			return true
+		elseif cmd == "move" then
+			local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if h then
+				h:MoveTo(arg :: Vector3)
+			end
+			return h ~= nil
+		elseif cmd == "resetPerf" then
+			table.clear(frameTimes)
+			table.clear(luaTimes)
+			return true
+		elseif cmd == "resetCooldown" then
+			lastFire = -math.huge
+			return true
+		elseif cmd == "pulseAt" then
+			-- 시각 효과만(서버에 알리지 않음): 지정 지점에서 음파
+			return Pulses.start(arg :: Vector3, player.Character, true)
+		elseif cmd == "trace" then
+			local p = Pulses.last
+			if not p or not p.trace then
+				return nil
+			end
+			return { trace = p.trace, revealed = p.revealed, origin = p.origin }
+		elseif cmd == "lit" then
+			return Lines.litMidpoints()
+		elseif cmd == "segInfo" then
+			-- 지정 선분 id 의 가운데 점
+			return World.SM[arg :: number]
+		elseif cmd == "segsNear" then
+			-- arg = {pos, radius}: 그 근처 정적 선분 id
+			local out = {}
+			for i = 1, World.segCount do
+				if (World.SM[i] - arg[1]).Magnitude <= arg[2] then
+					table.insert(out, i)
+				end
+			end
+			return out
+		elseif cmd == "setMode" then
+			Movement.forced = arg
+			return true
+		elseif cmd == "cell" then
+			local x, y, z = World.cellOf(arg :: Vector3)
+			if not x then
+				return "out"
+			end
+			return if World.free(World.index(x :: number, y :: number, z :: number)) then "free" else "blocked"
+		end
+		return nil
+	end
+end)
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="35">
+        <Properties>
+          <string name="Name">Movement</string>
+          <string name="Source"><![CDATA[--!strict
+-- 이동(걷기/달리기/웅크리기)과 1인칭 카메라 효과(아주 약한 헤드밥, 웅크릴 때 시점 낮춤, 추격 중 미세한 긴장감).
+-- Shift = 달리기, Ctrl = 웅크리기(누르고 있는 동안). 둘을 동시에 누르면 웅크리기.
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local MV = Config.Move
+local SetMoveMode = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("SetMoveMode") :: RemoteEvent
+
+local Movement = {}
+Movement.mode = "Walk"
+Movement.forced = nil :: string?
+local sentMode = ""
+local bobPhase = 0
+local crouchDrop = 0
+local tension = 0
+
+local SPEED = { Walk = MV.Walk, Run = MV.Run, Crouch = MV.Crouch }
+
+local function wantedMode(): string
+	if Movement.forced then
+		return Movement.forced
+	end
+	if UserInputService:GetFocusedTextBox() then
+		return "Walk"
+	end
+	local crouch = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+	if crouch then
+		return "Crouch"
+	end
+	local run = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+	if run then
+		return "Run"
+	end
+	return "Walk"
+end
+
+function Movement.update(dt: number)
+	local player = Players.LocalPlayer
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local cam = workspace.CurrentCamera
+	if not hum or not root or player:GetAttribute("Status") ~= "Alive" then
+		if cam and cam.FieldOfView ~= 70 then
+			cam.FieldOfView = 70
+		end
+		return
+	end
+	local mode = wantedMode()
+	Movement.mode = mode
+	hum.WalkSpeed = SPEED[mode]
+	if mode ~= sentMode then
+		sentMode = mode
+		SetMoveMode:FireServer(mode)
+	end
+
+	-- 시점: 웅크리기 높이 + 헤드밥
+	local v = root.AssemblyLinearVelocity
+	local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+	local targetDrop = if mode == "Crouch" then MV.CrouchCameraDrop else 0
+	crouchDrop += (targetDrop - crouchDrop) * math.min(1, dt * 10)
+	local amp = if mode == "Run" then MV.BobRun elseif mode == "Crouch" then MV.BobCrouch else MV.BobWalk
+	local moving = math.clamp(speed / math.max(1, SPEED[mode]), 0, 1)
+	bobPhase += dt * (speed * 0.75 + 0.01)
+	local bobY = math.sin(bobPhase * 2) * amp * moving
+	local bobX = math.cos(bobPhase) * amp * 0.5 * moving
+	hum.CameraOffset = Vector3.new(bobX, bobY - crouchDrop, 0)
+
+	-- 추격 긴장감: 가까운 괴물이 추격 상태면 시야각이 아주 조금 좁아졌다 넓어졌다 한다(위치는 알려 주지 않음)
+	local chased = false
+	for _, m in CollectionService:GetTagged(Config.Tags.Monster) do
+		if m:IsA("Model") and m:GetAttribute("State") == "Chase" and m.PrimaryPart then
+			if (m.PrimaryPart.Position - root.Position).Magnitude < 40 then
+				chased = true
+			end
+		end
+	end
+	tension += ((if chased then 1 else 0) - tension) * math.min(1, dt * 2)
+	if cam then
+		cam.FieldOfView = 70 - tension * (2 + math.sin(os.clock() * 7) * 0.6)
+	end
+end
+
+function Movement.reset()
+	sentMode = ""
+	crouchDrop = 0
+	tension = 0
+end
+
+return Movement
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="LocalScript" referent="36">
+        <Properties>
+          <string name="Name">RbxCharacterSounds</string>
+          <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
+-- 발소리는 Audio 모듈이 이동 모드(걷기/달리기/웅크리기)에 맞춰 직접 재생한다.
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="37">
+        <Properties>
+          <string name="Name">SonarLines</string>
+          <string name="Source"><![CDATA[--!strict
+-- 윤곽선 파트 풀. 얇은 Neon 파트를 미리 만들어 두고 재사용한다(이펙트를 매번 새로 만들지 않음).
+-- 선은 투명도 대신 색으로 사라진다: 흰색 → 검정. 화면이 전부 검정이라 검정 Neon 은 보이지 않고,
+-- 불투명 파트라서 투명 파트보다 렌더링이 훨씬 가볍다(인스턴싱).
+-- 같은 선분(키)이 다시 음파를 받으면 새로 만들지 않고 타이머만 갱신 → 반복 발사해도 쌓이지 않는다.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local S = Config.Sonar
+local Lines = {}
+
+local HIDDEN = CFrame.new(0, -10000, 0)
+local LR, LG, LB = S.LineColor.R, S.LineColor.G, S.LineColor.B
+local QUANT = 40
+
+type Rec = {
+	part: Part,
+	t0: number,
+	peak: number,
+	key: number?,
+	q: number,
+	slot: number,
+}
+
+local folder: Folder? = nil
+local free: { Part } = {}
+local created = 0
+local active: { Rec } = {}
+local byKey: { [number]: Rec } = {}
+local moveParts: { BasePart } = {}
+local moveCFs: { CFrame } = {}
+Lines.stolen = 0
+Lines.shownTotal = 0
+
+local function getFolder(): Folder
+	if folder and folder.Parent then
+		return folder
+	end
+	local f = Instance.new("Folder")
+	f.Name = "SonarLines"
+	f.Parent = workspace
+	folder = f
+	return f
+end
+
+local function newPart(): Part
+	local p = Instance.new("Part")
+	p.Name = "L"
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Material = Enum.Material.Neon
+	p.Color = Color3.new(0, 0, 0)
+	p.Size = Vector3.new(0.05, 0.05, 1)
+	p.CFrame = HIDDEN
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Parent = getFolder()
+	created += 1
+	return p
+end
+
+local function release(i: number)
+	local rec = active[i]
+	local last = active[#active]
+	active[i] = last
+	last.slot = i
+	active[#active] = nil
+	if rec.key then
+		byKey[rec.key] = nil
+	end
+	rec.part.Color = Color3.new(0, 0, 0)
+	table.insert(moveParts, rec.part)
+	table.insert(moveCFs, HIDDEN)
+	table.insert(free, rec.part)
+end
+
+local function take(): Part
+	local p = table.remove(free)
+	if p then
+		return p
+	end
+	if created < S.PoolSize then
+		return newPart()
+	end
+	-- 풀이 가득: 가장 오래된 선을 빼앗는다
+	local oldest, oi = math.huge, 1
+	for i, r in active do
+		if r.t0 < oldest then
+			oldest, oi = r.t0, i
+		end
+	end
+	Lines.stolen += 1
+	release(oi)
+	return table.remove(free) :: Part
+end
+
+local function place(part: Part, a: Vector3, b: Vector3, cam: Vector3)
+	local d = b - a
+	local len = d.Magnitude
+	local mid = (a + b) / 2
+	local w = math.clamp(S.LineMinWidth + (mid - cam).Magnitude * S.LineWidthPerStud, S.LineMinWidth, S.LineMaxWidth)
+	part.Size = Vector3.new(w, w, len + w * 0.6)
+	local dir = d / len
+	local up = if math.abs(dir.Y) > 0.98 then Vector3.xAxis else Vector3.yAxis
+	table.insert(moveParts, part)
+	table.insert(moveCFs, CFrame.lookAt(mid, mid + dir, up))
+end
+
+-- 선 하나를 보여 준다. key 가 같은 선이 이미 있으면 그 선을 갱신한다.
+function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: number?, cam: Vector3, replace: boolean?)
+	if (b - a).Magnitude < 0.03 then
+		return
+	end
+	Lines.shownTotal += 1
+	if key then
+		local rec = byKey[key]
+		if rec then
+			rec.t0 = now
+			rec.peak = math.max(peak, rec.peak * 0.5)
+			rec.q = -1
+			if replace then
+				place(rec.part, a, b, cam)
+			end
+			return
+		end
+	end
+	local part = take()
+	place(part, a, b, cam)
+	local rec: Rec = { part = part, t0 = now, peak = peak, key = key, q = -1, slot = #active + 1 }
+	active[rec.slot] = rec
+	if key then
+		byKey[key] = rec
+	end
+end
+
+-- 밝기 곡선: 도달 순간 플래시 → 유지 → 서서히 사라짐
+local function level(age: number): number
+	if age < 0 then
+		return 0
+	end
+	if age < S.FlashTime then
+		return 1 - (1 - S.BaseLevel) * (age / S.FlashTime)
+	end
+	local fadeStart = S.Hold - S.FadeTime
+	if age < fadeStart then
+		return S.BaseLevel
+	end
+	local t = math.clamp((age - fadeStart) / S.FadeTime, 0, 1)
+	return S.BaseLevel * (1 - t) * (1 - t * 0.35)
+end
+
+function Lines.update(now: number)
+	local i = 1
+	while i <= #active do
+		local rec = active[i]
+		local age = now - rec.t0
+		if age >= S.Hold then
+			release(i)
+		else
+			local l = level(age) * rec.peak
+			local q = math.floor(l * QUANT + 0.5)
+			if q ~= rec.q then
+				rec.q = q
+				local v = q / QUANT
+				rec.part.Color = Color3.new(LR * v, LG * v, LB * v)
+			end
+			i += 1
+		end
+	end
+	if #moveParts > 0 then
+		workspace:BulkMoveTo(moveParts, moveCFs, Enum.BulkMoveMode.FireCFrameChanged)
+		table.clear(moveParts)
+		table.clear(moveCFs)
+	end
+end
+
+function Lines.clear()
+	while #active > 0 do
+		release(#active)
+	end
+	if #moveParts > 0 then
+		workspace:BulkMoveTo(moveParts, moveCFs, Enum.BulkMoveMode.FireCFrameChanged)
+		table.clear(moveParts)
+		table.clear(moveCFs)
+	end
+end
+
+function Lines.stats()
+	local lit = 0
+	for _, r in active do
+		if r.q > 0 then
+			lit += 1
+		end
+	end
+	return { active = #active, lit = lit, created = created, free = #free, stolen = Lines.stolen, shown = Lines.shownTotal }
+end
+
+-- 테스트용: 현재 켜진 선의 가운데 점들
+function Lines.litMidpoints(): { Vector3 }
+	local out = {}
+	for _, r in active do
+		if r.q > 0 then
+			table.insert(out, r.part.Position)
+		end
+	end
+	return out
+end
+
+return Lines
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="38">
+        <Properties>
+          <string name="Name">SonarPulses</string>
+          <string name="Source"><![CDATA[--!strict
+-- 음파 전파: 발사 지점에서 복셀 격자를 따라 Dijkstra 로 퍼진다(벽은 통과 못 하고, 열린 통로·문으로만 돌아 들어간다).
+-- 파면 반경 = 경과 시간 × WaveSpeed. 파면이 지나간 복셀에 연결된 선분이 그 순간 나타난다 → 가까운 곳부터 먼 곳으로.
+-- 연산은 여러 프레임에 나눠 한다(프레임당 ExpandBudget).
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Geo = require(ReplicatedStorage.Shared.SonarGeometry)
+local World = require(script.Parent:WaitForChild("SonarWorld"))
+local Lines = require(script.Parent:WaitForChild("SonarLines"))
+
+local S = Config.Sonar
+local Pulses = {}
+
+type Pulse = {
+	id: number,
+	origin: Vector3,
+	t0: number,
+	dist: { [number]: number },
+	hk: { number },
+	hv: { number },
+	hn: number,
+	seen: { [number]: boolean },
+	buckets: { [number]: { number } },
+	nextBucket: number,
+	dynA: { Vector3 },
+	dynB: { Vector3 },
+	dynM: { Vector3 },
+	dynKey: { number | false },
+	dynCell: { [number]: { number } },
+	dseen: { [number]: boolean },
+	cam: Vector3,
+	revealed: number,
+	trace: { { number } }?,
+}
+
+local pulses: { Pulse } = {}
+local nextId = 0
+Pulses.last = nil :: Pulse?
+Pulses.started = 0
+Pulses.camera = function(): Vector3
+	local cam = workspace.CurrentCamera
+	return if cam then cam.CFrame.Position else Vector3.zero
+end
+
+-- 18방향(면 6 + 모서리 12). 모서리 방향은 두 성분 칸이 모두 비어야 지나갈 수 있다(벽 모서리 새는 것 방지).
+type Nb = { dx: number, dy: number, dz: number, w: number, a: { number }?, b: { number }? }
+local NB: { Nb } = {}
+do
+	for dz = -1, 1 do
+		for dy = -1, 1 do
+			for dx = -1, 1 do
+				local n = math.abs(dx) + math.abs(dy) + math.abs(dz)
+				if n == 1 then
+					table.insert(NB, { dx = dx, dy = dy, dz = dz, w = 1 })
+				elseif n == 2 then
+					local comps = {}
+					if dx ~= 0 then
+						table.insert(comps, { dx, 0, 0 })
+					end
+					if dy ~= 0 then
+						table.insert(comps, { 0, dy, 0 })
+					end
+					if dz ~= 0 then
+						table.insert(comps, { 0, 0, dz })
+					end
+					table.insert(NB, { dx = dx, dy = dy, dz = dz, w = math.sqrt(2), a = comps[1], b = comps[2] })
+				end
+			end
+		end
+	end
+end
+
+-- ── 최소 힙 ──
+local function push(p: Pulse, key: number, val: number)
+	local n = p.hn + 1
+	p.hn = n
+	local hk, hv = p.hk, p.hv
+	local i = n
+	while i > 1 do
+		local parent = i // 2
+		if hk[parent] <= key then
+			break
+		end
+		hk[i] = hk[parent]
+		hv[i] = hv[parent]
+		i = parent
+	end
+	hk[i] = key
+	hv[i] = val
+end
+
+local function pop(p: Pulse): (number, number)
+	local hk, hv = p.hk, p.hv
+	local topK, topV = hk[1], hv[1]
+	local n = p.hn
+	local lastK, lastV = hk[n], hv[n]
+	hk[n] = nil
+	hv[n] = nil
+	n -= 1
+	p.hn = n
+	if n > 0 then
+		local i = 1
+		while true do
+			local l = i * 2
+			if l > n then
+				break
+			end
+			local r = l + 1
+			local c = l
+			if r <= n and hk[r] < hk[l] then
+				c = r
+			end
+			if hk[c] >= lastK then
+				break
+			end
+			hk[i] = hk[c]
+			hv[i] = hv[c]
+			i = c
+		end
+		hk[i] = lastK
+		hv[i] = lastV
+	end
+	return topK, topV
+end
+
+local function bucketAdd(p: Pulse, arrival: number, id: number)
+	-- (이미 지나간 구간이면 다음에 보여 줄 구간에 넣는다: 늦게 확정된 칸의 선분이 빠지지 않게)
+	local b = math.max(math.floor(arrival), p.nextBucket)
+	local l = p.buckets[b]
+	if not l then
+		l = {}
+		p.buckets[b] = l
+	end
+	table.insert(l, id)
+end
+
+-- 움직이는 대상과 원통·구 실루엣을 이번 음파용 선분으로 만든다
+local function gatherDynamic(p: Pulse, exclude: Model?)
+	local list = Geo.newList()
+	local R = S.Radius
+	-- 정적 원통·구의 실루엣(키를 붙여 다음 음파 때 같은 선을 옮겨 쓴다)
+	for _, part in World.viewPartsNear(p.origin, R) do
+		local before = list.n
+		Geo.viewEdges(part, p.cam, list)
+		local idx = table.find(World.viewParts, part) or 0
+		for i = before + 1, list.n do
+			p.dynKey[i] = -(idx * 64 + (i - before))
+		end
+	end
+	-- 문, 괴물, 다른 플레이어(그 순간의 모습)
+	for _, e in World.dynamicParts(p.origin, R, exclude) do
+		local part = e.part
+		local before = list.n
+		if e.char then
+			local nm = part.Name
+			if nm == "Head" then
+				Geo.ballSilhouette(part.CFrame, part.Size * 0.85, p.cam, list)
+			elseif nm:find("Arm") or nm:find("Leg") or nm:find("Hand") or nm:find("Foot") then
+				local s = part.Size
+				local axis = if s.Y >= s.X and s.Y >= s.Z then "Y" elseif s.X >= s.Z then "X" else "Z"
+				Geo.boxEdges(part.CFrame, s, list, axis, true)
+			else
+				Geo.boxEdges(part.CFrame, part.Size, list, nil, true)
+			end
+		else
+			Geo.staticEdges(part, list, true)
+			Geo.viewEdges(part, p.cam, list)
+		end
+		for i = before + 1, list.n do
+			p.dynKey[i] = false
+		end
+	end
+	-- 분할 + 복셀 연결
+	local segLen = S.SegmentLength
+	local n = 0
+	for i = 1, list.n do
+		local a, b = list.A[i], list.B[i]
+		local d = b - a
+		local len = d.Magnitude
+		if len > 0.02 then
+			local k = math.max(1, math.ceil(len / segLen))
+			local key = p.dynKey[i]
+			for s = 0, k - 1 do
+				local pa = a + d * (s / k)
+				local pb = a + d * ((s + 1) / k)
+				n += 1
+				p.dynA[n] = pa
+				p.dynB[n] = pb
+				local m = (pa + pb) / 2
+				p.dynM[n] = m
+				p.dynKey[-n] = if key then (key :: number) * 32 - s else false
+				for _, idx in World.attachCells(m) do
+					local l = p.dynCell[idx]
+					if not l then
+						l = {}
+						p.dynCell[idx] = l
+					end
+					table.insert(l, n)
+				end
+			end
+		end
+	end
+end
+
+function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boolean
+	if not World.ready then
+		return false
+	end
+	local x, y, z = World.cellOf(origin)
+	if not x then
+		return false
+	end
+	-- 시작 복셀(막혀 있으면 가까운 빈 칸)
+	local start, startD = nil, math.huge
+	for dz = -1, 1 do
+		for dy = -1, 1 do
+			for dx = -1, 1 do
+				local xx, yy, zz = (x :: number) + dx, (y :: number) + dy, (z :: number) + dz
+				if xx >= 0 and yy >= 0 and zz >= 0 and xx < World.nx and yy < World.ny and zz < World.nz then
+					local idx = World.index(xx, yy, zz)
+					if World.free(idx) then
+						local d = (World.cellCenter(idx) - origin).Magnitude
+						if d < startD then
+							start, startD = idx, d
+						end
+					end
+				end
+			end
+		end
+	end
+	if not start then
+		return false
+	end
+	nextId += 1
+	local p: Pulse = {
+		id = nextId,
+		origin = origin,
+		t0 = os.clock(),
+		dist = {},
+		hk = {},
+		hv = {},
+		hn = 0,
+		seen = {},
+		buckets = {},
+		nextBucket = 0,
+		dynA = {},
+		dynB = {},
+		dynM = {},
+		dynKey = {},
+		dynCell = {},
+		dseen = {},
+		cam = Pulses.camera(),
+		revealed = 0,
+		trace = if traced then {} else nil,
+	}
+	gatherDynamic(p, exclude)
+	p.dist[start] = startD
+	push(p, startD, start)
+	table.insert(pulses, p)
+	Pulses.last = p
+	Pulses.started += 1
+	return true
+end
+
+local function settle(p: Pulse, c: number, d: number)
+	local center = World.cellCenter(c)
+	local R = S.Radius
+	local segs = World.cellSegs[c]
+	if segs then
+		local SM = World.SM
+		local seen = p.seen
+		for _, s in segs do
+			if not seen[s] then
+				seen[s] = true
+				local arr = d + (SM[s] - center).Magnitude
+				if arr <= R then
+					bucketAdd(p, arr, s)
+				end
+			end
+		end
+	end
+	local dyn = p.dynCell[c]
+	if dyn then
+		local dseen = p.dseen
+		for _, s in dyn do
+			if not dseen[s] then
+				dseen[s] = true
+				local arr = d + (p.dynM[s] - center).Magnitude
+				if arr <= R then
+					bucketAdd(p, arr, -s)
+				end
+			end
+		end
+	end
+end
+
+-- 파면을 limitD 까지 확장. 남은 예산을 돌려준다
+local function expand(p: Pulse, limitD: number, budget: number): number
+	local nx, ny, nz = World.nx, World.ny, World.nz
+	local occ = World.occ
+	local cs = World.cs
+	local R = S.Radius
+	local dist = p.dist
+	while p.hn > 0 and budget > 0 do
+		if p.hk[1] > limitD then
+			break
+		end
+		local d, c = pop(p)
+		if d <= (dist[c] or math.huge) + 1e-6 then
+			budget -= 1
+			settle(p, c, d)
+			local c0 = c - 1
+			local x = c0 % nx
+			local t = c0 // nx
+			local y = t % ny
+			local z = t // ny
+			for _, nb in NB do
+				local xx, yy, zz = x + nb.dx, y + nb.dy, z + nb.dz
+				if xx >= 0 and yy >= 0 and zz >= 0 and xx < nx and yy < ny and zz < nz then
+					local ni = xx + nx * (yy + ny * zz)
+					if buffer.readu8(occ, ni) == 0 then
+						local ok = true
+						local a, b = nb.a, nb.b
+						if a and b then
+							local ia = (x + a[1]) + nx * ((y + a[2]) + ny * (z + a[3]))
+							local ib = (x + b[1]) + nx * ((y + b[2]) + ny * (z + b[3]))
+							ok = buffer.readu8(occ, ia) == 0 and buffer.readu8(occ, ib) == 0
+						end
+						if ok then
+							local nd = d + nb.w * cs
+							if nd <= R and nd < (dist[ni + 1] or math.huge) then
+								dist[ni + 1] = nd
+								push(p, nd, ni + 1)
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	return budget
+end
+
+local function reveal(p: Pulse, id: number, arrival: number, now: number)
+	local peak = 1 - (1 - S.FarLevel) * math.clamp(arrival / S.Radius, 0, 1)
+	if id > 0 then
+		Lines.show(World.SA[id], World.SB[id], now, peak, id, p.cam, false)
+	else
+		local s = -id
+		local key = p.dynKey[-s]
+		Lines.show(p.dynA[s], p.dynB[s], now, peak, if key then (key :: number) - 1e7 else nil, p.cam, true)
+	end
+	p.revealed += 1
+	if p.trace and #p.trace < 6000 then
+		table.insert(p.trace, { now - p.t0, arrival, if id > 0 then id else 0 })
+	end
+end
+
+function Pulses.update(now: number)
+	if #pulses == 0 then
+		return
+	end
+	local budget = S.ExpandBudget
+	local R = S.Radius
+	local i = 1
+	while i <= #pulses do
+		local p = pulses[i]
+		local front = (now - p.t0) * S.WaveSpeed
+		local per = math.max(400, budget // (#pulses - i + 1))
+		local left = expand(p, math.min(front + 3, R + 3), per)
+		budget -= (per - left)
+		-- 확정된 거리(힙의 최소값)까지, 그리고 파면까지만 보여 준다
+		local settled = if p.hn > 0 then p.hk[1] else math.huge
+		local limit = math.min(front, settled)
+		while p.nextBucket <= limit and p.nextBucket <= R + 1 do
+			local l = p.buckets[p.nextBucket]
+			if l then
+				for _, id in l do
+					reveal(p, id, p.nextBucket, now)
+				end
+				p.buckets[p.nextBucket] = nil
+			end
+			p.nextBucket += 1
+		end
+		if p.nextBucket > R + 1 and (p.hn == 0 or p.hk[1] > R) then
+			table.remove(pulses, i)
+		else
+			i += 1
+		end
+	end
+end
+
+function Pulses.active(): number
+	return #pulses
+end
+
+function Pulses.clear()
+	table.clear(pulses)
+end
+
+return Pulses
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="39">
+        <Properties>
+          <string name="Name">SonarWorld</string>
+          <string name="Source"><![CDATA[--!strict
+-- 음파 렌더링용 월드 데이터(클라이언트). 스테이지가 로드되면 한 번만 만든다(매 프레임 다시 스캔하지 않음).
+--   1) 윤곽선 선분: SonarRenderable 태그 파트의 모서리 → 같은 평면 이음매·묻힌 모서리 제거 → 짧게 분할
+--   2) 전파 격자: 소리를 막는 구조물을 복셀(CellSize)로 칠한 점유 격자. 닫힌 문은 열고 닫을 때 갱신.
+--   3) 선분 ↔ 복셀 연결: 각 선분은 가까운 빈 복셀을 통해 음파를 받는다(벽 너머 복셀은 거리 제한으로 제외).
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Geo = require(ReplicatedStorage.Shared.SonarGeometry)
+
+local S = Config.Sonar
+local TAGS = Config.Tags
+
+local World = {}
+World.ready = false
+World.buildId = 0
+World.stage = nil :: Folder?
+
+-- 정적 선분
+World.SA = {} :: { Vector3 }
+World.SB = {} :: { Vector3 }
+World.SM = {} :: { Vector3 }
+World.segCount = 0
+World.culled = 0
+World.unattached = 0
+World.cellSegs = {} :: { [number]: { number } }
+-- 보는 위치에 따라 선이 바뀌는 정적 파트(원통·구) — 16스터드 버킷
+World.viewParts = {} :: { BasePart }
+local viewBuckets: { [number]: { number } } = {}
+-- 격자
+World.cs = S.CellSize
+World.origin = Vector3.zero
+World.nx, World.ny, World.nz = 0, 0, 0
+World.occ = buffer.create(1)
+World.doors = {} :: { { model: Model, cells: { number }, blocked: boolean, conn: RBXScriptConnection? } }
+
+local VB = 16
+local function vkey(x: number, y: number, z: number): number
+	return (x + 512) + (y + 64) * 1024 + (z + 512) * 1024 * 128
+end
+
+-- ── 판정 도우미 ──
+local function isDynamic(inst: Instance, stage: Instance?): boolean
+	local cur: Instance? = inst
+	while cur and cur ~= stage and cur ~= workspace do
+		if cur:GetAttribute(TAGS.Dynamic) == true then
+			return true
+		end
+		cur = cur.Parent
+	end
+	return false
+end
+
+-- 태그가 붙은 인스턴스(파트 또는 모델)의 파트들
+local function taggedParts(tag: string, within: Instance): { BasePart }
+	local out = {}
+	for _, inst in CollectionService:GetTagged(tag) do
+		if inst:IsDescendantOf(within) then
+			if inst:IsA("BasePart") then
+				table.insert(out, inst)
+			else
+				for _, d in inst:GetDescendants() do
+					if d:IsA("BasePart") then
+						table.insert(out, d)
+					end
+				end
+			end
+		end
+	end
+	return out
+end
+
+local function blocksSound(p: BasePart): boolean
+	local b = p:GetAttribute("SonarBlocks")
+	if type(b) == "boolean" then
+		return b
+	end
+	if not p.CanCollide or p.Transparency >= 1 then
+		return false
+	end
+	local s = p.Size
+	local dims = { s.X, s.Y, s.Z }
+	table.sort(dims)
+	return dims[1] >= 0.9 and dims[2] >= 0.9
+end
+
+-- ── 격자 ──
+function World.index(x: number, y: number, z: number): number
+	return x + World.nx * (y + World.ny * z) + 1
+end
+
+function World.coords(idx: number): (number, number, number)
+	local c = idx - 1
+	local nx, ny = World.nx, World.ny
+	local x = c % nx
+	local t = c // nx
+	return x, t % ny, t // ny
+end
+
+function World.cellCenter(idx: number): Vector3
+	local x, y, z = World.coords(idx)
+	local cs = World.cs
+	return World.origin + Vector3.new((x + 0.5) * cs, (y + 0.5) * cs, (z + 0.5) * cs)
+end
+
+function World.cellOf(p: Vector3): (number?, number?, number?)
+	local r = (p - World.origin) / World.cs
+	local x, y, z = math.floor(r.X), math.floor(r.Y), math.floor(r.Z)
+	if x < 0 or y < 0 or z < 0 or x >= World.nx or y >= World.ny or z >= World.nz then
+		return nil, nil, nil
+	end
+	return x, y, z
+end
+
+function World.free(idx: number): boolean
+	return buffer.readu8(World.occ, idx - 1) == 0
+end
+
+local function addOcc(idx: number, delta: number)
+	local v = buffer.readu8(World.occ, idx - 1) + delta
+	buffer.writeu8(World.occ, idx - 1, math.clamp(v, 0, 255))
+end
+
+-- 파트가 겹치는 복셀 목록(분리축: 파트 축 기준, 보수적)
+local function rasterCells(cf: CFrame, size: Vector3): { number }
+	local out = {}
+	local cs = World.cs
+	local h = cs / 2
+	local X, Y, Z = cf.XVector, cf.YVector, cf.ZVector
+	local ex = h * (math.abs(X.X) + math.abs(X.Y) + math.abs(X.Z))
+	local ey = h * (math.abs(Y.X) + math.abs(Y.Y) + math.abs(Y.Z))
+	local ez = h * (math.abs(Z.X) + math.abs(Z.Y) + math.abs(Z.Z))
+	local hx, hy, hz = size.X / 2 + ex - 0.01, size.Y / 2 + ey - 0.01, size.Z / 2 + ez - 0.01
+	-- 월드 AABB
+	local ax = math.abs(X.X) * size.X / 2 + math.abs(Y.X) * size.Y / 2 + math.abs(Z.X) * size.Z / 2
+	local ay = math.abs(X.Y) * size.X / 2 + math.abs(Y.Y) * size.Y / 2 + math.abs(Z.Y) * size.Z / 2
+	local az = math.abs(X.Z) * size.X / 2 + math.abs(Y.Z) * size.Y / 2 + math.abs(Z.Z) * size.Z / 2
+	local p = cf.Position
+	local o = World.origin
+	local x0 = math.max(0, math.floor((p.X - ax - o.X) / cs))
+	local x1 = math.min(World.nx - 1, math.floor((p.X + ax - o.X) / cs))
+	local y0 = math.max(0, math.floor((p.Y - ay - o.Y) / cs))
+	local y1 = math.min(World.ny - 1, math.floor((p.Y + ay - o.Y) / cs))
+	local z0 = math.max(0, math.floor((p.Z - az - o.Z) / cs))
+	local z1 = math.min(World.nz - 1, math.floor((p.Z + az - o.Z) / cs))
+	for z = z0, z1 do
+		for y = y0, y1 do
+			for x = x0, x1 do
+				local c = o + Vector3.new((x + 0.5) * cs, (y + 0.5) * cs, (z + 0.5) * cs)
+				local d = c - p
+				if math.abs(d:Dot(X)) < hx and math.abs(d:Dot(Y)) < hy and math.abs(d:Dot(Z)) < hz then
+					table.insert(out, World.index(x, y, z))
+				end
+			end
+		end
+	end
+	return out
+end
+
+-- mid 근처에서 음파를 받을 수 있는 빈 복셀들
+function World.attachCells(mid: Vector3): { number }
+	local out = {}
+	local x, y, z = World.cellOf(mid)
+	if not x then
+		return out
+	end
+	local lim = S.AttachDistance * S.AttachDistance
+	for dz = -1, 1 do
+		local zz = (z :: number) + dz
+		if zz >= 0 and zz < World.nz then
+			for dy = -1, 1 do
+				local yy = (y :: number) + dy
+				if yy >= 0 and yy < World.ny then
+					for dx = -1, 1 do
+						local xx = (x :: number) + dx
+						if xx >= 0 and xx < World.nx then
+							local idx = World.index(xx, yy, zz)
+							if World.free(idx) then
+								local c = World.cellCenter(idx)
+								local dd = c - mid
+								if dd:Dot(dd) <= lim then
+									table.insert(out, idx)
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	return out
+end
+
+-- ── 문(닫히면 막고 열리면 통과) ──
+local function refreshDoor(d)
+	local open = d.model:GetAttribute("Open") == true
+	local want = not open
+	if want ~= d.blocked then
+		for _, idx in d.cells do
+			addOcc(idx, if want then 1 else -1)
+		end
+		d.blocked = want
+	end
+end
+
+-- ── 보는 위치 의존 파트 조회 ──
+function World.viewPartsNear(p: Vector3, radius: number): { BasePart }
+	local out = {}
+	local r = math.ceil(radius / VB)
+	local cx, cy, cz = math.floor(p.X / VB), math.floor(p.Y / VB), math.floor(p.Z / VB)
+	local seen = {}
+	for dz = -r, r do
+		for dy = -2, 2 do
+			for dx = -r, r do
+				local list = viewBuckets[vkey(cx + dx, cy + dy, cz + dz)]
+				if list then
+					for _, i in list do
+						if not seen[i] then
+							seen[i] = true
+							local part = World.viewParts[i]
+							if (part.Position - p).Magnitude <= radius + part.Size.Magnitude / 2 then
+								table.insert(out, part)
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	return out
+end
+
+-- 움직이는 대상(문, 괴물, 다른 플레이어 캐릭터)
+function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { { part: BasePart, char: boolean } }
+	local out = {}
+	local function consider(p: BasePart, isChar: boolean)
+		if (p.Position - near).Magnitude <= radius + 4 then
+			table.insert(out, { part = p, char = isChar })
+		end
+	end
+	for _, inst in CollectionService:GetTagged(TAGS.Renderable) do
+		if inst:IsA("BasePart") and inst.Parent and isDynamic(inst, nil) and not (exclude and inst:IsDescendantOf(exclude)) then
+			consider(inst, false)
+		end
+	end
+	for _, plr in Players:GetPlayers() do
+		local char = plr.Character
+		if char and char ~= exclude and plr ~= Players.LocalPlayer then
+			for _, d in char:GetChildren() do
+				if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
+					consider(d, true)
+				end
+			end
+		end
+	end
+	return out
+end
+
+-- ── 빌드(양보하며 진행) ──
+function World.build(stage: Folder)
+	World.ready = false
+	World.stage = stage
+	local t0 = os.clock()
+	local function yieldSometimes()
+		if os.clock() - t0 > 0.012 then
+			task.wait()
+			t0 = os.clock()
+		end
+	end
+	for _, d in World.doors do
+		if d.conn then
+			d.conn:Disconnect()
+		end
+	end
+	World.doors = {}
+	World.SA, World.SB, World.SM = {}, {}, {}
+	World.segCount = 0
+	World.culled = 0
+	World.unattached = 0
+	World.cellSegs = {}
+	World.viewParts = {}
+	viewBuckets = {}
+
+	-- 정적 파트
+	local statics: { BasePart } = {}
+	for _, p in taggedParts(TAGS.Renderable, stage) do
+		if not isDynamic(p, stage) then
+			table.insert(statics, p)
+		end
+	end
+
+	-- 격자 범위
+	local bmin = stage:GetAttribute("BoundsMin") :: Vector3?
+	local bmax = stage:GetAttribute("BoundsMax") :: Vector3?
+	if not bmin or not bmax then
+		local lo, hi = Vector3.one * math.huge, -Vector3.one * math.huge
+		for _, p in statics do
+			lo = lo:Min(p.Position - p.Size)
+			hi = hi:Max(p.Position + p.Size)
+		end
+		bmin, bmax = lo, hi
+	end
+	local cs = World.cs
+	local lo = ((bmin :: Vector3) - Vector3.one * 4) / cs
+	local hi = ((bmax :: Vector3) + Vector3.one * 4) / cs
+	World.origin = Vector3.new(math.floor(lo.X), math.floor(lo.Y), math.floor(lo.Z)) * cs
+	World.nx = math.ceil(hi.X) - math.floor(lo.X)
+	World.ny = math.ceil(hi.Y) - math.floor(lo.Y)
+	World.nz = math.ceil(hi.Z) - math.floor(lo.Z)
+	World.occ = buffer.create(World.nx * World.ny * World.nz)
+
+	-- 공간 해시(점 포함 판정용, 8스터드 버킷)
+	local HB = 8
+	local hbuckets: { [number]: { BasePart } } = {}
+	for _, p in statics do
+		local cf, sz = p.CFrame, p.Size / 2
+		local X, Y, Z = cf.XVector, cf.YVector, cf.ZVector
+		local half = Vector3.new(
+			math.abs(X.X) * sz.X + math.abs(Y.X) * sz.Y + math.abs(Z.X) * sz.Z,
+			math.abs(X.Y) * sz.X + math.abs(Y.Y) * sz.Y + math.abs(Z.Y) * sz.Z,
+			math.abs(X.Z) * sz.X + math.abs(Y.Z) * sz.Y + math.abs(Z.Z) * sz.Z
+		) + Vector3.one * 0.2
+		local a = (p.Position - half) / HB
+		local b = (p.Position + half) / HB
+		for z = math.floor(a.Z), math.floor(b.Z) do
+			for y = math.floor(a.Y), math.floor(b.Y) do
+				for x = math.floor(a.X), math.floor(b.X) do
+					local k = vkey(x, y, z)
+					local l = hbuckets[k]
+					if not l then
+						l = {}
+						hbuckets[k] = l
+					end
+					table.insert(l, p)
+				end
+			end
+		end
+		yieldSometimes()
+	end
+	local function inside(pt: Vector3): boolean
+		local l = hbuckets[vkey(math.floor(pt.X / HB), math.floor(pt.Y / HB), math.floor(pt.Z / HB))]
+		if not l then
+			return false
+		end
+		for _, p in l do
+			if Geo.pointInside(p, pt) then
+				return true
+			end
+		end
+		return false
+	end
+
+	-- 점유 격자
+	for _, p in statics do
+		if blocksSound(p) then
+			for _, idx in rasterCells(p.CFrame, p.Size) do
+				addOcc(idx, 1)
+			end
+		end
+		yieldSometimes()
+	end
+	-- 문
+	for _, m in CollectionService:GetTagged(TAGS.Door) do
+		if m:IsA("Model") and m:IsDescendantOf(stage) then
+			local panel = m:FindFirstChild("Panel") :: BasePart?
+			local closed = panel and panel:GetAttribute("ClosedCFrame") :: CFrame?
+			if panel and closed then
+				local d = { model = m, cells = rasterCells(closed, panel.Size), blocked = false, conn = nil :: RBXScriptConnection? }
+				refreshDoor(d)
+				d.conn = m:GetAttributeChangedSignal("Open"):Connect(function()
+					refreshDoor(d)
+				end)
+				table.insert(World.doors, d)
+			end
+		end
+	end
+
+	-- 선분
+	local EPS = 0.08
+	local list = Geo.newList()
+	local SA, SB, SM = World.SA, World.SB, World.SM
+	local segLen = S.SegmentLength
+	local n = 0
+	for _, p in statics do
+		if Geo.shapeOf(p) ~= "None" then
+			list.n = 0
+			Geo.staticEdges(p, list)
+			for i = 1, list.n do
+				local a, b = list.A[i], list.B[i]
+				local n1, n2 = list.N1[i], list.N2[i]
+				local d = b - a
+				local len = d.Magnitude
+				if len > 0.03 then
+					local k = math.max(1, math.ceil(len / segLen))
+					for s = 0, k - 1 do
+						local pa = a + d * (s / k)
+						local pb = a + d * ((s + 1) / k)
+						local m = (pa + pb) / 2
+						local keep = true
+						if n1 and n2 then
+							local u1 = (n1 :: Vector3) * EPS
+							local u2 = (n2 :: Vector3) * EPS
+							local diag = inside(m + u1 + u2)
+							if not diag then
+								-- 한쪽 면이 모서리 너머로 같은 평면으로 이어지면 이음매
+								if inside(m + u2 - u1) or inside(m + u1 - u2) then
+									keep = false
+								end
+							elseif inside(m + u1 - u2) and inside(m - u1 + u2) then
+								keep = false -- 묻힌 모서리
+							end
+						end
+						if keep then
+							n += 1
+							SA[n] = pa
+							SB[n] = pb
+							SM[n] = m
+						else
+							World.culled += 1
+						end
+					end
+				end
+			end
+		end
+		if Geo.hasViewEdges(p) then
+			table.insert(World.viewParts, p)
+			local i = #World.viewParts
+			local k = vkey(math.floor(p.Position.X / VB), math.floor(p.Position.Y / VB), math.floor(p.Position.Z / VB))
+			local l = viewBuckets[k]
+			if not l then
+				l = {}
+				viewBuckets[k] = l
+			end
+			table.insert(l, i)
+		end
+		yieldSometimes()
+	end
+	World.segCount = n
+
+	-- 선분 ↔ 복셀
+	local cellSegs = World.cellSegs
+	for s = 1, n do
+		local cells = World.attachCells(SM[s])
+		if #cells == 0 then
+			World.unattached += 1
+		end
+		for _, idx in cells do
+			local l = cellSegs[idx]
+			if not l then
+				l = {}
+				cellSegs[idx] = l
+			end
+			table.insert(l, s)
+		end
+		if s % 400 == 0 then
+			yieldSometimes()
+		end
+	end
+
+	World.buildId = (stage:GetAttribute("BuildId") :: number?) or 0
+	World.ready = true
+end
+
+return World
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="40">
+        <Properties>
+          <string name="Name">UI</string>
+          <string name="Source"><![CDATA[--!strict
+-- 최소 UI: 작은 조준점, 음파 재사용 대기 막대, 스테이지 이름, 상호작용 안내, 사망/탈출/클리어 화면.
+-- 흰색·회색만. 미니맵이나 괴물 위치 표시는 없다.
+
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
+
+local UI = {}
+local player = Players.LocalPlayer
+
+pcall(function()
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+end)
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "SonarUI"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 5
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local FONT = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+local FONT_BOLD = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
+
+local function label(parent: Instance, text: string, size: number, pos: UDim2, anchor: Vector2, bold: boolean?): TextLabel
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Text = text
+	l.TextSize = size
+	l.FontFace = if bold then FONT_BOLD else FONT
+	l.TextColor3 = Color3.fromRGB(220, 220, 220)
+	l.Size = UDim2.fromOffset(600, size + 8)
+	l.Position = pos
+	l.AnchorPoint = anchor
+	l.Parent = parent
+	return l
+end
+
+-- 조준점
+local dot = Instance.new("Frame")
+dot.Size = UDim2.fromOffset(3, 3)
+dot.AnchorPoint = Vector2.new(0.5, 0.5)
+dot.Position = UDim2.fromScale(0.5, 0.5)
+dot.BackgroundColor3 = Color3.fromRGB(230, 230, 230)
+dot.BackgroundTransparency = 0.35
+dot.BorderSizePixel = 0
+dot.Parent = gui
+
+-- 음파 대기 막대(조준점 아래, 아주 얇게)
+local barBack = Instance.new("Frame")
+barBack.Size = UDim2.fromOffset(36, 2)
+barBack.AnchorPoint = Vector2.new(0.5, 0)
+barBack.Position = UDim2.new(0.5, 0, 0.5, 14)
+barBack.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+barBack.BackgroundTransparency = 0.75
+barBack.BorderSizePixel = 0
+barBack.Parent = gui
+local barFill = Instance.new("Frame")
+barFill.Size = UDim2.fromScale(1, 1)
+barFill.BackgroundColor3 = Color3.fromRGB(230, 230, 230)
+barFill.BackgroundTransparency = 0.5
+barFill.BorderSizePixel = 0
+barFill.Parent = barBack
+
+-- 스테이지 이름(왼쪽 위, 흐리게)
+local stageLabel = label(gui, "", 14, UDim2.fromOffset(18, 14), Vector2.zero)
+stageLabel.TextXAlignment = Enum.TextXAlignment.Left
+stageLabel.TextTransparency = 0.45
+
+-- 가운데 큰 제목(스테이지 시작 시 잠깐)
+local title = label(gui, "", 26, UDim2.fromScale(0.5, 0.36), Vector2.new(0.5, 0.5), true)
+title.TextTransparency = 1
+title.Size = UDim2.fromOffset(900, 40)
+
+-- 짧은 안내(가운데 아래)
+local hint = label(gui, "", 15, UDim2.new(0.5, 0, 0.5, 46), Vector2.new(0.5, 0))
+hint.TextTransparency = 1
+
+-- 상호작용 안내
+local prompt = label(gui, "", 15, UDim2.new(0.5, 0, 0.5, 26), Vector2.new(0.5, 0))
+prompt.TextTransparency = 0.2
+prompt.Visible = false
+
+-- 결과 화면
+local overlay = Instance.new("Frame")
+overlay.Size = UDim2.fromScale(1, 1)
+overlay.BackgroundColor3 = Color3.new(0, 0, 0)
+overlay.BackgroundTransparency = 1
+overlay.BorderSizePixel = 0
+overlay.ZIndex = 10
+overlay.Parent = gui
+local ovTitle = label(overlay, "", 40, UDim2.fromScale(0.5, 0.44), Vector2.new(0.5, 0.5), true)
+ovTitle.Size = UDim2.fromOffset(900, 56)
+ovTitle.ZIndex = 11
+ovTitle.TextTransparency = 1
+local ovSub = label(overlay, "", 16, UDim2.fromScale(0.5, 0.53), Vector2.new(0.5, 0.5))
+ovSub.Size = UDim2.fromOffset(900, 24)
+ovSub.ZIndex = 11
+ovSub.TextColor3 = Color3.fromRGB(160, 160, 160)
+ovSub.TextTransparency = 1
+
+-- 관전 안내(아래쪽)
+local spectate = label(gui, "", 14, UDim2.new(0.5, 0, 1, -40), Vector2.new(0.5, 0.5))
+spectate.TextColor3 = Color3.fromRGB(170, 170, 170)
+spectate.Visible = false
+
+local function tween(obj: Instance, t: number, props: { [string]: any })
+	TweenService:Create(obj, TweenInfo.new(t, Enum.EasingStyle.Sine), props):Play()
+end
+
+function UI.setCooldown(frac: number)
+	barFill.Size = UDim2.fromScale(math.clamp(frac, 0, 1), 1)
+	barFill.BackgroundTransparency = if frac >= 1 then 0.6 else 0.35
+end
+
+function UI.setStage(name: string)
+	stageLabel.Text = name
+	title.Text = name
+	tween(title, 1.2, { TextTransparency = 0.1 })
+	task.delay(3.5, function()
+		if title.Text == name then
+			tween(title, 1.5, { TextTransparency = 1 })
+		end
+	end)
+end
+
+function UI.hint(text: string, seconds: number)
+	hint.Text = text
+	tween(hint, 0.6, { TextTransparency = 0.25 })
+	task.delay(seconds, function()
+		if hint.Text == text then
+			tween(hint, 1.2, { TextTransparency = 1 })
+		end
+	end)
+end
+
+function UI.setPrompt(text: string?)
+	prompt.Visible = text ~= nil
+	prompt.Text = text or ""
+end
+
+-- 결과 화면. black: 화면을 검게 덮는다(아니면 글자만)
+function UI.overlay(t: string, sub: string, black: boolean)
+	ovTitle.Text = t
+	ovSub.Text = sub
+	tween(overlay, 0.9, { BackgroundTransparency = if black then 0 else 1 })
+	tween(ovTitle, 0.9, { TextTransparency = 0 })
+	tween(ovSub, 1.2, { TextTransparency = 0 })
+	dot.Visible = false
+	barBack.Visible = false
+end
+
+function UI.hideOverlay(fast: boolean?)
+	local t = if fast then 0.2 else 0.8
+	tween(overlay, t, { BackgroundTransparency = 1 })
+	tween(ovTitle, t, { TextTransparency = 1 })
+	tween(ovSub, t, { TextTransparency = 1 })
+	dot.Visible = true
+	barBack.Visible = true
+end
+
+-- 오버레이 글자만 남기고 배경을 걷는다(관전으로 넘어갈 때)
+function UI.liftOverlay()
+	tween(overlay, 1.2, { BackgroundTransparency = 1 })
+	tween(ovTitle, 1.2, { TextTransparency = 1 })
+	tween(ovSub, 1.2, { TextTransparency = 1 })
+end
+
+function UI.setSpectate(text: string?)
+	spectate.Visible = text ~= nil
+	spectate.Text = text or ""
+	if text then
+		dot.Visible = false
+		barBack.Visible = false
+	end
+end
+
+function UI.state()
+	return {
+		overlayTitle = ovTitle.Text,
+		overlayShown = ovTitle.TextTransparency < 0.5,
+		stage = stageLabel.Text,
+		spectate = if spectate.Visible then spectate.Text else nil,
+	}
+end
+
+return UI
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="Workspace" referent="41">
+    <Properties>
+      <string name="Name">Workspace</string>
+      <bool name="NeedsPivotMigration">false</bool>
+      <bool name="StreamingEnabled">false</bool>
+    </Properties>
+  </Item>
+</roblox>
