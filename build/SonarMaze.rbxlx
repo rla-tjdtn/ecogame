@@ -54,30 +54,35 @@
       </Properties>
       <Item class="RemoteEvent" referent="6">
         <Properties>
-          <string name="Name">RoundEvent</string>
+          <string name="Name">RoomAction</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="7">
         <Properties>
-          <string name="Name">SetMoveMode</string>
+          <string name="Name">RoundEvent</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="8">
         <Properties>
-          <string name="Name">SonarFire</string>
+          <string name="Name">SetMoveMode</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="9">
+        <Properties>
+          <string name="Name">SonarFire</string>
+        </Properties>
+      </Item>
+      <Item class="RemoteEvent" referent="10">
         <Properties>
           <string name="Name">SonarPulse</string>
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="10">
+    <Item class="Folder" referent="11">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
-      <Item class="ModuleScript" referent="11">
+      <Item class="ModuleScript" referent="12">
         <Properties>
           <string name="Name">Config</string>
           <string name="Source"><![CDATA[--!strict
@@ -141,9 +146,9 @@ Config.Noise = {
 
 -- ─────────────────────────────── 괴물 ───────────────────────────────
 Config.Monster = {
-	WanderSpeed = 6.5,
-	InvestigateSpeed = 10,
-	ChaseSpeed = 15.5, -- 달리기(18)보다 느리고 걷기(10)보다 빠르다
+	WanderSpeed = 3.5, -- 아주 천천히(플레이어는 길을 찾으며 도망가야 한다)
+	InvestigateSpeed = 5.5,
+	ChaseSpeed = 8.5, -- 걷기(10)보다도 느리다: 막다른 길·정면으로 마주칠 때 잡힌다
 	SightRange = 15, -- 시야(어둠 속 감각) 거리
 	SightRangeCrouch = 7,
 	SenseRange = 4.5, -- 이 거리 안이면 시야와 상관없이 알아챈다
@@ -171,6 +176,13 @@ Config.Round = {
 
 -- ─────────────────────────────── 스테이지 ───────────────────────────────
 -- Module 은 ServerScriptService.Server.Stages 안의 레이아웃 모듈 이름
+-- 로비·방
+Config.Lobby = {
+	MaxPlayers = 4, -- 방 하나 최대 인원
+	MinPlayers = 1, -- 시작할 수 있는 최소 인원
+	LocalStart = false, -- true 면 텔레포트하지 않고 이 서버에서 시작(Studio 에서는 항상 이 서버에서)
+}
+
 -- 숨는 곳(맵 문자 L: 캐비닛·옷장)
 Config.Hide = {
 	Noise = 8, -- 문을 여닫는 소리 반경(스터드)
@@ -223,7 +235,7 @@ return Config
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="12">
+      <Item class="ModuleScript" referent="13">
         <Properties>
           <string name="Name">SonarGeometry</string>
           <string name="Source"><![CDATA[--!strict
@@ -495,15 +507,15 @@ return Geo
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="13">
+  <Item class="ServerScriptService" referent="14">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="14">
+    <Item class="Folder" referent="15">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">Doors</string>
           <string name="Source"><![CDATA[--!strict
@@ -659,7 +671,7 @@ return Doors
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">Hiding</string>
           <string name="Source"><![CDATA[--!strict
@@ -908,7 +920,224 @@ return Hiding
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="17">
+      <Item class="ModuleScript" referent="18">
+        <Properties>
+          <string name="Name">Lobby</string>
+          <string name="Source"><![CDATA[--!strict
+-- 로비와 방.
+--   · 서버가 시작되면: 예약 서버(방에서 텔레포트로 온 게임 서버)면 바로 게임, 아니면 로비.
+--   · 로비: 방 만들기 / 참가 / 나가기 / 시작(방장만). 방 목록은 ReplicatedStorage 속성 "Rooms"(JSON), 내 방은 Player 속성 "RoomId".
+--   · 시작: 게임에서는 방 사람들을 새 예약 서버로 텔레포트(방마다 따로 플레이).
+--           Studio(텔레포트 불가)에서는 이 서버에서 그 방 사람들로 바로 시작하고, 다 깨면 로비로 돌아온다.
+-- 클라이언트 요청: Remotes.RoomAction:FireServer(action, arg)  action = "create" | "join"(arg = 방 번호) | "leave" | "start"
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Round = require(script.Parent.Round)
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local RoomAction = Remotes:WaitForChild("RoomAction") :: RemoteEvent
+local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
+
+local Lobby = {}
+
+type Room = { id: number, host: Player, members: { Player }, started: boolean }
+local rooms: { [number]: Room } = {}
+local nextId = 0
+Lobby.rooms = rooms
+
+local function publish()
+	local list = {}
+	for _, r in rooms do
+		local names, ids = {}, {}
+		for _, m in r.members do
+			table.insert(names, m.DisplayName)
+			table.insert(ids, m.UserId)
+		end
+		table.insert(list, { id = r.id, host = r.host.DisplayName, hostId = r.host.UserId, names = names, ids = ids, started = r.started, max = Config.Lobby.MaxPlayers })
+	end
+	table.sort(list, function(a, b)
+		return a.id < b.id
+	end)
+	ReplicatedStorage:SetAttribute("Rooms", HttpService:JSONEncode(list))
+end
+
+local function message(p: Player, text: string)
+	RoundEvent:FireClient(p, "RoomMsg", { text = text })
+end
+
+local function roomOf(p: Player): Room?
+	local id = p:GetAttribute("RoomId")
+	return if type(id) == "number" then rooms[id] else nil
+end
+
+local function leave(p: Player)
+	local r = roomOf(p)
+	p:SetAttribute("RoomId", nil)
+	if not r then
+		return
+	end
+	local i = table.find(r.members, p)
+	if i then
+		table.remove(r.members, i)
+	end
+	if #r.members == 0 then
+		rooms[r.id] = nil
+	elseif r.host == p then
+		r.host = r.members[1] -- 방장이 나가면 다음 사람이 방장
+		message(r.host, "방장이 되었습니다")
+	end
+	publish()
+end
+
+local function join(p: Player, r: Room): boolean
+	if r.started then
+		message(p, "이미 시작한 방입니다")
+		return false
+	end
+	if #r.members >= Config.Lobby.MaxPlayers then
+		message(p, "방이 가득 찼습니다")
+		return false
+	end
+	leave(p)
+	table.insert(r.members, p)
+	p:SetAttribute("RoomId", r.id)
+	publish()
+	return true
+end
+
+-- 이 서버에서 그 방 사람들로 게임을 시작한다(Studio, 또는 텔레포트를 쓸 수 없을 때)
+function Lobby.startLocal(r: Room)
+	local members = {}
+	for _, m in r.members do
+		members[m] = true
+	end
+	-- 로비 맵이 사라지므로 다른 방은 모두 닫는다(그 사람들은 게임이 끝날 때까지 기다린다)
+	for id, other in rooms do
+		for _, m in other.members do
+			m:SetAttribute("RoomId", nil)
+			if not members[m] then
+				message(m, "다른 방이 이 서버에서 게임 중입니다. 끝나면 로비로 돌아옵니다")
+			end
+		end
+		rooms[id] = nil
+	end
+	publish()
+	Round.members = members
+	Round.returnToLobby = true
+	Round.stageIndex = 1
+	task.spawn(Round.loop)
+end
+
+local function startTeleport(r: Room)
+	local ok, err = pcall(function()
+		local code = TeleportService:ReserveServer(game.PlaceId)
+		local options = Instance.new("TeleportOptions")
+		options.ReservedServerAccessCode = code
+		options:SetTeleportData({ room = r.id })
+		TeleportService:TeleportAsync(game.PlaceId, r.members, options)
+	end)
+	if not ok then
+		r.started = false
+		publish()
+		for _, m in r.members do
+			message(m, "시작하지 못했습니다(텔레포트 실패). 다시 눌러 주세요")
+		end
+		warn("[Lobby] teleport failed: " .. tostring(err))
+	end
+end
+
+local function start(p: Player)
+	local r = roomOf(p)
+	if not r then
+		return
+	end
+	if r.host ~= p then
+		message(p, "방장만 시작할 수 있습니다")
+		return
+	end
+	if r.started then
+		return
+	end
+	if #r.members < Config.Lobby.MinPlayers then
+		message(p, string.format("%d명 이상이어야 시작합니다", Config.Lobby.MinPlayers))
+		return
+	end
+	r.started = true
+	publish()
+	for _, m in r.members do
+		RoundEvent:FireClient(m, "RoomStarting", { id = r.id })
+	end
+	if Lobby.localStart() then
+		Lobby.startLocal(r)
+	else
+		startTeleport(r)
+	end
+end
+
+-- 텔레포트 대신 이 서버에서 시작하는가(Studio 에서는 텔레포트가 안 된다)
+function Lobby.localStart(): boolean
+	return RunService:IsStudio() or Config.Lobby.LocalStart == true
+end
+
+-- 방에서 텔레포트로 온 게임 서버인가(예약 서버)
+function Lobby.isGameServer(): boolean
+	return game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0
+end
+
+function Lobby.act(p: Player, action: any, arg: any)
+	if Round.state ~= "Lobby" or type(action) ~= "string" then
+		return
+	end
+	if action == "create" then
+		if roomOf(p) then
+			return
+		end
+		nextId += 1
+		local r: Room = { id = nextId, host = p, members = {}, started = false }
+		rooms[r.id] = r
+		join(p, r)
+	elseif action == "join" then
+		local r = if type(arg) == "number" then rooms[arg] else nil
+		if r and roomOf(p) ~= r then
+			join(p, r)
+		end
+	elseif action == "leave" then
+		leave(p)
+	elseif action == "start" then
+		start(p)
+	end
+end
+
+RoomAction.OnServerEvent:Connect(Lobby.act)
+Players.PlayerRemoving:Connect(leave)
+
+-- 서버 시작: 첫 플레이어가 들어오면 모드를 정한다(테스트는 ReplicatedStorage 속성 ForceMode 로 고른다)
+function Lobby.boot()
+	while #Players:GetPlayers() == 0 do
+		task.wait(0.2)
+	end
+	local force = ReplicatedStorage:GetAttribute("ForceMode")
+	local mode = if force == "Game" or force == "Lobby" then force elseif Lobby.isGameServer() then "Game" else "Lobby"
+	if mode == "Game" then
+		ReplicatedStorage:SetAttribute("Mode", "Game")
+		Round.loop()
+	else
+		publish()
+		Round.enterLobby()
+	end
+end
+
+publish()
+return Lobby
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="19">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -917,7 +1146,7 @@ return Hiding
 --   · 완전한 어둠 조명 강제
 --   · 음파 발사 검증(발사 간격·생존 여부, 위치는 서버가 캐릭터 머리에서 정한다) → 다른 클라이언트에 전달 + 괴물에게 소리
 --   · 이동 모드(걷기/달리기/웅크리기) 요청 처리
---   · 라운드 루프 시작
+--   · 로비(방) 또는 게임 시작(Lobby.boot)
 
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
@@ -1002,11 +1231,13 @@ end)
 -- 테스트 하네스가 읽는 값
 _G.SonarMaze = { Round = Round, Sonar = Sonar, SoundBus = SoundBus }
 
-task.spawn(Round.loop)
+-- 로비(방 만들기) 또는 게임 서버로 시작
+local Lobby = require(script.Parent.Lobby)
+task.spawn(Lobby.boot)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">MapKit</string>
           <string name="Source"><![CDATA[--!strict
@@ -1308,7 +1539,7 @@ return Kit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">Monster</string>
           <string name="Source"><![CDATA[--!strict
@@ -1374,8 +1605,16 @@ local function buildModel(cf: CFrame, stage: number): Model
 	end
 	-- 몸통(앞으로 숙인 마른 몸), 머리, 긴 팔, 다리. 루트 가운데 기준 바닥은 y = -5
 	local parts: { BasePart } = {}
+	-- 팔·다리는 어깨·엉덩이 관절(Motor6D)에 붙여 걸을 때 흔든다(Monster.animate)
+	local group: string? = nil
+	local groupParts: { [string]: { BasePart } } = {}
 	local function add(p: BasePart)
 		table.insert(parts, p)
+		if group then
+			local l = groupParts[group] or {}
+			groupParts[group] = l
+			table.insert(l, p)
+		end
 	end
 	-- 레퍼런스(손그림): 작은 머리 + 짧은 목 + 좁고 긴 몸통 + 바깥으로 벌어진 긴 팔(발톱 5개) + 길고 가는 다리. 바닥 y = -5, 앞 = -Z
 	local function seg(a: Vector3, b: Vector3, r: number)
@@ -1470,6 +1709,7 @@ local function buildModel(cf: CFrame, stage: number): Model
 	end
 	for _, s in { -1, 1 } do
 		-- 긴 팔: 한 줄, 어깨 → 팔꿈치 → 손목, V자로 벌어짐
+		group = "Arm" .. s
 		local sh = V3(0.9 * s, 2.55, -0.35)
 		local el = V3(1.55 * s, 0.15, -0.85)
 		local wr = V3(2.1 * s, -2.1, -1.0)
@@ -1483,6 +1723,7 @@ local function buildModel(cf: CFrame, stage: number): Model
 			seg(mid, tip, 0.014)
 		end
 		-- 길고 곧은 다리: 한 줄 + 무릎 꺾임, 작은 발
+		group = "Leg" .. s
 		for _, e in { 0.4 } do
 			local x0, xk, xa = e * s, (e + 0.06) * s, (e + 0.08) * s
 			ink(V3(x0, 0.5, 0), V3(xk, -2.3, -0.2), 0.03)
@@ -1493,9 +1734,52 @@ local function buildModel(cf: CFrame, stage: number): Model
 		ink(V3(xc, -4.97, 0.35), V3(xc, -4.97, -0.8), 0.03)
 		ink(V3(xc, -4.75, 0.1), V3(xc, -4.97, 0.35), 0.03)
 	end
+	group = nil
+	local JOINTS: { [string]: Vector3 } = {
+		["Arm-1"] = Vector3.new(-0.9, 2.55, -0.35),
+		["Arm1"] = Vector3.new(0.9, 2.55, -0.35),
+		["Leg-1"] = Vector3.new(-0.4, 0.5, 0),
+		["Leg1"] = Vector3.new(0.4, 0.5, 0),
+	}
+	local grouped: { [BasePart]: boolean } = {}
+	for name, list in groupParts do
+		local off = JOINTS[name]
+		if off then
+			local pv = Instance.new("Part")
+			pv.Name = "Pivot" .. name
+			pv.Size = Vector3.new(0.2, 0.2, 0.2)
+			pv.Transparency = 1
+			pv.CanCollide = false
+			pv.CanQuery = false
+			pv.CanTouch = false
+			pv.Massless = true
+			pv.CFrame = cf * CFrame.new(off)
+			pv.Parent = model
+			local motor = Instance.new("Motor6D")
+			motor.Name = "Joint" .. name
+			motor.Part0 = root
+			motor.Part1 = pv
+			motor.C0 = CFrame.new(off)
+			motor.C1 = CFrame.identity
+			motor.Parent = root
+			for _, p in list do
+				p.Anchored = false
+				p.CanCollide = false
+				p.CanQuery = false
+				p.Massless = true
+				local w = Instance.new("WeldConstraint")
+				w.Part0 = pv
+				w.Part1 = p
+				w.Parent = p
+				grouped[p] = true
+			end
+		end
+	end
 	for _, p in parts do
 		p.Name = "Body"
-		limb(p)
+		if not grouped[p] then
+			limb(p)
+		end
 	end
 	-- 장애물 판정과 무관하게(검은 몸은 SonarRenderable 태그로 음파에만 드러난다)
 	local hum = Instance.new("Humanoid")
@@ -1550,6 +1834,9 @@ export type Monster = typeof(setmetatable({} :: {
 	legGoal: Vector3?,
 	pullSpot: Vector3?, -- 쫓던 플레이어가 숨는 것을 봤다: 그 숨는 곳 앞
 	lastHunt: number,
+	joints: { { motor: Motor6D, base: CFrame, offset: number, amp: number } },
+	phase: number,
+	animT: number,
 }, Monster))
 
 function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> (), stage: number?): Monster
@@ -1600,8 +1887,37 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 		legGoal = nil,
 		pullSpot = nil,
 		lastHunt = os.clock(),
+		joints = {},
+		phase = 0,
+		animT = 0,
 	}, Monster)
+	for _, name in { "Leg-1", "Leg1", "Arm-1", "Arm1" } do
+		local motor = root:FindFirstChild("Joint" .. name) :: Motor6D?
+		if motor then
+			local isLeg = name:sub(1, 3) == "Leg"
+			local left = name:find("-1") ~= nil
+			-- 다리끼리, 팔끼리 반대로, 팔은 같은 쪽 다리와 반대로
+			table.insert(self.joints, { motor = motor, base = motor.C0, offset = if (isLeg == left) then 0 else math.pi, amp = if isLeg then 0.5 else 0.38 })
+		end
+	end
 	return self
+end
+
+-- 걷는 모습: 속도만큼 팔다리를 흔든다(초당 10번만 바꿔 네트워크 부담을 줄인다. 음파는 순간 모습만 보여 준다)
+function Monster.animate(self: Monster, dt: number)
+	self.animT += dt
+	if self.animT < 0.1 or #self.joints == 0 then
+		return
+	end
+	local step = self.animT
+	self.animT = 0
+	local v = self.root.AssemblyLinearVelocity
+	local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+	self.phase = (self.phase + step * speed * 0.55) % (math.pi * 2)
+	local amt = math.clamp(speed / 3, 0, 1) -- (느리게 걸어도 팔다리가 크게 흔들려야 음파에 걷는 모습이 보인다)
+	for _, j in self.joints do
+		j.motor.C0 = j.base * CFrame.Angles(math.sin(self.phase + j.offset) * j.amp * amt, 0, 0)
+	end
 end
 
 function Monster.note(self: Monster, s: string)
@@ -1795,6 +2111,9 @@ end
 function Monster.hear(self: Monster, pos: Vector3, radius: number, source: Player?, kind: string)
 	if not self.alive or os.clock() < self.startAt then
 		return
+	end
+	if kind == "Door" and source == nil then
+		return -- 괴물이 연 문 소리(괴물끼리 서로 문 소리에 끌려다니지 않게)
 	end
 	if not SoundBus.canHear(pos, self.root.Position, radius) then
 		return
@@ -2101,7 +2420,7 @@ return Monster
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="22">
         <Properties>
           <string name="Name">Props</string>
           <string name="Source"><![CDATA[--!strict
@@ -2348,13 +2667,14 @@ return Props
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="23">
         <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[--!strict
 -- 라운드(스테이지) 진행: 스테이지 짓기 → 플레이어 배치 → 괴물 → 탈출/사망 판정 → 다음 스테이지 또는 재시작.
 -- 플레이어 상태(Player 속성 "Status"): "Waiting" | "Alive" | "Dead" | "Escaped"
--- ReplicatedStorage 속성: StageIndex, StageName, RoundState("Waiting"|"Playing"|"Result"), RoundId
+-- ReplicatedStorage 속성: StageIndex, StageName, RoundState("Waiting"|"Lobby"|"Loading"|"Playing"|"Result"), RoundId, Mode("Lobby"|"Game")
+-- 로비(RoundState "Lobby"): 로비 맵을 스테이지처럼 지어 음파로 본다. 방(Lobby.luau)에서 시작하면 그 방 사람만 참가자(Round.members).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -2379,6 +2699,9 @@ Round.monsters = {} :: { any }
 Round.autoLoop = true -- 테스트가 끌 수 있다
 Round.lastOutcome = "" :: string
 Round.events = {} :: { string }
+Round.members = nil :: { [Player]: boolean }? -- nil 이면 서버의 모든 플레이어가 참가자
+Round.returnToLobby = false -- 로비에서 시작한 게임: 마지막 스테이지를 깨거나 참가자가 모두 나가면 로비로
+Round.lastAllClear = false
 
 local stageFolder: Folder? = nil
 local spawnCursor = 0
@@ -2401,9 +2724,20 @@ function Round.status(p: Player): string
 	return (p:GetAttribute("Status") :: string?) or "Waiting"
 end
 
-function Round.alivePlayers(): { Player }
+-- 이번 게임 참가자(로비에서 방으로 시작했으면 그 방 사람만)
+function Round.participants(): { Player }
 	local out = {}
 	for _, p in Players:GetPlayers() do
+		if not Round.members or Round.members[p] then
+			table.insert(out, p)
+		end
+	end
+	return out
+end
+
+function Round.alivePlayers(): { Player }
+	local out = {}
+	for _, p in Round.participants() do
 		if Round.status(p) == "Alive" then
 			table.insert(out, p)
 		end
@@ -2427,14 +2761,12 @@ local function stageModule(i: number): any?
 	return require(m :: ModuleScript)
 end
 
-function Round.buildStage(i: number)
+local function buildLayout(layout: any, label: string)
 	if stageFolder then
 		stageFolder:Destroy()
 		stageFolder = nil
 	end
 	Doors.clear()
-	local layout = stageModule(i)
-	assert(layout, "stage module missing: " .. tostring(i))
 	local b0 = os.clock()
 	local info = Builder.build(layout, workspace, "Stage")
 	Round.lastBuildMs = (os.clock() - b0) * 1000
@@ -2455,7 +2787,13 @@ function Round.buildStage(i: number)
 	stageFolder = folder
 	Round.info = info
 	SoundBus.setGeometry(folder)
-	note("built stage " .. i .. " parts=" .. count)
+	note("built " .. label .. " parts=" .. count)
+end
+
+function Round.buildStage(i: number)
+	local layout = stageModule(i)
+	assert(layout, "stage module missing: " .. tostring(i))
+	buildLayout(layout, "stage " .. i)
 end
 
 local function nextSpawn(): CFrame
@@ -2499,10 +2837,19 @@ function Round.kill(p: Player, why: string?)
 	if Round.status(p) ~= "Alive" then
 		return
 	end
+	if Round.state == "Lobby" then
+		-- 로비에서는 죽지 않는다(떨어지면 다시 세운다)
+		task.delay(1, function()
+			if Round.state == "Lobby" then
+				Round.spawnPlayer(p)
+			end
+		end)
+		return
+	end
 	setStatus(p, "Dead")
 	note("dead " .. p.Name .. " " .. (why or ""))
 	local others = #Round.alivePlayers()
-	RoundEvent:FireAllClients("Died", { userId = p.UserId, solo = #Players:GetPlayers() == 1, othersAlive = others })
+	RoundEvent:FireAllClients("Died", { userId = p.UserId, solo = #Round.participants() == 1, othersAlive = others })
 	local char = p.Character
 	if char then
 		local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -2573,6 +2920,7 @@ function Round.startStage(i: number)
 	Round.stageIndex = i
 	Round.state = "Loading"
 	ReplicatedStorage:SetAttribute("RoundState", "Loading")
+	ReplicatedStorage:SetAttribute("Mode", "Game")
 	for _, p in Players:GetPlayers() do
 		setStatus(p, "Waiting")
 		if p.Character then
@@ -2586,7 +2934,7 @@ function Round.startStage(i: number)
 	ReplicatedStorage:SetAttribute("StageName", def.Name)
 	ReplicatedStorage:SetAttribute("RoundId", Round.roundId)
 	spawnCursor = 0
-	for _, p in Players:GetPlayers() do
+	for _, p in Round.participants() do
 		task.spawn(Round.spawnPlayer, p)
 	end
 	Round.state = "Playing"
@@ -2601,10 +2949,10 @@ function Round.finished(): boolean
 	if Round.state ~= "Playing" then
 		return false
 	end
-	if #Players:GetPlayers() == 0 then
+	if #Round.participants() == 0 then
 		return true
 	end
-	for _, p in Players:GetPlayers() do
+	for _, p in Round.participants() do
 		local s = Round.status(p)
 		if s == "Alive" or s == "Waiting" then
 			return false
@@ -2615,7 +2963,8 @@ end
 
 function Round.finish(): string
 	local anyEscaped = false
-	for _, p in Players:GetPlayers() do
+	Round.lastAllClear = false
+	for _, p in Round.participants() do
 		if Round.status(p) == "Escaped" then
 			anyEscaped = true
 		end
@@ -2632,8 +2981,9 @@ function Round.finish(): string
 			nextI = 1
 		end
 		outcome = "Clear"
-		RoundEvent:FireAllClients("Clear", { stage = i, nextStage = nextI, nextName = stageDef(nextI).Name, allClear = allClear, seconds = Config.Round.ResultSeconds })
+		RoundEvent:FireAllClients("Clear", { stage = i, nextStage = nextI, nextName = stageDef(nextI).Name, allClear = allClear, toLobby = Round.returnToLobby, seconds = Config.Round.ResultSeconds })
 		Round.stageIndex = nextI
+		Round.lastAllClear = allClear
 	else
 		outcome = "Failed"
 		RoundEvent:FireAllClients("Failed", { stage = i, nextName = stageDef(i).Name, seconds = Config.Round.ResultSeconds })
@@ -2644,18 +2994,19 @@ function Round.finish(): string
 end
 
 -- 출구·잡기 판정
-RunService.Heartbeat:Connect(function()
+RunService.Heartbeat:Connect(function(dt)
 	if Round.state ~= "Playing" then
 		return
 	end
 	for _, m in Round.monsters do
 		m:checkCatch()
+		m:animate(dt)
 	end
 	local info = Round.info
 	if not info then
 		return
 	end
-	for _, p in Players:GetPlayers() do
+	for _, p in Round.participants() do
 		if Round.status(p) == "Alive" then
 			local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if root then
@@ -2713,15 +3064,58 @@ end)
 
 Players.PlayerAdded:Connect(function(p)
 	setStatus(p, "Waiting")
-	if Round.state == "Playing" then
-		-- 늦게 들어온 플레이어도 시작 지점에서 함께 한다
+	if Round.state == "Lobby" then
+		task.defer(Round.spawnPlayer, p)
+	elseif Round.state == "Playing" and not Round.members then
+		-- 늦게 들어온 플레이어도 시작 지점에서 함께 한다(방에서 시작한 게임은 그 방 사람만)
 		task.defer(Round.spawnPlayer, p)
 	end
 end)
 
+Players.PlayerRemoving:Connect(function(p)
+	if Round.members then
+		Round.members[p] = nil
+	end
+end)
+
+-- 로비: 로비 맵을 짓고 모두 그 안에 세운다
+function Round.enterLobby()
+	clearMonsters()
+	Round.members = nil
+	Round.returnToLobby = false
+	Round.state = "Loading"
+	ReplicatedStorage:SetAttribute("RoundState", "Loading")
+	ReplicatedStorage:SetAttribute("Mode", "Lobby")
+	for _, p in Players:GetPlayers() do
+		setStatus(p, "Waiting")
+		if p.Character then
+			p.Character:Destroy()
+			p.Character = nil
+		end
+	end
+	buildLayout(require(script.Parent.Stages.Lobby) :: any, "lobby")
+	ReplicatedStorage:SetAttribute("StageIndex", 0)
+	ReplicatedStorage:SetAttribute("StageName", "로비")
+	ReplicatedStorage:SetAttribute("RoundId", Round.roundId)
+	spawnCursor = 0
+	Round.state = "Lobby"
+	ReplicatedStorage:SetAttribute("RoundState", "Lobby")
+	for _, p in Players:GetPlayers() do
+		task.spawn(Round.spawnPlayer, p)
+	end
+	RoundEvent:FireAllClients("Lobby", {})
+	note("lobby")
+end
+
+-- 게임 진행(스테이지 → 결과 → 다음/재시작).
+-- returnToLobby 면 다섯 스테이지를 모두 깨거나 참가자가 모두 나가면 로비로 돌아가며 끝난다.
 function Round.loop()
 	while true do
-		while #Players:GetPlayers() == 0 do
+		while #Round.participants() == 0 do
+			if Round.returnToLobby then
+				Round.enterLobby()
+				return
+			end
 			task.wait(0.5)
 		end
 		task.wait(Config.Round.FirstStartDelay)
@@ -2734,6 +3128,10 @@ function Round.loop()
 		while not Round.autoLoop do
 			task.wait(0.2)
 		end
+		if Round.returnToLobby and (Round.lastAllClear or #Round.participants() == 0) then
+			Round.enterLobby()
+			return
+		end
 	end
 end
 
@@ -2741,7 +3139,7 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="22">
+      <Item class="ModuleScript" referent="24">
         <Properties>
           <string name="Name">SoundBus</string>
           <string name="Source"><![CDATA[--!strict
@@ -2838,7 +3236,7 @@ return SoundBus
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">StageBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -3478,11 +3876,43 @@ return Builder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="24">
+      <Item class="Folder" referent="26">
         <Properties>
           <string name="Name">Stages</string>
         </Properties>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="27">
+          <Properties>
+            <string name="Name">Lobby</string>
+            <string name="Source"><![CDATA[--!strict
+-- 로비: 방을 만들고 기다리는 어두운 홀. 스테이지처럼 지어서 음파로 본다(괴물 없음, 출구 없음).
+-- 가운데 큰 홀(기둥), 위쪽 대기실과 양옆 작은 방(아치·문), 아래쪽 휴게실.
+return {
+	Seed = 7,
+	PipeChance = 0.45,
+	Rows = {
+		"##########################",
+		"#....#..............#....#",
+		"#.c..A..O...SS...O..A..m.#",
+		"#....#..............#....#",
+		"##A###.....SS.......###A##",
+		"#.......................v#",
+		"#..O.....O......O.....O..#",
+		"#........................#",
+		"#####.....######.....#####",
+		"#...#.....#....#.....#...#",
+		"#.f.D.....A....A.....D.f.#",
+		"#...#.....#....#.....#...#",
+		"#####.....######.....#####",
+		"#........................#",
+		"#..O.....O......O.....O..#",
+		"#c......................c#",
+		"##########################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">Stage1</string>
             <string name="Source"><![CDATA[--!strict
@@ -3540,7 +3970,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">Stage2</string>
             <string name="Source"><![CDATA[--!strict
@@ -3600,7 +4030,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">Stage3</string>
             <string name="Source"><![CDATA[--!strict
@@ -3662,7 +4092,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">Stage4</string>
             <string name="Source"><![CDATA[--!strict
@@ -3723,7 +4153,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">Stage5</string>
             <string name="Source"><![CDATA[--!strict
@@ -3802,7 +4232,7 @@ return {
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="30">
+      <Item class="Script" referent="33">
         <Properties>
           <string name="Name">TestHarness</string>
           <token name="RunContext">0</token>
@@ -3853,6 +4283,8 @@ LogService.MessageOut:Connect(function(msg, kind)
 end)
 
 -- 테스트 설정: 괴물은 시험할 때만 움직이고, 결과 화면은 짧게
+-- 로비 테스트만 로비로, 나머지는 바로 게임으로 시작(Lobby.boot 가 읽는다)
+ReplicatedStorage:SetAttribute("ForceMode", if args.Test == "lobby" then "Lobby" else "Game")
 Config.Monster.StartDelay = 1e6
 Config.Round.ResultSeconds = 2
 Config.Round.FirstStartDelay = 1
@@ -4452,7 +4884,7 @@ local function core()
 			m:setState("Investigate")
 			m.goal = goal
 			m.searchCenter = goal
-			task.wait(12)
+			task.wait(20) -- (조사 속도 5.5: 20초면 약 13칸)
 			local r = Round.info.route(m.root.Position - Vector3.new(0, 4.5, 0), goal, true)
 			local left = if r then #r else startLen
 			check("monster follows a long winding route (route legs)", left <= startLen - 8, string.format("route %d -> %d tiles, state %s", startLen, left, m.state))
@@ -4692,6 +5124,206 @@ local function load()
 	R.info.load = all
 end
 
+-- ─────────────────────────────── lobby (2인) ───────────────────────────────
+-- 로비에서 시작 → 음파로 로비가 보인다 → P1 방 만들기(버튼) → P2 참가(버튼)·나가기·재참가 → 방장만 시작 →
+-- 두 사람 모두 1스테이지 → 함께 탈출해 2스테이지 → 마지막 스테이지를 깨면 로비로 돌아온다
+local function lobbyTest()
+	local LobbyMod = require(script.Parent.Lobby)
+	local want = tonumber(args.Players) or 2
+	local ps = waitFor(function()
+		local all = Players:GetPlayers()
+		if #all < want or Round.state ~= "Lobby" then
+			return nil
+		end
+		for _, q in all do
+			if q:GetAttribute("Status") ~= "Alive" or not (q.Character and q.Character:FindFirstChild("HumanoidRootPart")) then
+				return nil
+			end
+		end
+		return all
+	end, 60)
+	check("server starts in the lobby with everyone inside", ps ~= nil, Round.state .. " " .. #Players:GetPlayers())
+	if not ps then
+		return
+	end
+	local p1, p2 = ps[1], ps[2]
+	local function built(p)
+		return waitFor(function()
+			local st = ask(p, "stats")
+			return st and st.buildId == stageFolder():GetAttribute("BuildId") and st.build.segs > 0 and st
+		end, 25)
+	end
+	local b1, b2 = built(p1), built(p2)
+	check("both clients see the lobby through sonar (outlines built)", b1 ~= nil and b2 ~= nil and b1.build.segs > 500, b1 and b1.build.segs)
+	check("no monsters in the lobby", #Round.monsters == 0, #Round.monsters)
+	task.wait(0.5)
+	ask(p1, "resetCooldown")
+	ask(p1, "fire")
+	task.wait(1.2)
+	local lit = ask(p1, "stats")
+	check("sonar lights up the lobby", lit and lit.lines.lit > 50, lit and lit.lines.lit)
+	local u = ask(p1, "lobby")
+	check("room panel shown in the lobby", u and u.visible and table.find(u.buttons, "방 만들기") ~= nil, u and table.concat(u.buttons, ","))
+	local m = ask(p1, "lobbyMenu", true)
+	check("Tab menu frees the mouse", m and m.mouseFree == true)
+	ask(p1, "lobbyClick", "방 만들기")
+	local id = waitFor(function()
+		return p1:GetAttribute("RoomId")
+	end, 5)
+	check("P1 creates a room (button)", id ~= nil, tostring(id))
+	local joinText = "참가 " .. tostring(id)
+	local seen = waitFor(function()
+		local x = ask(p2, "lobby")
+		return x and x.rooms == 1 and table.find(x.buttons, joinText) ~= nil and x
+	end, 5)
+	check("P2 sees the room with a join button", seen ~= nil, seen and table.concat(seen.buttons, ","))
+	ask(p2, "lobbyClick", joinText)
+	check("P2 joins the room (button)", waitFor(function()
+		return p2:GetAttribute("RoomId") == id
+	end, 5) ~= nil)
+	local u1 = waitFor(function()
+		local x = ask(p1, "lobby")
+		return x and x.title:find(p2.DisplayName, 1, true) and x
+	end, 5)
+	check("P1 sees P2 in the room", u1 ~= nil, u1 and u1.title)
+	local u2 = ask(p2, "lobby")
+	check("only the host has a start button", u1 and table.find(u1.buttons, "시작") ~= nil and u2 and table.find(u2.buttons, "시작") == nil, u2 and table.concat(u2.buttons, ","))
+	ask(p2, "lobbyClick", "나가기")
+	check("P2 can leave the room", waitFor(function()
+		return p2:GetAttribute("RoomId") == nil
+	end, 5) ~= nil)
+	waitFor(function()
+		local x = ask(p2, "lobby")
+		return x and table.find(x.buttons, joinText) ~= nil
+	end, 5)
+	ask(p2, "lobbyClick", joinText)
+	check("P2 joins again", waitFor(function()
+		return p2:GetAttribute("RoomId") == id
+	end, 5) ~= nil)
+	LobbyMod.act(p2, "start")
+	task.wait(0.8)
+	check("a non-host cannot start", Round.state == "Lobby", Round.state)
+	-- 방장이 시작
+	task.wait(0.5)
+	ask(p1, "lobbyClick", "시작")
+	local started = waitFor(function()
+		return Round.state == "Playing" and Round.stageIndex == 1
+	end, 20)
+	check("host presses start: stage 1 begins", started ~= nil, Round.state)
+	local both = waitFor(function()
+		for _, q in { p1, p2 } do
+			if q:GetAttribute("Status") ~= "Alive" or not (q.Character and q.Character:FindFirstChild("HumanoidRootPart")) then
+				return nil
+			end
+		end
+		return true
+	end, 15)
+	check("both players are in stage 1", both ~= nil, tostring(p1:GetAttribute("Status")) .. "/" .. tostring(p2:GetAttribute("Status")))
+	check("stage 1 has its monsters", #Round.monsters == Config.Stages[1].Monsters, #Round.monsters)
+	local g1, g2 = built(p1), built(p2)
+	check("both clients rebuilt sonar for stage 1", g1 ~= nil and g2 ~= nil and g1.build.segs > 20000, g1 and g1.build.segs)
+	local lu = ask(p1, "lobby")
+	check("room panel hidden during the game", lu and not lu.visible)
+	task.wait(0.5)
+	ask(p2, "resetCooldown")
+	ask(p2, "fire")
+	task.wait(1.2)
+	local lit2 = ask(p2, "stats")
+	check("P2's sonar works in the game", lit2 and lit2.lines.lit > 50, lit2 and lit2.lines.lit)
+	-- 시야 공유: P2 의 음파가 P1 의 지도에도 남고, 지도에 팀원이 보인다
+	task.wait(1.5)
+	local mp1 = ask(p1, "map")
+	check("teammate's echo is recorded on my map", mp1 and mp1.explored > 5, mp1 and mp1.explored)
+	ask(p1, "toggleMap")
+	task.wait(0.4)
+	local mp1b = ask(p1, "map")
+	check("teammate shown on my map", mp1b and mp1b.matesShown == 1, mp1b and mp1b.matesShown)
+	ask(p1, "toggleMap")
+	-- 함께 탈출 → 2스테이지
+	for _, q in { p1, p2 } do
+		place(q, Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
+	end
+	local next2 = waitFor(function()
+		return Round.state == "Playing" and Round.stageIndex == 2 and p1:GetAttribute("Status") == "Alive" and p2:GetAttribute("Status") == "Alive"
+	end, 20)
+	check("both escape stage 1 together and play stage 2", next2 ~= nil, Round.state .. " " .. Round.stageIndex)
+	-- 마지막 스테이지를 깬 것으로 하고 탈출 → 로비로(시작 지점에 세워지기를 기다린 뒤)
+	task.wait(2)
+	Round.stageIndex = #Config.Stages
+	for _, q in { p1, p2 } do
+		place(q, Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
+	end
+	local back = waitFor(function()
+		return Round.state == "Lobby" and p1:GetAttribute("Status") == "Alive" and p2:GetAttribute("Status") == "Alive"
+	end, 20)
+	check("after the last stage both return to the lobby", back ~= nil, Round.state)
+	check("rooms are cleared after the game", next(LobbyMod.rooms) == nil and p1:GetAttribute("RoomId") == nil)
+	local lu2 = waitFor(function()
+		local x = ask(p1, "lobby")
+		return x and x.visible and x
+	end, 5)
+	check("room panel is back in the lobby", lu2 ~= nil)
+end
+
+-- ─────────────────────────────── walk ───────────────────────────────
+-- 괴물이 실제로 돌아다니는가: 60초 동안 1초마다 위치를 재서 이동 거리·멈춰 있던 시간을 본다(플레이어는 숨겨 둔다)
+local function walk()
+	local ps = readyPlayers(1)
+	if not ps then
+		check("ready", false)
+		return
+	end
+	local p = ps[1]
+	local si = tonumber(args.Stage) or 1
+	if si ~= Round.stageIndex then
+		Round.startStage(si)
+		readyPlayers(1)
+	end
+	local spot = Hiding.all()[1]
+	if spot then
+		Hiding.enter(p, spot)
+	end
+	local seconds = tonumber(args.Seconds) or 60
+	for _, m in Round.monsters do
+		m.startAt = 0
+	end
+	local track = {}
+	for k, m in Round.monsters do
+		track[k] = { last = m.root.Position, dist = 0, still = 0, states = {}, swing = 0 }
+	end
+	for _ = 1, seconds do
+		task.wait(1)
+		for k, m in Round.monsters do
+			local t = track[k]
+			local pos = m.root.Position
+			local d = (Vector3.new(pos.X, 0, pos.Z) - Vector3.new(t.last.X, 0, t.last.Z)).Magnitude
+			t.dist += d
+			if d < 0.5 and m.state ~= "Alert" then
+				t.still += 1
+			end
+			t.last = pos
+			t.states[m.state] = (t.states[m.state] or 0) + 1
+			local j = m.joints[1]
+			if j then
+				local _, ang = (j.base:Inverse() * j.motor.C0):ToAxisAngle()
+				t.swing = math.max(t.swing, math.abs(ang))
+			end
+		end
+	end
+	local out = {}
+	for k, m in Round.monsters do
+		local t = track[k]
+		local st = {}
+		for name, n in t.states do
+			table.insert(st, name .. "=" .. n)
+		end
+		table.insert(out, { dist = math.floor(t.dist), still = t.still, states = table.concat(st, " "), log = table.concat(m.log, " | "):sub(-400) })
+		check(string.format("monster %d keeps moving (%ds)", k, seconds), t.dist > seconds * Config.Monster.WanderSpeed * 0.4 and t.still < seconds * 0.35, string.format("%d studs, still %ds", math.floor(t.dist), t.still))
+		check(string.format("monster %d swings its legs while walking", k), t.swing > 0.15, string.format("max %.2f rad", t.swing))
+	end
+	R.info.walk = out
+end
+
 -- ─────────────────────────────── stages ───────────────────────────────
 -- 스테이지 1~5 를 차례로 지어: 오류 없이 지어지는가, 시작→출구 경로, 괴물 수, 음파 선이 나오는가
 local function stages()
@@ -4810,7 +5442,11 @@ end
 
 task.spawn(function()
 	local ok, err = pcall(function()
-		if args.Test == "load" then
+		if args.Test == "lobby" then
+			lobbyTest()
+		elseif args.Test == "walk" then
+			walk()
+		elseif args.Test == "load" then
 			load()
 		elseif args.Test == "probe" then
 			probe()
@@ -4837,13 +5473,13 @@ end)
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="31">
+  <Item class="SoundService" referent="34">
     <Properties>
       <string name="Name">SoundService</string>
       <token name="AmbientReverb">11</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="32">
+  <Item class="StarterPlayer" referent="35">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -4855,11 +5491,11 @@ end)
       <float name="CharacterWalkSpeed">10</float>
       <bool name="EnableMouseLockOption">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="33">
+    <Item class="StarterPlayerScripts" referent="36">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="ModuleScript" referent="34">
+      <Item class="ModuleScript" referent="37">
         <Properties>
           <string name="Name">Audio</string>
           <string name="Source"><![CDATA[--!strict
@@ -5115,7 +5751,285 @@ return Audio
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="35">
+      <Item class="ModuleScript" referent="38">
+        <Properties>
+          <string name="Name">LobbyUI</string>
+          <string name="Source"><![CDATA[--!strict
+-- 로비 화면: 방 목록, 방 만들기 / 참가 / 나가기 / 시작(방장).
+-- 1인칭이라 마우스가 가운데 묶여 있으므로 Tab 으로 메뉴를 열면 마우스가 풀린다(다시 Tab 이면 둘러보기).
+-- 방 목록은 서버가 ReplicatedStorage 속성 "Rooms"(JSON)로, 내 방은 Player 속성 "RoomId" 로 알려 준다.
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+
+local LobbyUI = {}
+
+local player = Players.LocalPlayer
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local RoomAction = Remotes:WaitForChild("RoomAction") :: RemoteEvent
+
+local WHITE = Color3.fromRGB(235, 235, 235)
+local GREY = Color3.fromRGB(140, 140, 140)
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "Lobby"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 10
+gui.Enabled = false
+
+local panel = Instance.new("Frame")
+panel.Name = "Panel"
+panel.AnchorPoint = Vector2.new(1, 0.5)
+panel.Position = UDim2.new(1, -24, 0.5, 0)
+panel.Size = UDim2.fromOffset(340, 420)
+panel.BackgroundColor3 = Color3.new(0, 0, 0)
+panel.BackgroundTransparency = 0.15
+panel.BorderSizePixel = 0
+panel.Parent = gui
+local stroke = Instance.new("UIStroke")
+stroke.Color = GREY
+stroke.Thickness = 1
+stroke.Parent = panel
+
+local function label(text: string, y: number, size: number, color: Color3, h: number?): TextLabel
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Position = UDim2.fromOffset(16, y)
+	l.Size = UDim2.new(1, -32, 0, h or (size + 6))
+	l.Font = Enum.Font.GothamMedium
+	l.TextSize = size
+	l.TextColor3 = color
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.TextWrapped = true
+	l.Text = text
+	l.Parent = panel
+	return l
+end
+
+local title = label("로비 — 방", 14, 20, WHITE)
+local hint = label("Tab: 메뉴 열기 (마우스)", 42, 14, GREY)
+local msg = label("", 380, 14, Color3.fromRGB(226, 75, 74), 30)
+
+local list = Instance.new("Frame")
+list.BackgroundTransparency = 1
+list.Position = UDim2.fromOffset(16, 70)
+list.Size = UDim2.new(1, -32, 0, 230)
+list.Parent = panel
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 6)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = list
+
+local bar = Instance.new("Frame")
+bar.BackgroundTransparency = 1
+bar.Position = UDim2.fromOffset(16, 316)
+bar.Size = UDim2.new(1, -32, 0, 44)
+bar.Parent = panel
+local barLayout = Instance.new("UIListLayout")
+barLayout.FillDirection = Enum.FillDirection.Horizontal
+barLayout.Padding = UDim.new(0, 8)
+barLayout.Parent = bar
+
+-- 메뉴가 열려 있을 때 마우스를 풀어 주는 버튼(Modal)
+local modal = Instance.new("TextButton")
+modal.Name = "MouseFree"
+modal.Modal = true
+modal.BackgroundTransparency = 1
+modal.Text = ""
+modal.Size = UDim2.fromOffset(0, 0)
+modal.Visible = false
+modal.Parent = gui
+
+gui.Parent = player:WaitForChild("PlayerGui")
+
+type Btn = { button: TextButton, run: () -> () }
+local buttons: { [string]: Btn } = {}
+
+local function button(parent: Instance, text: string, width: number, run: () -> ()): TextButton
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.fromOffset(width, 36)
+	b.BackgroundColor3 = Color3.new(0, 0, 0)
+	b.BorderSizePixel = 0
+	b.Font = Enum.Font.GothamMedium
+	b.TextSize = 15
+	b.TextColor3 = WHITE
+	b.Text = text
+	b.AutoButtonColor = true
+	local s = Instance.new("UIStroke")
+	s.Color = WHITE
+	s.Thickness = 1
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = b
+	b.Activated:Connect(run)
+	b.Parent = parent
+	buttons[text] = { button = b, run = run }
+	return b
+end
+
+local menuOpen = false
+local message = ""
+local msgUntil = 0
+
+function LobbyUI.act(action: string, arg: any?)
+	RoomAction:FireServer(action, arg)
+end
+
+local function rooms(): { any }
+	local s = ReplicatedStorage:GetAttribute("Rooms")
+	if type(s) ~= "string" then
+		return {}
+	end
+	local ok, v = pcall(HttpService.JSONDecode, HttpService, s)
+	return if ok and type(v) == "table" then v else {}
+end
+
+local function render()
+	table.clear(buttons)
+	for _, c in list:GetChildren() do
+		if not c:IsA("UIListLayout") then
+			c:Destroy()
+		end
+	end
+	for _, c in bar:GetChildren() do
+		if not c:IsA("UIListLayout") then
+			c:Destroy()
+		end
+	end
+	local myId = player:GetAttribute("RoomId")
+	local mine = nil
+	local all = rooms()
+	for i, r in all do
+		if r.id == myId then
+			mine = r
+		end
+		local row = Instance.new("Frame")
+		row.LayoutOrder = i
+		row.BackgroundTransparency = 1
+		row.Size = UDim2.new(1, 0, 0, 36)
+		row.Parent = list
+		local t = Instance.new("TextLabel")
+		t.BackgroundTransparency = 1
+		t.Size = UDim2.new(1, -86, 1, 0)
+		t.Font = Enum.Font.Gotham
+		t.TextSize = 14
+		t.TextColor3 = if r.id == myId then WHITE else GREY
+		t.TextXAlignment = Enum.TextXAlignment.Left
+		t.TextTruncate = Enum.TextTruncate.AtEnd
+		t.Text = string.format("방 %d · %s · %d/%d%s", r.id, r.host, #r.names, r.max, if r.started then " · 시작 중" else "")
+		t.Parent = row
+		if r.id ~= myId and not r.started and #r.names < r.max then
+			local b = button(row, "참가 " .. r.id, 78, function()
+				LobbyUI.act("join", r.id)
+			end)
+			b.Position = UDim2.new(1, -78, 0, 0)
+			b.Size = UDim2.fromOffset(78, 34)
+		end
+	end
+	if #all == 0 then
+		local t = Instance.new("TextLabel")
+		t.BackgroundTransparency = 1
+		t.Size = UDim2.new(1, 0, 0, 30)
+		t.Font = Enum.Font.Gotham
+		t.TextSize = 14
+		t.TextColor3 = GREY
+		t.TextXAlignment = Enum.TextXAlignment.Left
+		t.Text = "열린 방이 없습니다. 방을 만들어 보세요."
+		t.Parent = list
+	end
+	if mine then
+		title.Text = string.format("방 %d — %s", mine.id, table.concat(mine.names, ", "))
+		button(bar, "나가기", 100, function()
+			LobbyUI.act("leave")
+		end)
+		if mine.hostId == player.UserId then
+			button(bar, "시작", 100, function()
+				LobbyUI.act("start")
+			end)
+		else
+			local w = Instance.new("TextLabel")
+			w.BackgroundTransparency = 1
+			w.Size = UDim2.fromOffset(160, 36)
+			w.Font = Enum.Font.Gotham
+			w.TextSize = 14
+			w.TextColor3 = GREY
+			w.Text = "방장이 시작하기를 기다리는 중"
+			w.Parent = bar
+		end
+	else
+		title.Text = "로비 — 방"
+		button(bar, "방 만들기", 140, function()
+			LobbyUI.act("create")
+		end)
+	end
+	msg.Text = if os.clock() < msgUntil then message else ""
+	hint.Text = if menuOpen then "Tab: 메뉴 닫기 (둘러보기)" else "Tab: 메뉴 열기 (마우스)"
+end
+
+local function inLobby(): boolean
+	return ReplicatedStorage:GetAttribute("RoundState") == "Lobby"
+end
+
+local function refresh()
+	local show = inLobby()
+	gui.Enabled = show
+	if not show then
+		menuOpen = false
+	end
+	modal.Visible = show and menuOpen
+	if show then
+		render()
+	end
+end
+
+function LobbyUI.setMenu(open: boolean)
+	menuOpen = open and inLobby()
+	refresh()
+end
+
+function LobbyUI.message(text: string, seconds: number?)
+	message = text
+	msgUntil = os.clock() + (seconds or 4)
+	refresh()
+	task.delay((seconds or 4) + 0.05, refresh)
+end
+
+-- (테스트) 지금 보이는 버튼을 누른 것과 같게
+function LobbyUI.click(text: string): boolean
+	local b = buttons[text]
+	if b and b.button.Visible and gui.Enabled then
+		b.run()
+		return true
+	end
+	return false
+end
+
+function LobbyUI.state()
+	local names = {}
+	for t in buttons do
+		table.insert(names, t)
+	end
+	table.sort(names)
+	return { visible = gui.Enabled, menuOpen = menuOpen, mouseFree = modal.Visible, rooms = #rooms(), myRoom = player:GetAttribute("RoomId"), buttons = names, title = title.Text, message = msg.Text }
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if input.KeyCode == Enum.KeyCode.Tab and inLobby() then
+		LobbyUI.setMenu(not menuOpen)
+	end
+end)
+ReplicatedStorage:GetAttributeChangedSignal("Rooms"):Connect(refresh)
+ReplicatedStorage:GetAttributeChangedSignal("RoundState"):Connect(refresh)
+player:GetAttributeChangedSignal("RoomId"):Connect(refresh)
+refresh()
+
+return LobbyUI
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="LocalScript" referent="39">
         <Properties>
           <string name="Name">Main</string>
           <string name="Source"><![CDATA[--!strict
@@ -5136,6 +6050,7 @@ local Movement = require(script.Parent:WaitForChild("Movement"))
 local Audio = require(script.Parent:WaitForChild("Audio"))
 local UI = require(script.Parent:WaitForChild("UI"))
 local MapView = require(script.Parent:WaitForChild("MapView"))
+local LobbyUI = require(script.Parent:WaitForChild("LobbyUI"))
 Pulses.onReach = MapView.onReach
 
 local player = Players.LocalPlayer
@@ -5344,8 +6259,17 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 				end
 			end)
 		end
+	elseif kind == "Lobby" then
+		UI.hideOverlay(false)
+		UI.setSpectate(nil)
+		UI.setStage("로비")
+		task.delay(1.5, UI.hint, "Tab — 방 메뉴      좌클릭 — 음파      Q — 지도", 7)
+	elseif kind == "RoomMsg" then
+		LobbyUI.message(data.text)
+	elseif kind == "RoomStarting" then
+		LobbyUI.message("게임을 시작합니다…", 6)
 	elseif kind == "Clear" then
-		local sub = if data.allClear then "모든 스테이지를 탈출했습니다 — 처음부터 다시 시작합니다" else ("다음: " .. data.nextName)
+		local sub = if data.allClear then (if data.toLobby then "모든 스테이지를 탈출했습니다 — 로비로 돌아갑니다" else "모든 스테이지를 탈출했습니다 — 처음부터 다시 시작합니다") else ("다음: " .. data.nextName)
 		UI.overlay("STAGE CLEAR", sub, true)
 		UI.setSpectate(nil)
 	elseif kind == "Failed" then
@@ -5482,6 +6406,13 @@ task.spawn(function()
 		elseif cmd == "linesNear" then
 			local t = arg :: { any }
 			return Lines.countNear(t[1], t[2])
+		elseif cmd == "lobby" then
+			return LobbyUI.state()
+		elseif cmd == "lobbyClick" then
+			return LobbyUI.click(arg :: string)
+		elseif cmd == "lobbyMenu" then
+			LobbyUI.setMenu(arg == true)
+			return LobbyUI.state()
 		elseif cmd == "map" then
 			return MapView.state()
 		elseif cmd == "toggleMap" then
@@ -5523,13 +6454,12 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="36">
+      <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">MapView</string>
           <string name="Source"><![CDATA[--!strict
--- 지도(Q): 내 음파가 닿은 곳만 그려지고, 그 스테이지가 끝날 때까지 남는다(게임 화면의 선은 그대로 사라진다).
--- 검은 바탕에 벽 윤곽을 흰 선으로, 내 위치는 빨간 칸. 출구는 음파가 닿았을 때만 표시.
--- 다른 사람의 음파는 지도에 남지 않는다(Pulses 의 own 음파만 onReach 로 들어온다).
+-- 지도(Q): 나와 팀원의 음파가 닿은 곳이 그려지고, 그 스테이지가 끝날 때까지 남는다(게임 화면의 선은 그대로 사라진다).
+-- 검은 바탕에 벽 윤곽을 흰 선으로, 내 위치는 빨간 칸, 팀원은 흰 테두리 칸. 출구는 음파가 닿았을 때만 표시.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -5593,6 +6523,20 @@ local function square(color: Color3, px: number, z: number): Frame
 	return f
 end
 local me = square(Color3.fromRGB(226, 75, 74), 10, 3)
+-- 팀원 표시(흰 테두리 칸), 필요한 만큼 만든다
+local mates: { Frame } = {}
+local function mateMark(i: number): Frame
+	local f = mates[i]
+	if not f then
+		f = square(Color3.new(0, 0, 0), 10, 3)
+		local st = Instance.new("UIStroke")
+		st.Color = Color3.new(1, 1, 1)
+		st.Thickness = 2
+		st.Parent = f
+		mates[i] = f
+	end
+	return f
+end
 local exitMark = square(Color3.new(1, 1, 1), 8, 2)
 
 local title = Instance.new("TextLabel")
@@ -5603,7 +6547,7 @@ title.Font = Enum.Font.GothamMedium
 title.TextSize = 16
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.TextColor3 = Color3.fromRGB(150, 150, 150)
-title.Text = "지도  ·  음파가 닿은 곳만 기록됩니다  ·  Q 닫기"
+title.Text = "지도  ·  나와 팀원의 음파가 닿은 곳이 기록됩니다  ·  Q 닫기"
 title.Parent = back
 
 gui.Parent = player:WaitForChild("PlayerGui")
@@ -5703,7 +6647,13 @@ function Map.toggle()
 end
 
 function Map.state()
-	return { open = isOpen, explored = exploredCount, lines = lineCount, exitShown = exitMark.Visible, meShown = me.Visible }
+	local shown = 0
+	for _, f in mates do
+		if f.Visible then
+			shown += 1
+		end
+	end
+	return { open = isOpen, explored = exploredCount, lines = lineCount, exitShown = exitMark.Visible, meShown = me.Visible, matesShown = shown }
 end
 
 UserInputService.InputBegan:Connect(function(input, processed)
@@ -5727,13 +6677,29 @@ RunService.RenderStepped:Connect(function()
 	else
 		me.Visible = false
 	end
+	-- 살아 있는 팀원(같은 게임의 다른 플레이어)
+	local n = 0
+	for _, p in Players:GetPlayers() do
+		if p ~= player and p:GetAttribute("Status") == "Alive" then
+			local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if r then
+				n += 1
+				local f = mateMark(n)
+				f.Position = UDim2.fromScale(r.Position.X / (W * T), r.Position.Z / (H * T))
+				f.Visible = true
+			end
+		end
+	end
+	for i = n + 1, #mates do
+		mates[i].Visible = false
+	end
 end)
 
 return Map
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="37">
+      <Item class="ModuleScript" referent="41">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
@@ -5834,7 +6800,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="38">
+      <Item class="LocalScript" referent="42">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -5842,7 +6808,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="39">
+      <Item class="ModuleScript" referent="43">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -6079,7 +7045,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="40">
+      <Item class="ModuleScript" referent="44">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -6220,6 +7186,19 @@ local function bucketAdd(p: Pulse, arrival: number, id: number)
 	table.insert(l, id)
 end
 
+-- 움직이는 파트마다 고정 번호(같은 선을 다음 음파 때 새로 만들지 않고 옮겨 쓴다 → 겹쳐서 두 줄·더 밝게 보이지 않는다)
+local dynIds: { [BasePart]: number } = setmetatable({}, { __mode = "k" }) :: any
+local nextDynId = 0
+local function dynId(part: BasePart): number
+	local id = dynIds[part]
+	if not id then
+		nextDynId += 1
+		id = nextDynId
+		dynIds[part] = id
+	end
+	return id
+end
+
 -- 움직이는 대상과 원통·구 실루엣을 이번 음파용 선분으로 만든다
 local function gatherDynamic(p: Pulse, exclude: Model?)
 	local list = Geo.newList()
@@ -6228,9 +7207,9 @@ local function gatherDynamic(p: Pulse, exclude: Model?)
 	for _, part in World.viewPartsNear(p.origin, R) do
 		local before = list.n
 		Geo.viewEdges(part, p.cam, list)
-		local idx = table.find(World.viewParts, part) or 0
+		local vid = dynId(part)
 		for i = before + 1, list.n do
-			p.dynKey[i] = -(idx * 64 + (i - before))
+			p.dynKey[i] = -(1e8 + vid * 64 + (i - before))
 		end
 	end
 	-- 문, 괴물, 다른 플레이어(그 순간의 모습)
@@ -6252,8 +7231,9 @@ local function gatherDynamic(p: Pulse, exclude: Model?)
 			Geo.staticEdges(part, list, true)
 			Geo.viewEdges(part, p.cam, list)
 		end
+		local pid = dynId(part)
 		for i = before + 1, list.n do
-			p.dynKey[i] = false
+			p.dynKey[i] = -(2e8 + pid * 256 + (i - before))
 		end
 	end
 	-- 분할 + 복셀 연결
@@ -6471,8 +7451,8 @@ function Pulses.update(now: number)
 		end
 		if p.nextBucket > R + 1 and (p.hn == 0 or p.hk[1] > R) then
 			table.remove(pulses, i)
-			-- 내 음파가 닿은 곳(지도에 남긴다)
-			if p.own and Pulses.onReach then
+			-- 음파가 닿은 곳(내 것과 팀원 것 모두 지도에 남긴다 — 시야 공유)
+			if Pulses.onReach then
 				Pulses.onReach(p.dist, R)
 			end
 		else
@@ -6481,7 +7461,7 @@ function Pulses.update(now: number)
 	end
 end
 
--- 내 음파가 끝났을 때 (복셀 → 거리, 반경)을 받는다(MapView)
+-- 음파(내 것·팀원 것)가 끝났을 때 (복셀 → 거리, 반경)을 받는다(MapView)
 Pulses.onReach = nil :: ((dist: { [number]: number }, radius: number) -> ())?
 
 function Pulses.active(): number
@@ -6496,7 +7476,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="41">
+      <Item class="ModuleScript" referent="45">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -7043,7 +8023,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="42">
+      <Item class="ModuleScript" referent="46">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -7241,7 +8221,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="43">
+  <Item class="Workspace" referent="47">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

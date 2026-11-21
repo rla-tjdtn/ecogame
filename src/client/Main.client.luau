@@ -16,6 +16,7 @@ local Movement = require(script.Parent:WaitForChild("Movement"))
 local Audio = require(script.Parent:WaitForChild("Audio"))
 local UI = require(script.Parent:WaitForChild("UI"))
 local MapView = require(script.Parent:WaitForChild("MapView"))
+local LobbyUI = require(script.Parent:WaitForChild("LobbyUI"))
 Pulses.onReach = MapView.onReach
 
 local player = Players.LocalPlayer
@@ -224,8 +225,17 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 				end
 			end)
 		end
+	elseif kind == "Lobby" then
+		UI.hideOverlay(false)
+		UI.setSpectate(nil)
+		UI.setStage("로비")
+		task.delay(1.5, UI.hint, "Tab — 방 메뉴      좌클릭 — 음파      Q — 지도", 7)
+	elseif kind == "RoomMsg" then
+		LobbyUI.message(data.text)
+	elseif kind == "RoomStarting" then
+		LobbyUI.message("게임을 시작합니다…", 6)
 	elseif kind == "Clear" then
-		local sub = if data.allClear then "모든 스테이지를 탈출했습니다 — 처음부터 다시 시작합니다" else ("다음: " .. data.nextName)
+		local sub = if data.allClear then (if data.toLobby then "모든 스테이지를 탈출했습니다 — 로비로 돌아갑니다" else "모든 스테이지를 탈출했습니다 — 처음부터 다시 시작합니다") else ("다음: " .. data.nextName)
 		UI.overlay("STAGE CLEAR", sub, true)
 		UI.setSpectate(nil)
 	elseif kind == "Failed" then
@@ -362,6 +372,13 @@ task.spawn(function()
 		elseif cmd == "linesNear" then
 			local t = arg :: { any }
 			return Lines.countNear(t[1], t[2])
+		elseif cmd == "lobby" then
+			return LobbyUI.state()
+		elseif cmd == "lobbyClick" then
+			return LobbyUI.click(arg :: string)
+		elseif cmd == "lobbyMenu" then
+			LobbyUI.setMenu(arg == true)
+			return LobbyUI.state()
 		elseif cmd == "map" then
 			return MapView.state()
 		elseif cmd == "toggleMap" then

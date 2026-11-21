@@ -1,7 +1,6 @@
 --!strict
--- 지도(Q): 내 음파가 닿은 곳만 그려지고, 그 스테이지가 끝날 때까지 남는다(게임 화면의 선은 그대로 사라진다).
--- 검은 바탕에 벽 윤곽을 흰 선으로, 내 위치는 빨간 칸. 출구는 음파가 닿았을 때만 표시.
--- 다른 사람의 음파는 지도에 남지 않는다(Pulses 의 own 음파만 onReach 로 들어온다).
+-- 지도(Q): 나와 팀원의 음파가 닿은 곳이 그려지고, 그 스테이지가 끝날 때까지 남는다(게임 화면의 선은 그대로 사라진다).
+-- 검은 바탕에 벽 윤곽을 흰 선으로, 내 위치는 빨간 칸, 팀원은 흰 테두리 칸. 출구는 음파가 닿았을 때만 표시.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -65,6 +64,20 @@ local function square(color: Color3, px: number, z: number): Frame
 	return f
 end
 local me = square(Color3.fromRGB(226, 75, 74), 10, 3)
+-- 팀원 표시(흰 테두리 칸), 필요한 만큼 만든다
+local mates: { Frame } = {}
+local function mateMark(i: number): Frame
+	local f = mates[i]
+	if not f then
+		f = square(Color3.new(0, 0, 0), 10, 3)
+		local st = Instance.new("UIStroke")
+		st.Color = Color3.new(1, 1, 1)
+		st.Thickness = 2
+		st.Parent = f
+		mates[i] = f
+	end
+	return f
+end
 local exitMark = square(Color3.new(1, 1, 1), 8, 2)
 
 local title = Instance.new("TextLabel")
@@ -75,7 +88,7 @@ title.Font = Enum.Font.GothamMedium
 title.TextSize = 16
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.TextColor3 = Color3.fromRGB(150, 150, 150)
-title.Text = "지도  ·  음파가 닿은 곳만 기록됩니다  ·  Q 닫기"
+title.Text = "지도  ·  나와 팀원의 음파가 닿은 곳이 기록됩니다  ·  Q 닫기"
 title.Parent = back
 
 gui.Parent = player:WaitForChild("PlayerGui")
@@ -175,7 +188,13 @@ function Map.toggle()
 end
 
 function Map.state()
-	return { open = isOpen, explored = exploredCount, lines = lineCount, exitShown = exitMark.Visible, meShown = me.Visible }
+	local shown = 0
+	for _, f in mates do
+		if f.Visible then
+			shown += 1
+		end
+	end
+	return { open = isOpen, explored = exploredCount, lines = lineCount, exitShown = exitMark.Visible, meShown = me.Visible, matesShown = shown }
 end
 
 UserInputService.InputBegan:Connect(function(input, processed)
@@ -198,6 +217,22 @@ RunService.RenderStepped:Connect(function()
 		me.Visible = true
 	else
 		me.Visible = false
+	end
+	-- 살아 있는 팀원(같은 게임의 다른 플레이어)
+	local n = 0
+	for _, p in Players:GetPlayers() do
+		if p ~= player and p:GetAttribute("Status") == "Alive" then
+			local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if r then
+				n += 1
+				local f = mateMark(n)
+				f.Position = UDim2.fromScale(r.Position.X / (W * T), r.Position.Z / (H * T))
+				f.Visible = true
+			end
+		end
+	end
+	for i = n + 1, #mates do
+		mates[i].Visible = false
 	end
 end)
 

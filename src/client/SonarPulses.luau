@@ -136,6 +136,19 @@ local function bucketAdd(p: Pulse, arrival: number, id: number)
 	table.insert(l, id)
 end
 
+-- 움직이는 파트마다 고정 번호(같은 선을 다음 음파 때 새로 만들지 않고 옮겨 쓴다 → 겹쳐서 두 줄·더 밝게 보이지 않는다)
+local dynIds: { [BasePart]: number } = setmetatable({}, { __mode = "k" }) :: any
+local nextDynId = 0
+local function dynId(part: BasePart): number
+	local id = dynIds[part]
+	if not id then
+		nextDynId += 1
+		id = nextDynId
+		dynIds[part] = id
+	end
+	return id
+end
+
 -- 움직이는 대상과 원통·구 실루엣을 이번 음파용 선분으로 만든다
 local function gatherDynamic(p: Pulse, exclude: Model?)
 	local list = Geo.newList()
@@ -144,9 +157,9 @@ local function gatherDynamic(p: Pulse, exclude: Model?)
 	for _, part in World.viewPartsNear(p.origin, R) do
 		local before = list.n
 		Geo.viewEdges(part, p.cam, list)
-		local idx = table.find(World.viewParts, part) or 0
+		local vid = dynId(part)
 		for i = before + 1, list.n do
-			p.dynKey[i] = -(idx * 64 + (i - before))
+			p.dynKey[i] = -(1e8 + vid * 64 + (i - before))
 		end
 	end
 	-- 문, 괴물, 다른 플레이어(그 순간의 모습)
@@ -168,8 +181,9 @@ local function gatherDynamic(p: Pulse, exclude: Model?)
 			Geo.staticEdges(part, list, true)
 			Geo.viewEdges(part, p.cam, list)
 		end
+		local pid = dynId(part)
 		for i = before + 1, list.n do
-			p.dynKey[i] = false
+			p.dynKey[i] = -(2e8 + pid * 256 + (i - before))
 		end
 	end
 	-- 분할 + 복셀 연결
@@ -387,8 +401,8 @@ function Pulses.update(now: number)
 		end
 		if p.nextBucket > R + 1 and (p.hn == 0 or p.hk[1] > R) then
 			table.remove(pulses, i)
-			-- 내 음파가 닿은 곳(지도에 남긴다)
-			if p.own and Pulses.onReach then
+			-- 음파가 닿은 곳(내 것과 팀원 것 모두 지도에 남긴다 — 시야 공유)
+			if Pulses.onReach then
 				Pulses.onReach(p.dist, R)
 			end
 		else
@@ -397,7 +411,7 @@ function Pulses.update(now: number)
 	end
 end
 
--- 내 음파가 끝났을 때 (복셀 → 거리, 반경)을 받는다(MapView)
+-- 음파(내 것·팀원 것)가 끝났을 때 (복셀 → 거리, 반경)을 받는다(MapView)
 Pulses.onReach = nil :: ((dist: { [number]: number }, radius: number) -> ())?
 
 function Pulses.active(): number

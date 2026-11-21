@@ -61,8 +61,16 @@ local function buildModel(cf: CFrame, stage: number): Model
 	end
 	-- 몸통(앞으로 숙인 마른 몸), 머리, 긴 팔, 다리. 루트 가운데 기준 바닥은 y = -5
 	local parts: { BasePart } = {}
+	-- 팔·다리는 어깨·엉덩이 관절(Motor6D)에 붙여 걸을 때 흔든다(Monster.animate)
+	local group: string? = nil
+	local groupParts: { [string]: { BasePart } } = {}
 	local function add(p: BasePart)
 		table.insert(parts, p)
+		if group then
+			local l = groupParts[group] or {}
+			groupParts[group] = l
+			table.insert(l, p)
+		end
 	end
 	-- 레퍼런스(손그림): 작은 머리 + 짧은 목 + 좁고 긴 몸통 + 바깥으로 벌어진 긴 팔(발톱 5개) + 길고 가는 다리. 바닥 y = -5, 앞 = -Z
 	local function seg(a: Vector3, b: Vector3, r: number)
@@ -157,6 +165,7 @@ local function buildModel(cf: CFrame, stage: number): Model
 	end
 	for _, s in { -1, 1 } do
 		-- 긴 팔: 한 줄, 어깨 → 팔꿈치 → 손목, V자로 벌어짐
+		group = "Arm" .. s
 		local sh = V3(0.9 * s, 2.55, -0.35)
 		local el = V3(1.55 * s, 0.15, -0.85)
 		local wr = V3(2.1 * s, -2.1, -1.0)
@@ -170,6 +179,7 @@ local function buildModel(cf: CFrame, stage: number): Model
 			seg(mid, tip, 0.014)
 		end
 		-- 길고 곧은 다리: 한 줄 + 무릎 꺾임, 작은 발
+		group = "Leg" .. s
 		for _, e in { 0.4 } do
 			local x0, xk, xa = e * s, (e + 0.06) * s, (e + 0.08) * s
 			ink(V3(x0, 0.5, 0), V3(xk, -2.3, -0.2), 0.03)
@@ -180,9 +190,52 @@ local function buildModel(cf: CFrame, stage: number): Model
 		ink(V3(xc, -4.97, 0.35), V3(xc, -4.97, -0.8), 0.03)
 		ink(V3(xc, -4.75, 0.1), V3(xc, -4.97, 0.35), 0.03)
 	end
+	group = nil
+	local JOINTS: { [string]: Vector3 } = {
+		["Arm-1"] = Vector3.new(-0.9, 2.55, -0.35),
+		["Arm1"] = Vector3.new(0.9, 2.55, -0.35),
+		["Leg-1"] = Vector3.new(-0.4, 0.5, 0),
+		["Leg1"] = Vector3.new(0.4, 0.5, 0),
+	}
+	local grouped: { [BasePart]: boolean } = {}
+	for name, list in groupParts do
+		local off = JOINTS[name]
+		if off then
+			local pv = Instance.new("Part")
+			pv.Name = "Pivot" .. name
+			pv.Size = Vector3.new(0.2, 0.2, 0.2)
+			pv.Transparency = 1
+			pv.CanCollide = false
+			pv.CanQuery = false
+			pv.CanTouch = false
+			pv.Massless = true
+			pv.CFrame = cf * CFrame.new(off)
+			pv.Parent = model
+			local motor = Instance.new("Motor6D")
+			motor.Name = "Joint" .. name
+			motor.Part0 = root
+			motor.Part1 = pv
+			motor.C0 = CFrame.new(off)
+			motor.C1 = CFrame.identity
+			motor.Parent = root
+			for _, p in list do
+				p.Anchored = false
+				p.CanCollide = false
+				p.CanQuery = false
+				p.Massless = true
+				local w = Instance.new("WeldConstraint")
+				w.Part0 = pv
+				w.Part1 = p
+				w.Parent = p
+				grouped[p] = true
+			end
+		end
+	end
 	for _, p in parts do
 		p.Name = "Body"
-		limb(p)
+		if not grouped[p] then
+			limb(p)
+		end
 	end
 	-- 장애물 판정과 무관하게(검은 몸은 SonarRenderable 태그로 음파에만 드러난다)
 	local hum = Instance.new("Humanoid")
@@ -237,6 +290,9 @@ export type Monster = typeof(setmetatable({} :: {
 	legGoal: Vector3?,
 	pullSpot: Vector3?, -- 쫓던 플레이어가 숨는 것을 봤다: 그 숨는 곳 앞
 	lastHunt: number,
+	joints: { { motor: Motor6D, base: CFrame, offset: number, amp: number } },
+	phase: number,
+	animT: number,
 }, Monster))
 
 function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> (), stage: number?): Monster
@@ -287,8 +343,37 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 		legGoal = nil,
 		pullSpot = nil,
 		lastHunt = os.clock(),
+		joints = {},
+		phase = 0,
+		animT = 0,
 	}, Monster)
+	for _, name in { "Leg-1", "Leg1", "Arm-1", "Arm1" } do
+		local motor = root:FindFirstChild("Joint" .. name) :: Motor6D?
+		if motor then
+			local isLeg = name:sub(1, 3) == "Leg"
+			local left = name:find("-1") ~= nil
+			-- 다리끼리, 팔끼리 반대로, 팔은 같은 쪽 다리와 반대로
+			table.insert(self.joints, { motor = motor, base = motor.C0, offset = if (isLeg == left) then 0 else math.pi, amp = if isLeg then 0.5 else 0.38 })
+		end
+	end
 	return self
+end
+
+-- 걷는 모습: 속도만큼 팔다리를 흔든다(초당 10번만 바꿔 네트워크 부담을 줄인다. 음파는 순간 모습만 보여 준다)
+function Monster.animate(self: Monster, dt: number)
+	self.animT += dt
+	if self.animT < 0.1 or #self.joints == 0 then
+		return
+	end
+	local step = self.animT
+	self.animT = 0
+	local v = self.root.AssemblyLinearVelocity
+	local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+	self.phase = (self.phase + step * speed * 0.55) % (math.pi * 2)
+	local amt = math.clamp(speed / 3, 0, 1) -- (느리게 걸어도 팔다리가 크게 흔들려야 음파에 걷는 모습이 보인다)
+	for _, j in self.joints do
+		j.motor.C0 = j.base * CFrame.Angles(math.sin(self.phase + j.offset) * j.amp * amt, 0, 0)
+	end
 end
 
 function Monster.note(self: Monster, s: string)
@@ -482,6 +567,9 @@ end
 function Monster.hear(self: Monster, pos: Vector3, radius: number, source: Player?, kind: string)
 	if not self.alive or os.clock() < self.startAt then
 		return
+	end
+	if kind == "Door" and source == nil then
+		return -- 괴물이 연 문 소리(괴물끼리 서로 문 소리에 끌려다니지 않게)
 	end
 	if not SoundBus.canHear(pos, self.root.Position, radius) then
 		return

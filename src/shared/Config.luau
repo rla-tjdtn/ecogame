@@ -59,9 +59,9 @@ Config.Noise = {
 
 -- ─────────────────────────────── 괴물 ───────────────────────────────
 Config.Monster = {
-	WanderSpeed = 6.5,
-	InvestigateSpeed = 10,
-	ChaseSpeed = 15.5, -- 달리기(18)보다 느리고 걷기(10)보다 빠르다
+	WanderSpeed = 3.5, -- 아주 천천히(플레이어는 길을 찾으며 도망가야 한다)
+	InvestigateSpeed = 5.5,
+	ChaseSpeed = 8.5, -- 걷기(10)보다도 느리다: 막다른 길·정면으로 마주칠 때 잡힌다
 	SightRange = 15, -- 시야(어둠 속 감각) 거리
 	SightRangeCrouch = 7,
 	SenseRange = 4.5, -- 이 거리 안이면 시야와 상관없이 알아챈다
@@ -89,6 +89,13 @@ Config.Round = {
 
 -- ─────────────────────────────── 스테이지 ───────────────────────────────
 -- Module 은 ServerScriptService.Server.Stages 안의 레이아웃 모듈 이름
+-- 로비·방
+Config.Lobby = {
+	MaxPlayers = 4, -- 방 하나 최대 인원
+	MinPlayers = 1, -- 시작할 수 있는 최소 인원
+	LocalStart = false, -- true 면 텔레포트하지 않고 이 서버에서 시작(Studio 에서는 항상 이 서버에서)
+}
+
 -- 숨는 곳(맵 문자 L: 캐비닛·옷장)
 Config.Hide = {
 	Noise = 8, -- 문을 여닫는 소리 반경(스터드)

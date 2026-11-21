@@ -9,7 +9,8 @@
         "SonarFire": { "$className": "RemoteEvent" },
         "SonarPulse": { "$className": "RemoteEvent" },
         "SetMoveMode": { "$className": "RemoteEvent" },
-        "RoundEvent": { "$className": "RemoteEvent" }
+        "RoundEvent": { "$className": "RemoteEvent" },
+        "RoomAction": { "$className": "RemoteEvent" }
       }
     },
     "ServerScriptService": {

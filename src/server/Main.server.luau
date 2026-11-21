@@ -3,7 +3,7 @@
 --   · 완전한 어둠 조명 강제
 --   · 음파 발사 검증(발사 간격·생존 여부, 위치는 서버가 캐릭터 머리에서 정한다) → 다른 클라이언트에 전달 + 괴물에게 소리
 --   · 이동 모드(걷기/달리기/웅크리기) 요청 처리
---   · 라운드 루프 시작
+--   · 로비(방) 또는 게임 시작(Lobby.boot)
 
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
@@ -88,4 +88,6 @@ end)
 -- 테스트 하네스가 읽는 값
 _G.SonarMaze = { Round = Round, Sonar = Sonar, SoundBus = SoundBus }
 
-task.spawn(Round.loop)
+-- 로비(방 만들기) 또는 게임 서버로 시작
+local Lobby = require(script.Parent.Lobby)
+task.spawn(Lobby.boot)

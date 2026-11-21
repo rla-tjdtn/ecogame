@@ -1,7 +1,8 @@
 --!strict
 -- 라운드(스테이지) 진행: 스테이지 짓기 → 플레이어 배치 → 괴물 → 탈출/사망 판정 → 다음 스테이지 또는 재시작.
 -- 플레이어 상태(Player 속성 "Status"): "Waiting" | "Alive" | "Dead" | "Escaped"
--- ReplicatedStorage 속성: StageIndex, StageName, RoundState("Waiting"|"Playing"|"Result"), RoundId
+-- ReplicatedStorage 속성: StageIndex, StageName, RoundState("Waiting"|"Lobby"|"Loading"|"Playing"|"Result"), RoundId, Mode("Lobby"|"Game")
+-- 로비(RoundState "Lobby"): 로비 맵을 스테이지처럼 지어 음파로 본다. 방(Lobby.luau)에서 시작하면 그 방 사람만 참가자(Round.members).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,6 +27,9 @@ Round.monsters = {} :: { any }
 Round.autoLoop = true -- 테스트가 끌 수 있다
 Round.lastOutcome = "" :: string
 Round.events = {} :: { string }
+Round.members = nil :: { [Player]: boolean }? -- nil 이면 서버의 모든 플레이어가 참가자
+Round.returnToLobby = false -- 로비에서 시작한 게임: 마지막 스테이지를 깨거나 참가자가 모두 나가면 로비로
+Round.lastAllClear = false
 
 local stageFolder: Folder? = nil
 local spawnCursor = 0
@@ -48,9 +52,20 @@ function Round.status(p: Player): string
 	return (p:GetAttribute("Status") :: string?) or "Waiting"
 end
 
-function Round.alivePlayers(): { Player }
+-- 이번 게임 참가자(로비에서 방으로 시작했으면 그 방 사람만)
+function Round.participants(): { Player }
 	local out = {}
 	for _, p in Players:GetPlayers() do
+		if not Round.members or Round.members[p] then
+			table.insert(out, p)
+		end
+	end
+	return out
+end
+
+function Round.alivePlayers(): { Player }
+	local out = {}
+	for _, p in Round.participants() do
 		if Round.status(p) == "Alive" then
 			table.insert(out, p)
 		end
@@ -74,14 +89,12 @@ local function stageModule(i: number): any?
 	return require(m :: ModuleScript)
 end
 
-function Round.buildStage(i: number)
+local function buildLayout(layout: any, label: string)
 	if stageFolder then
 		stageFolder:Destroy()
 		stageFolder = nil
 	end
 	Doors.clear()
-	local layout = stageModule(i)
-	assert(layout, "stage module missing: " .. tostring(i))
 	local b0 = os.clock()
 	local info = Builder.build(layout, workspace, "Stage")
 	Round.lastBuildMs = (os.clock() - b0) * 1000
@@ -102,7 +115,13 @@ function Round.buildStage(i: number)
 	stageFolder = folder
 	Round.info = info
 	SoundBus.setGeometry(folder)
-	note("built stage " .. i .. " parts=" .. count)
+	note("built " .. label .. " parts=" .. count)
+end
+
+function Round.buildStage(i: number)
+	local layout = stageModule(i)
+	assert(layout, "stage module missing: " .. tostring(i))
+	buildLayout(layout, "stage " .. i)
 end
 
 local function nextSpawn(): CFrame
@@ -146,10 +165,19 @@ function Round.kill(p: Player, why: string?)
 	if Round.status(p) ~= "Alive" then
 		return
 	end
+	if Round.state == "Lobby" then
+		-- 로비에서는 죽지 않는다(떨어지면 다시 세운다)
+		task.delay(1, function()
+			if Round.state == "Lobby" then
+				Round.spawnPlayer(p)
+			end
+		end)
+		return
+	end
 	setStatus(p, "Dead")
 	note("dead " .. p.Name .. " " .. (why or ""))
 	local others = #Round.alivePlayers()
-	RoundEvent:FireAllClients("Died", { userId = p.UserId, solo = #Players:GetPlayers() == 1, othersAlive = others })
+	RoundEvent:FireAllClients("Died", { userId = p.UserId, solo = #Round.participants() == 1, othersAlive = others })
 	local char = p.Character
 	if char then
 		local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -220,6 +248,7 @@ function Round.startStage(i: number)
 	Round.stageIndex = i
 	Round.state = "Loading"
 	ReplicatedStorage:SetAttribute("RoundState", "Loading")
+	ReplicatedStorage:SetAttribute("Mode", "Game")
 	for _, p in Players:GetPlayers() do
 		setStatus(p, "Waiting")
 		if p.Character then
@@ -233,7 +262,7 @@ function Round.startStage(i: number)
 	ReplicatedStorage:SetAttribute("StageName", def.Name)
 	ReplicatedStorage:SetAttribute("RoundId", Round.roundId)
 	spawnCursor = 0
-	for _, p in Players:GetPlayers() do
+	for _, p in Round.participants() do
 		task.spawn(Round.spawnPlayer, p)
 	end
 	Round.state = "Playing"
@@ -248,10 +277,10 @@ function Round.finished(): boolean
 	if Round.state ~= "Playing" then
 		return false
 	end
-	if #Players:GetPlayers() == 0 then
+	if #Round.participants() == 0 then
 		return true
 	end
-	for _, p in Players:GetPlayers() do
+	for _, p in Round.participants() do
 		local s = Round.status(p)
 		if s == "Alive" or s == "Waiting" then
 			return false
@@ -262,7 +291,8 @@ end
 
 function Round.finish(): string
 	local anyEscaped = false
-	for _, p in Players:GetPlayers() do
+	Round.lastAllClear = false
+	for _, p in Round.participants() do
 		if Round.status(p) == "Escaped" then
 			anyEscaped = true
 		end
@@ -279,8 +309,9 @@ function Round.finish(): string
 			nextI = 1
 		end
 		outcome = "Clear"
-		RoundEvent:FireAllClients("Clear", { stage = i, nextStage = nextI, nextName = stageDef(nextI).Name, allClear = allClear, seconds = Config.Round.ResultSeconds })
+		RoundEvent:FireAllClients("Clear", { stage = i, nextStage = nextI, nextName = stageDef(nextI).Name, allClear = allClear, toLobby = Round.returnToLobby, seconds = Config.Round.ResultSeconds })
 		Round.stageIndex = nextI
+		Round.lastAllClear = allClear
 	else
 		outcome = "Failed"
 		RoundEvent:FireAllClients("Failed", { stage = i, nextName = stageDef(i).Name, seconds = Config.Round.ResultSeconds })
@@ -291,18 +322,19 @@ function Round.finish(): string
 end
 
 -- 출구·잡기 판정
-RunService.Heartbeat:Connect(function()
+RunService.Heartbeat:Connect(function(dt)
 	if Round.state ~= "Playing" then
 		return
 	end
 	for _, m in Round.monsters do
 		m:checkCatch()
+		m:animate(dt)
 	end
 	local info = Round.info
 	if not info then
 		return
 	end
-	for _, p in Players:GetPlayers() do
+	for _, p in Round.participants() do
 		if Round.status(p) == "Alive" then
 			local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if root then
@@ -360,15 +392,58 @@ end)
 
 Players.PlayerAdded:Connect(function(p)
 	setStatus(p, "Waiting")
-	if Round.state == "Playing" then
-		-- 늦게 들어온 플레이어도 시작 지점에서 함께 한다
+	if Round.state == "Lobby" then
+		task.defer(Round.spawnPlayer, p)
+	elseif Round.state == "Playing" and not Round.members then
+		-- 늦게 들어온 플레이어도 시작 지점에서 함께 한다(방에서 시작한 게임은 그 방 사람만)
 		task.defer(Round.spawnPlayer, p)
 	end
 end)
 
+Players.PlayerRemoving:Connect(function(p)
+	if Round.members then
+		Round.members[p] = nil
+	end
+end)
+
+-- 로비: 로비 맵을 짓고 모두 그 안에 세운다
+function Round.enterLobby()
+	clearMonsters()
+	Round.members = nil
+	Round.returnToLobby = false
+	Round.state = "Loading"
+	ReplicatedStorage:SetAttribute("RoundState", "Loading")
+	ReplicatedStorage:SetAttribute("Mode", "Lobby")
+	for _, p in Players:GetPlayers() do
+		setStatus(p, "Waiting")
+		if p.Character then
+			p.Character:Destroy()
+			p.Character = nil
+		end
+	end
+	buildLayout(require(script.Parent.Stages.Lobby) :: any, "lobby")
+	ReplicatedStorage:SetAttribute("StageIndex", 0)
+	ReplicatedStorage:SetAttribute("StageName", "로비")
+	ReplicatedStorage:SetAttribute("RoundId", Round.roundId)
+	spawnCursor = 0
+	Round.state = "Lobby"
+	ReplicatedStorage:SetAttribute("RoundState", "Lobby")
+	for _, p in Players:GetPlayers() do
+		task.spawn(Round.spawnPlayer, p)
+	end
+	RoundEvent:FireAllClients("Lobby", {})
+	note("lobby")
+end
+
+-- 게임 진행(스테이지 → 결과 → 다음/재시작).
+-- returnToLobby 면 다섯 스테이지를 모두 깨거나 참가자가 모두 나가면 로비로 돌아가며 끝난다.
 function Round.loop()
 	while true do
-		while #Players:GetPlayers() == 0 do
+		while #Round.participants() == 0 do
+			if Round.returnToLobby then
+				Round.enterLobby()
+				return
+			end
 			task.wait(0.5)
 		end
 		task.wait(Config.Round.FirstStartDelay)
@@ -380,6 +455,10 @@ function Round.loop()
 		task.wait(Config.Round.ResultSeconds)
 		while not Round.autoLoop do
 			task.wait(0.2)
+		end
+		if Round.returnToLobby and (Round.lastAllClear or #Round.participants() == 0) then
+			Round.enterLobby()
+			return
 		end
 	end
 end

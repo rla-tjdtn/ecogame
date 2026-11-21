@@ -45,6 +45,8 @@ LogService.MessageOut:Connect(function(msg, kind)
 end)
 
 -- 테스트 설정: 괴물은 시험할 때만 움직이고, 결과 화면은 짧게
+-- 로비 테스트만 로비로, 나머지는 바로 게임으로 시작(Lobby.boot 가 읽는다)
+ReplicatedStorage:SetAttribute("ForceMode", if args.Test == "lobby" then "Lobby" else "Game")
 Config.Monster.StartDelay = 1e6
 Config.Round.ResultSeconds = 2
 Config.Round.FirstStartDelay = 1
@@ -644,7 +646,7 @@ local function core()
 			m:setState("Investigate")
 			m.goal = goal
 			m.searchCenter = goal
-			task.wait(12)
+			task.wait(20) -- (조사 속도 5.5: 20초면 약 13칸)
 			local r = Round.info.route(m.root.Position - Vector3.new(0, 4.5, 0), goal, true)
 			local left = if r then #r else startLen
 			check("monster follows a long winding route (route legs)", left <= startLen - 8, string.format("route %d -> %d tiles, state %s", startLen, left, m.state))
@@ -884,6 +886,206 @@ local function load()
 	R.info.load = all
 end
 
+-- ─────────────────────────────── lobby (2인) ───────────────────────────────
+-- 로비에서 시작 → 음파로 로비가 보인다 → P1 방 만들기(버튼) → P2 참가(버튼)·나가기·재참가 → 방장만 시작 →
+-- 두 사람 모두 1스테이지 → 함께 탈출해 2스테이지 → 마지막 스테이지를 깨면 로비로 돌아온다
+local function lobbyTest()
+	local LobbyMod = require(script.Parent.Lobby)
+	local want = tonumber(args.Players) or 2
+	local ps = waitFor(function()
+		local all = Players:GetPlayers()
+		if #all < want or Round.state ~= "Lobby" then
+			return nil
+		end
+		for _, q in all do
+			if q:GetAttribute("Status") ~= "Alive" or not (q.Character and q.Character:FindFirstChild("HumanoidRootPart")) then
+				return nil
+			end
+		end
+		return all
+	end, 60)
+	check("server starts in the lobby with everyone inside", ps ~= nil, Round.state .. " " .. #Players:GetPlayers())
+	if not ps then
+		return
+	end
+	local p1, p2 = ps[1], ps[2]
+	local function built(p)
+		return waitFor(function()
+			local st = ask(p, "stats")
+			return st and st.buildId == stageFolder():GetAttribute("BuildId") and st.build.segs > 0 and st
+		end, 25)
+	end
+	local b1, b2 = built(p1), built(p2)
+	check("both clients see the lobby through sonar (outlines built)", b1 ~= nil and b2 ~= nil and b1.build.segs > 500, b1 and b1.build.segs)
+	check("no monsters in the lobby", #Round.monsters == 0, #Round.monsters)
+	task.wait(0.5)
+	ask(p1, "resetCooldown")
+	ask(p1, "fire")
+	task.wait(1.2)
+	local lit = ask(p1, "stats")
+	check("sonar lights up the lobby", lit and lit.lines.lit > 50, lit and lit.lines.lit)
+	local u = ask(p1, "lobby")
+	check("room panel shown in the lobby", u and u.visible and table.find(u.buttons, "방 만들기") ~= nil, u and table.concat(u.buttons, ","))
+	local m = ask(p1, "lobbyMenu", true)
+	check("Tab menu frees the mouse", m and m.mouseFree == true)
+	ask(p1, "lobbyClick", "방 만들기")
+	local id = waitFor(function()
+		return p1:GetAttribute("RoomId")
+	end, 5)
+	check("P1 creates a room (button)", id ~= nil, tostring(id))
+	local joinText = "참가 " .. tostring(id)
+	local seen = waitFor(function()
+		local x = ask(p2, "lobby")
+		return x and x.rooms == 1 and table.find(x.buttons, joinText) ~= nil and x
+	end, 5)
+	check("P2 sees the room with a join button", seen ~= nil, seen and table.concat(seen.buttons, ","))
+	ask(p2, "lobbyClick", joinText)
+	check("P2 joins the room (button)", waitFor(function()
+		return p2:GetAttribute("RoomId") == id
+	end, 5) ~= nil)
+	local u1 = waitFor(function()
+		local x = ask(p1, "lobby")
+		return x and x.title:find(p2.DisplayName, 1, true) and x
+	end, 5)
+	check("P1 sees P2 in the room", u1 ~= nil, u1 and u1.title)
+	local u2 = ask(p2, "lobby")
+	check("only the host has a start button", u1 and table.find(u1.buttons, "시작") ~= nil and u2 and table.find(u2.buttons, "시작") == nil, u2 and table.concat(u2.buttons, ","))
+	ask(p2, "lobbyClick", "나가기")
+	check("P2 can leave the room", waitFor(function()
+		return p2:GetAttribute("RoomId") == nil
+	end, 5) ~= nil)
+	waitFor(function()
+		local x = ask(p2, "lobby")
+		return x and table.find(x.buttons, joinText) ~= nil
+	end, 5)
+	ask(p2, "lobbyClick", joinText)
+	check("P2 joins again", waitFor(function()
+		return p2:GetAttribute("RoomId") == id
+	end, 5) ~= nil)
+	LobbyMod.act(p2, "start")
+	task.wait(0.8)
+	check("a non-host cannot start", Round.state == "Lobby", Round.state)
+	-- 방장이 시작
+	task.wait(0.5)
+	ask(p1, "lobbyClick", "시작")
+	local started = waitFor(function()
+		return Round.state == "Playing" and Round.stageIndex == 1
+	end, 20)
+	check("host presses start: stage 1 begins", started ~= nil, Round.state)
+	local both = waitFor(function()
+		for _, q in { p1, p2 } do
+			if q:GetAttribute("Status") ~= "Alive" or not (q.Character and q.Character:FindFirstChild("HumanoidRootPart")) then
+				return nil
+			end
+		end
+		return true
+	end, 15)
+	check("both players are in stage 1", both ~= nil, tostring(p1:GetAttribute("Status")) .. "/" .. tostring(p2:GetAttribute("Status")))
+	check("stage 1 has its monsters", #Round.monsters == Config.Stages[1].Monsters, #Round.monsters)
+	local g1, g2 = built(p1), built(p2)
+	check("both clients rebuilt sonar for stage 1", g1 ~= nil and g2 ~= nil and g1.build.segs > 20000, g1 and g1.build.segs)
+	local lu = ask(p1, "lobby")
+	check("room panel hidden during the game", lu and not lu.visible)
+	task.wait(0.5)
+	ask(p2, "resetCooldown")
+	ask(p2, "fire")
+	task.wait(1.2)
+	local lit2 = ask(p2, "stats")
+	check("P2's sonar works in the game", lit2 and lit2.lines.lit > 50, lit2 and lit2.lines.lit)
+	-- 시야 공유: P2 의 음파가 P1 의 지도에도 남고, 지도에 팀원이 보인다
+	task.wait(1.5)
+	local mp1 = ask(p1, "map")
+	check("teammate's echo is recorded on my map", mp1 and mp1.explored > 5, mp1 and mp1.explored)
+	ask(p1, "toggleMap")
+	task.wait(0.4)
+	local mp1b = ask(p1, "map")
+	check("teammate shown on my map", mp1b and mp1b.matesShown == 1, mp1b and mp1b.matesShown)
+	ask(p1, "toggleMap")
+	-- 함께 탈출 → 2스테이지
+	for _, q in { p1, p2 } do
+		place(q, Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
+	end
+	local next2 = waitFor(function()
+		return Round.state == "Playing" and Round.stageIndex == 2 and p1:GetAttribute("Status") == "Alive" and p2:GetAttribute("Status") == "Alive"
+	end, 20)
+	check("both escape stage 1 together and play stage 2", next2 ~= nil, Round.state .. " " .. Round.stageIndex)
+	-- 마지막 스테이지를 깬 것으로 하고 탈출 → 로비로(시작 지점에 세워지기를 기다린 뒤)
+	task.wait(2)
+	Round.stageIndex = #Config.Stages
+	for _, q in { p1, p2 } do
+		place(q, Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
+	end
+	local back = waitFor(function()
+		return Round.state == "Lobby" and p1:GetAttribute("Status") == "Alive" and p2:GetAttribute("Status") == "Alive"
+	end, 20)
+	check("after the last stage both return to the lobby", back ~= nil, Round.state)
+	check("rooms are cleared after the game", next(LobbyMod.rooms) == nil and p1:GetAttribute("RoomId") == nil)
+	local lu2 = waitFor(function()
+		local x = ask(p1, "lobby")
+		return x and x.visible and x
+	end, 5)
+	check("room panel is back in the lobby", lu2 ~= nil)
+end
+
+-- ─────────────────────────────── walk ───────────────────────────────
+-- 괴물이 실제로 돌아다니는가: 60초 동안 1초마다 위치를 재서 이동 거리·멈춰 있던 시간을 본다(플레이어는 숨겨 둔다)
+local function walk()
+	local ps = readyPlayers(1)
+	if not ps then
+		check("ready", false)
+		return
+	end
+	local p = ps[1]
+	local si = tonumber(args.Stage) or 1
+	if si ~= Round.stageIndex then
+		Round.startStage(si)
+		readyPlayers(1)
+	end
+	local spot = Hiding.all()[1]
+	if spot then
+		Hiding.enter(p, spot)
+	end
+	local seconds = tonumber(args.Seconds) or 60
+	for _, m in Round.monsters do
+		m.startAt = 0
+	end
+	local track = {}
+	for k, m in Round.monsters do
+		track[k] = { last = m.root.Position, dist = 0, still = 0, states = {}, swing = 0 }
+	end
+	for _ = 1, seconds do
+		task.wait(1)
+		for k, m in Round.monsters do
+			local t = track[k]
+			local pos = m.root.Position
+			local d = (Vector3.new(pos.X, 0, pos.Z) - Vector3.new(t.last.X, 0, t.last.Z)).Magnitude
+			t.dist += d
+			if d < 0.5 and m.state ~= "Alert" then
+				t.still += 1
+			end
+			t.last = pos
+			t.states[m.state] = (t.states[m.state] or 0) + 1
+			local j = m.joints[1]
+			if j then
+				local _, ang = (j.base:Inverse() * j.motor.C0):ToAxisAngle()
+				t.swing = math.max(t.swing, math.abs(ang))
+			end
+		end
+	end
+	local out = {}
+	for k, m in Round.monsters do
+		local t = track[k]
+		local st = {}
+		for name, n in t.states do
+			table.insert(st, name .. "=" .. n)
+		end
+		table.insert(out, { dist = math.floor(t.dist), still = t.still, states = table.concat(st, " "), log = table.concat(m.log, " | "):sub(-400) })
+		check(string.format("monster %d keeps moving (%ds)", k, seconds), t.dist > seconds * Config.Monster.WanderSpeed * 0.4 and t.still < seconds * 0.35, string.format("%d studs, still %ds", math.floor(t.dist), t.still))
+		check(string.format("monster %d swings its legs while walking", k), t.swing > 0.15, string.format("max %.2f rad", t.swing))
+	end
+	R.info.walk = out
+end
+
 -- ─────────────────────────────── stages ───────────────────────────────
 -- 스테이지 1~5 를 차례로 지어: 오류 없이 지어지는가, 시작→출구 경로, 괴물 수, 음파 선이 나오는가
 local function stages()
@@ -1002,7 +1204,11 @@ end
 
 task.spawn(function()
 	local ok, err = pcall(function()
-		if args.Test == "load" then
+		if args.Test == "lobby" then
+			lobbyTest()
+		elseif args.Test == "walk" then
+			walk()
+		elseif args.Test == "load" then
 			load()
 		elseif args.Test == "probe" then
 			probe()
