@@ -355,6 +355,18 @@ Config.RealScreams = {
 	{ Id = 9120358057, Start = 0, Dur = 3, Volume = 0.6, Name = "불협화음 합창 곡소리 (숨 섞인)" },
 	{ Id = 9126213995, Start = 0, Dur = 2.5, Volume = 0.7, Name = "귀신 속삭임 폭발 (알아들을 수 없는 악령)" },
 	{ Id = 9114573103, Start = 0, Dur = 3, Volume = 0.6, Name = "귀신의 긴 날숨 (느린 숨결)" },
+	{ Id = 9114568703, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 1 (Ghastly Screams 1)" },
+	{ Id = 9114567451, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 2" },
+	{ Id = 9114567638, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 6" },
+	{ Id = 9114567965, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 11 (짧음)" },
+	{ Id = 9114570562, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 13" },
+	{ Id = 9114569607, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 15 (짧음)" },
+	{ Id = 9114568392, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 20" },
+	{ Id = 9114568534, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 24" },
+	{ Id = 9125438341, Start = 0, Dur = 3, Volume = 0.5, Name = "악몽 속 아이 비명 (멀리서 긁히는 비명)" },
+	{ Id = 9118153393, Start = 0, Dur = 3, Volume = 0.5, Name = "울리는 긴 비명 (음이 이어지는 비명)" },
+	{ Id = 9114226295, Start = 0, Dur = 3, Volume = 0.6, Name = "공허한 숨결 울부짖음 (울림 가득)" },
+	{ Id = 9114572483, Start = 0.5, Dur = 3, Volume = 0.55, Name = "귀신 비명 2 (다가오는 쉿소리, 다른 녹음)" },
 }
 Config.RealScream = 1 -- 위 목록 번호(0 = 합성 시안)
 Config.ScreamGate = { 0.2, 0.1 } -- 끊기는 박자: { 켜짐초, 꺼짐초 }
