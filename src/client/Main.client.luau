@@ -18,6 +18,8 @@ local UI = require(script.Parent:WaitForChild("UI"))
 local MapView = require(script.Parent:WaitForChild("MapView"))
 local LobbyUI = require(script.Parent:WaitForChild("LobbyUI"))
 local Mates = require(script.Parent:WaitForChild("Mates"))
+local KeyHUD = require(script.Parent:WaitForChild("KeyHUD"))
+local JumpScare = require(script.Parent:WaitForChild("JumpScare"))
 Pulses.onReach = MapView.onReach
 
 local player = Players.LocalPlayer
@@ -204,7 +206,15 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		if data.stage == 1 then
 			task.delay(2.5, UI.hint, "좌클릭 — 음파      Shift — 달리기      Ctrl — 웅크리기", 7)
 		end
+		task.delay(if data.stage == 1 then 10 else 2.5, UI.hint, "상자와 서랍(E)을 뒤져 열쇠를 찾아야 출구가 열린다", 6)
 	elseif kind == "Died" then
+		if data.userId == player.UserId and data.why == "monster" then
+			-- 점프스케어: 괴물 얼굴이 확 뜬 뒤 YOU DIED
+			JumpScare.play(function()
+				Audio.play("MonsterAlert", nil, 0.03, 0.8)
+			end)
+			task.wait(JumpScare.Duration)
+		end
 		if data.userId == player.UserId then
 			if data.othersAlive > 0 then
 				UI.overlay("YOU DIED", "관전으로 전환합니다", true)
@@ -231,6 +241,13 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		UI.setSpectate(nil)
 		UI.setStage("로비")
 		task.delay(1.5, UI.hint, "Tab — 방 메뉴      좌클릭 — 음파      Q — 지도", 7)
+	elseif kind == "KeyFound" then
+		UI.hint((if data.userId == player.UserId then "열쇠를 찾았다" else (data.by .. " 님이 열쇠를 찾았다")) .. " — 이제 출구가 열린다", 5)
+	elseif kind == "SearchResult" then
+		local t = if data.result == "searching" then "뒤지는 중…" elseif data.result == "empty" then "비어 있다" else "이미 뒤진 곳이다"
+		UI.hint(t, if data.result == "searching" then 1 else 2)
+	elseif kind == "ExitLocked" then
+		UI.hint("출구가 잠겨 있다 — 상자나 서랍에서 열쇠를 찾아야 한다", 3)
 	elseif kind == "RoomMsg" then
 		LobbyUI.message(data.text)
 	elseif kind == "RoomStarting" then
@@ -374,6 +391,10 @@ task.spawn(function()
 		elseif cmd == "linesNear" then
 			local t = arg :: { any }
 			return Lines.countNear(t[1], t[2])
+		elseif cmd == "jumpscare" then
+			return JumpScare.state()
+		elseif cmd == "keyHud" then
+			return KeyHUD.state()
 		elseif cmd == "mates" then
 			return Mates.count()
 		elseif cmd == "lobby" then

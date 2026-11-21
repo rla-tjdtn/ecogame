@@ -13,6 +13,7 @@ local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
 local Monster = require(script.Parent.Monster)
 local Hiding = require(script.Parent.Hiding)
+local Search = require(script.Parent.Search)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
@@ -177,7 +178,7 @@ function Round.kill(p: Player, why: string?)
 	setStatus(p, "Dead")
 	note("dead " .. p.Name .. " " .. (why or ""))
 	local others = #Round.alivePlayers()
-	RoundEvent:FireAllClients("Died", { userId = p.UserId, solo = #Round.participants() == 1, othersAlive = others })
+	RoundEvent:FireAllClients("Died", { userId = p.UserId, solo = #Round.participants() == 1, othersAlive = others, why = why })
 	local char = p.Character
 	if char then
 		local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -267,6 +268,7 @@ function Round.startStage(i: number)
 	end
 	Round.state = "Playing"
 	ReplicatedStorage:SetAttribute("RoundState", "Playing")
+	Search.assignKey((Round.info :: Builder.StageInfo).spawns[1].Position)
 	RoundEvent:FireAllClients("Start", { stage = i, name = def.Name })
 	Round.spawnMonsters(def.Monsters)
 	note("start " .. i)
@@ -341,7 +343,16 @@ RunService.Heartbeat:Connect(function(dt)
 				local lp = info.exitCFrame:PointToObjectSpace(root.Position)
 				local s = info.exitSize / 2
 				if math.abs(lp.X) <= s.X and math.abs(lp.Y) <= s.Y and math.abs(lp.Z) <= s.Z then
-					Round.escape(p)
+					if Config.Key.Required and ReplicatedStorage:GetAttribute("HasKey") ~= true then
+						-- 잠긴 출구: 몇 초에 한 번 알려 준다
+						local last = (p:GetAttribute("ExitLockedAt") :: number?) or 0
+						if os.clock() - last > 3 then
+							p:SetAttribute("ExitLockedAt", os.clock())
+							RoundEvent:FireClient(p, "ExitLocked", {})
+						end
+					else
+						Round.escape(p)
+					end
 				end
 			end
 		end
@@ -422,6 +433,7 @@ function Round.enterLobby()
 		end
 	end
 	buildLayout(require(script.Parent.Stages.Lobby) :: any, "lobby")
+	ReplicatedStorage:SetAttribute("HasKey", false)
 	ReplicatedStorage:SetAttribute("StageIndex", 0)
 	ReplicatedStorage:SetAttribute("StageName", "로비")
 	ReplicatedStorage:SetAttribute("RoundId", Round.roundId)

@@ -24,8 +24,8 @@
     <Item class="BloomEffect" referent="1">
       <Properties>
         <string name="Name">Bloom</string>
-        <float name="Intensity">0.35</float>
-        <float name="Size">10</float>
+        <float name="Intensity">0.2</float>
+        <float name="Size">6</float>
         <float name="Threshold">0.9</float>
       </Properties>
     </Item>
@@ -100,13 +100,13 @@ Config.Sonar = {
 	Hold = 3.5, -- 선이 나타난 뒤 완전히 사라질 때까지(초)
 	FadeTime = 1.2, -- Hold 끝부분에서 서서히 사라지는 구간(초)
 	FlashTime = 0.15, -- 파동이 지나가는 순간 살짝 더 밝은 구간(초)
-	BaseLevel = 0.8, -- 플래시 이후 선 밝기(0~1)
+	BaseLevel = 0.7, -- 플래시 이후 선 밝기(0~1)
 	FarLevel = 0.45, -- 반경 끝에 있는 선의 밝기 배율(가까울수록 1)
-	LineColor = Color3.fromRGB(235, 235, 235),
+	LineColor = Color3.fromRGB(215, 215, 215), -- (눈부심을 줄이려고 조금 어둡게)
 	-- 선 굵기: 카메라와의 거리에 비례해 화면상 굵기가 거의 일정하게 보이도록
-	LineMinWidth = 0.035,
-	LineWidthPerStud = 0.0021,
-	LineMaxWidth = 0.12,
+	LineMinWidth = 0.022, -- (눈이 아프지 않게 얇게: 0.035 → 0.022)
+	LineWidthPerStud = 0.0013,
+	LineMaxWidth = 0.075,
 	SegmentLength = 2.5, -- 긴 모서리를 이 길이 이하로 잘라 가까운 쪽부터 그려지게 한다
 	CellSize = 2, -- 파동 전파용 복셀 크기(스터드)
 	AttachDistance = 2.6, -- 선분이 이 거리 안의 빈 복셀을 통해 음파를 받는다
@@ -176,6 +176,14 @@ Config.Round = {
 
 -- ─────────────────────────────── 스테이지 ───────────────────────────────
 -- Module 은 ServerScriptService.Server.Stages 안의 레이아웃 모듈 이름
+-- 열쇠: 스테이지마다 상자·서랍(맵 문자 Z) 중 한 곳에 있고, 팀이 찾아야 출구가 열린다
+Config.Key = {
+	Required = true, -- false 면 열쇠 없이도 탈출(테스트용)
+	PromptDistance = 6,
+	SearchSeconds = 0.8, -- 뒤지는 시간
+	SearchNoise = 10, -- 뒤지는 소리 반경(스터드)
+}
+
 -- 로비·방
 Config.Lobby = {
 	MaxPlayers = 4, -- 방 하나 최대 인원
@@ -203,23 +211,52 @@ Config.Stages = {
 -- 기본값은 Roblox 클라이언트에 기본 포함된 rbxasset:// 파일만 쓴다(외부 에셋 ID 없음).
 -- 더 어울리는 소리가 있으면 Id 를 "rbxassetid://숫자" 로 바꾸면 된다. Id = "" 이면 그 소리는 재생하지 않는다.
 Config.Sounds = {
-	-- 발소리 파일에는 여러 발짝이 들어 있어 Cut 초만 재생해 한 발짝만 낸다
-	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.35, Pitch = 0.85, Range = 40, Cut = 0.2 },
-	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.6, Pitch = 0.95, Range = 70, Cut = 0.17 },
-	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.12, Pitch = 0.75, Range = 18, Cut = 0.22 },
+	-- 사람 발소리: 실제 녹음된 발걸음 파일(2.5초 안에 4걸음: 0.03·0.62·1.22·1.82초 지점)에서 걸음 하나씩만 골라 쓰고(Steps = {시작초, 재생길이초}),
+	-- 몸무게가 실린 낮은 "툭"(FootThump)을 Thump 배율만큼 겹친다. 매 걸음 다른 걸음을 골라 같은 소리가 반복되지 않는다.
+	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.5, Pitch = 1.0, Range = 40, Steps = { { 0.03, 0.2 }, { 0.62, 0.22 }, { 1.22, 0.13 }, { 1.82, 0.13 } }, Thump = 0.22 },
+	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.85, Pitch = 1.12, Range = 70, Steps = { { 0.03, 0.2 }, { 0.62, 0.22 }, { 1.22, 0.13 }, { 1.82, 0.13 } }, Thump = 0.4 },
+	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.18, Pitch = 0.9, Range = 18, Steps = { { 1.22, 0.13 }, { 1.82, 0.13 } }, Thump = 0.05 },
+	FootThump = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 1.0, Pitch = 1.25, Range = 70, Cut = 0.1 },
 	Sonar = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.3, Pitch = 0.35, Range = 90 }, -- (크면 머리가 아프다: 0.9 → 0.3)
 	SonarEcho = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.12, Pitch = 0.28, Range = 90 },
 	Door = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.8, Pitch = 0.55, Range = 60 },
-	MonsterStep = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.9, Pitch = 0.5, Range = 95 },
-	MonsterIdle = { Id = "rbxasset://sounds/oof.ogg", Volume = 0.55, Pitch = 0.32, Range = 70 },
-	MonsterAlert = { Id = "rbxasset://sounds/ouch.ogg", Volume = 0.8, Pitch = 0.4, Range = 90 },
-	MonsterChase = { Id = "rbxasset://sounds/ouch.ogg", Volume = 1.0, Pitch = 0.27, Range = 110 },
+	-- 괴물 발소리: 사람과 완전히 다르게 — 깊고 무거운 "쿵"(울림) + 낮게 늘인 발톱 "타닥"(Claw). 걸음 간격도 사람보다 느리고 불규칙하다
+	MonsterStep = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.5, Pitch = 0.7, Range = 95, Cut = 0.24, Claw = "MonsterClaw", Fx = { Reverb = 1.2 } },
+	MonsterClaw = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.35, Pitch = 0.55, Range = 95, Steps = { { 0.03, 0.34 }, { 0.62, 0.34 } } },
+	-- 괴물 소리는 전부 괴성(비명): 사람 목소리 파일을 낮고 길게 + 왜곡 + 울림. Fx = 왜곡 정도 / 울림(초)
+	MonsterIdle = { Id = "rbxasset://sounds/ouch.ogg", Volume = 0.22, Pitch = 0.6, Range = 70, Fx = { Distortion = 0.5, Reverb = 2.5 } },
+	MonsterAlert = { Id = "rbxasset://sounds/ouch.ogg", Volume = 0.45, Pitch = 0.55, Range = 90, Fx = { Distortion = 0.6, Reverb = 2.5 } },
+	MonsterChase = { Id = "rbxasset://sounds/ouch.ogg", Volume = 0.5, Pitch = 0.45, Range = 110, Fx = { Distortion = 0.7, Reverb = 3 } },
+	MonsterScream2 = { Id = "rbxasset://sounds/oof.ogg", Volume = 0.4, Pitch = 0.5, Range = 110, Fx = { Distortion = 0.7, Reverb = 3 } }, -- 괴성에 겹치는 두 번째 목소리
 	AmbientHum = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.18, Pitch = 0.22, Range = 0 }, -- 환풍기·배관 진동(루프)
 	AmbientFan = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.5, Pitch = 0.4, Range = 45 }, -- 맵 안 환풍기 위치(루프)
-	AmbientDrip = { Id = "rbxasset://sounds/impact_water.mp3", Volume = 0.25, Pitch = 2.2, Range = 60 },
-	AmbientMetal = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.22, Pitch = 0.35, Range = 160 },
+	AmbientDrip = { Id = "", Volume = 0.25, Pitch = 2.2, Range = 60 }, -- 물방울(찰팍) 소리 제거
+	AmbientMetal = { Id = "", Volume = 0.22, Pitch = 0.35, Range = 160 }, -- 폭발음 같은 금속음 제거
 	AmbientCreak = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.25, Pitch = 0.3, Range = 120 },
-	AmbientWater = { Id = "rbxasset://sounds/action_swim.mp3", Volume = 0.35, Pitch = 0.6, Range = 50 }, -- 하수도 물 흐름(루프)
+	AmbientWater = { Id = "", Volume = 0.35, Pitch = 0.6, Range = 50 }, -- 하수도 물소리(찰팍거림) 제거
+}
+
+-- 괴성: 짧은 목소리 파일을 시간차로 여러 번 겹쳐 길게 지른다. s = Sounds 이름, t = 시작 지연(초), p = 피치 배율, v = 볼륨 배율
+Config.Screams = {
+	Idle = { -- 배회 중 먼 괴성 (약 2초)
+		{ s = "MonsterIdle", t = 0, p = 1, v = 1 },
+		{ s = "MonsterScream2", t = 0.3, p = 0.85, v = 0.6 },
+		{ s = "MonsterIdle", t = 0.75, p = 0.8, v = 0.6 },
+	},
+	Alert = { -- 경계 (약 2.5초)
+		{ s = "MonsterAlert", t = 0, p = 1, v = 1 },
+		{ s = "MonsterScream2", t = 0.25, p = 0.9, v = 0.8 },
+		{ s = "MonsterAlert", t = 0.6, p = 0.85, v = 0.9 },
+		{ s = "MonsterScream2", t = 1.0, p = 0.8, v = 0.6 },
+	},
+	Chase = { -- 추격 시작 (약 3초 이상, 점점 낮아지며 길게)
+		{ s = "MonsterChase", t = 0, p = 1, v = 1 },
+		{ s = "MonsterScream2", t = 0.25, p = 0.85, v = 0.9 },
+		{ s = "MonsterChase", t = 0.6, p = 0.85, v = 1 },
+		{ s = "MonsterScream2", t = 1.0, p = 0.7, v = 0.8 },
+		{ s = "MonsterChase", t = 1.4, p = 0.65, v = 0.7 },
+		{ s = "MonsterScream2", t = 1.9, p = 0.55, v = 0.5 },
+	},
 }
 
 -- 태그 이름
@@ -230,6 +267,7 @@ Config.Tags = {
 	Monster = "Monster",
 	AmbientEmitter = "AmbientEmitter",
 	HideSpot = "HideSpot",
+	SearchSpot = "SearchSpot",
 }
 
 return Config
@@ -1792,6 +1830,9 @@ local function buildModel(cf: CFrame, stage: number): Model
 	end
 	for _, p in parts do
 		p.Name = "Body"
+		-- 몸은 완전히 투명: 음파를 맞을 때만 선으로 드러난다(검은 몸이 선을 가려 위치가 드러나지 않게)
+		p.Transparency = 1
+		p.CastShadow = false
 		if not grouped[p] then
 			limb(p)
 		end
@@ -2700,6 +2741,7 @@ local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
 local Monster = require(script.Parent.Monster)
 local Hiding = require(script.Parent.Hiding)
+local Search = require(script.Parent.Search)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
@@ -2864,7 +2906,7 @@ function Round.kill(p: Player, why: string?)
 	setStatus(p, "Dead")
 	note("dead " .. p.Name .. " " .. (why or ""))
 	local others = #Round.alivePlayers()
-	RoundEvent:FireAllClients("Died", { userId = p.UserId, solo = #Round.participants() == 1, othersAlive = others })
+	RoundEvent:FireAllClients("Died", { userId = p.UserId, solo = #Round.participants() == 1, othersAlive = others, why = why })
 	local char = p.Character
 	if char then
 		local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -2954,6 +2996,7 @@ function Round.startStage(i: number)
 	end
 	Round.state = "Playing"
 	ReplicatedStorage:SetAttribute("RoundState", "Playing")
+	Search.assignKey((Round.info :: Builder.StageInfo).spawns[1].Position)
 	RoundEvent:FireAllClients("Start", { stage = i, name = def.Name })
 	Round.spawnMonsters(def.Monsters)
 	note("start " .. i)
@@ -3028,7 +3071,16 @@ RunService.Heartbeat:Connect(function(dt)
 				local lp = info.exitCFrame:PointToObjectSpace(root.Position)
 				local s = info.exitSize / 2
 				if math.abs(lp.X) <= s.X and math.abs(lp.Y) <= s.Y and math.abs(lp.Z) <= s.Z then
-					Round.escape(p)
+					if Config.Key.Required and ReplicatedStorage:GetAttribute("HasKey") ~= true then
+						-- 잠긴 출구: 몇 초에 한 번 알려 준다
+						local last = (p:GetAttribute("ExitLockedAt") :: number?) or 0
+						if os.clock() - last > 3 then
+							p:SetAttribute("ExitLockedAt", os.clock())
+							RoundEvent:FireClient(p, "ExitLocked", {})
+						end
+					else
+						Round.escape(p)
+					end
 				end
 			end
 		end
@@ -3109,6 +3161,7 @@ function Round.enterLobby()
 		end
 	end
 	buildLayout(require(script.Parent.Stages.Lobby) :: any, "lobby")
+	ReplicatedStorage:SetAttribute("HasKey", false)
 	ReplicatedStorage:SetAttribute("StageIndex", 0)
 	ReplicatedStorage:SetAttribute("StageName", "로비")
 	ReplicatedStorage:SetAttribute("RoundId", Round.roundId)
@@ -3155,6 +3208,208 @@ return Round
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="24">
+        <Properties>
+          <string name="Name">Search</string>
+          <string name="Source"><![CDATA[--!strict
+-- 뒤질 수 있는 상자·서랍(맵 문자 Z). 스테이지마다 그중 한 곳에 열쇠가 있고(라운드마다 서버가 고른다),
+-- 누군가 찾으면 팀 전체가 열쇠를 가진다(ReplicatedStorage 속성 HasKey). 열쇠가 없으면 출구가 열리지 않는다(Round).
+-- E 로 뒤지면 서랍이 열리거나 뚜껑이 들리고(음파에 그 순간 모습으로), 뒤지는 소리를 가까운 괴물이 듣는다.
+
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Kit = require(script.Parent.MapKit)
+local SoundBus = require(script.Parent.SoundBus)
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
+
+local Search = {}
+
+export type Spot = {
+	model: Model,
+	moving: Model, -- 열릴 때 움직이는 서랍/뚜껑(음파는 움직이는 물체로 그린다)
+	openOffset: CFrame,
+	front: Vector3,
+	prompt: ProximityPrompt,
+	searched: boolean,
+	hasKey: boolean,
+	busy: boolean,
+}
+
+local spots: { Spot } = {}
+
+-- 챕터별 모양: w 폭, h 높이, d 깊이, kind = "drawers" | "lid"
+type Style = { w: number, h: number, d: number, kind: string, rows: number, name: string }
+local STYLES: { [string]: Style } = {
+	drawers = { w = 3.2, h = 3.8, d = 2.2, kind = "drawers", rows = 3, name = "서랍장" }, -- 지하 시설: 철제 서랍장
+	crate = { w = 3.6, h = 3.2, d = 3.0, kind = "lid", rows = 0, name = "나무 상자" }, -- 창고
+	toolbox = { w = 3.4, h = 1.9, d = 2.0, kind = "lid", rows = 0, name = "공구함" }, -- 하수도
+	nightstand = { w = 2.6, h = 2.8, d = 2.2, kind = "drawers", rows = 2, name = "협탁" }, -- 병원
+	chest = { w = 3.6, h = 2.3, d = 2.4, kind = "lid", rows = 0, name = "궤짝" }, -- 심층 미로
+}
+Search.Styles = STYLES
+
+local function build(parent: Instance, cf: CFrame, s: Style): (Model, Model, CFrame)
+	local m = Instance.new("Model")
+	m.Name = "SearchSpot"
+	local mv = Instance.new("Model")
+	mv.Name = "Moving"
+	mv:SetAttribute(Config.Tags.Dynamic, true)
+	local t = 0.2
+	local w, h, d = s.w, s.h, s.d
+	local function box(par: Instance, local_: CFrame, size: Vector3, opts: Kit.Opts?): Part
+		return Kit.box(par, cf * local_, size, opts)
+	end
+	-- 몸통(앞 = -Z)
+	box(m, CFrame.new(0, h / 2, d / 2 - t / 2), Vector3.new(w, h, t))
+	for _, sx in { -1, 1 } do
+		box(m, CFrame.new(sx * (w / 2 - t / 2), h / 2, 0), Vector3.new(t, h, d))
+	end
+	box(m, CFrame.new(0, t / 2, 0), Vector3.new(w, t, d))
+	local openOffset
+	if s.kind == "drawers" then
+		box(m, CFrame.new(0, h - t / 2, 0), Vector3.new(w + 0.1, t, d + 0.1))
+		local rowH = (h - t * 2) / s.rows
+		for k = 1, s.rows do
+			local y = t + rowH * (k - 0.5)
+			local par: Instance = if k == s.rows then mv else m -- 맨 위 서랍이 열린다
+			box(par, CFrame.new(0, y, -d / 2 + t / 2), Vector3.new(w - t * 2 - 0.08, rowH - 0.1, t), { blocks = false })
+			box(par, CFrame.new(0, y, -d / 2 - 0.1), Vector3.new(0.8, 0.12, 0.12), { blocks = false, collide = false })
+			if k == s.rows then
+				box(mv, CFrame.new(0, y - rowH / 2 + 0.15, 0), Vector3.new(w - t * 2 - 0.1, 0.1, d - t * 2), { blocks = false, collide = false })
+			end
+		end
+		openOffset = CFrame.new(0, 0, -(d * 0.6)) -- 앞으로 빠진다
+	else
+		-- 앞판 + 뚜껑(+ 띠)
+		box(m, CFrame.new(0, h / 2, -d / 2 + t / 2), Vector3.new(w, h, t))
+		box(mv, CFrame.new(0, h + t / 2, 0), Vector3.new(w + 0.12, t, d + 0.12))
+		if s.name ~= "공구함" then
+			for _, sx in { -0.3, 0.3 } do
+				box(mv, CFrame.new(sx * w, h + t + 0.03, 0), Vector3.new(0.18, 0.06, d + 0.14), { blocks = false, collide = false })
+			end
+		else
+			box(mv, CFrame.new(0, h + t + 0.25, 0), Vector3.new(w * 0.5, 0.12, 0.12), { blocks = false, collide = false })
+		end
+		openOffset = CFrame.new(0, 0.6, d * 0.45) * CFrame.Angles(math.rad(-55), 0, 0) -- 뒤로 젖혀진다
+	end
+	mv.Parent = m
+	m.Parent = parent
+	return m, mv, openOffset
+end
+
+-- pos: 타일 가운데 바닥, back: 벽 쪽(단위 벡터)
+function Search.create(parent: Instance, pos: Vector3, back: Vector3, styleName: string?): Spot
+	local s = STYLES[styleName or "drawers"] or STYLES.drawers
+	local facing = -back
+	local center = pos + back * (Config.Hide.Tile / 2 - s.d / 2 - 0.15)
+	local cf = CFrame.lookAt(center, center + facing)
+	local model, moving, openOffset = build(parent, cf, s)
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "뒤지기"
+	prompt.ObjectText = s.name
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = Config.Key.PromptDistance
+	prompt.RequiresLineOfSight = false
+	prompt.Style = Enum.ProximityPromptStyle.Custom
+	local anchor = model:FindFirstChildWhichIsA("BasePart") :: BasePart
+	prompt.Parent = anchor
+	CollectionService:AddTag(model, Config.Tags.SearchSpot)
+	local spot: Spot = {
+		model = model,
+		moving = moving,
+		openOffset = openOffset,
+		front = center + facing * (s.d / 2 + 2.2),
+		prompt = prompt,
+		searched = false,
+		hasKey = false,
+		busy = false,
+	}
+	table.insert(spots, spot)
+	prompt.Triggered:Connect(function(player)
+		Search.search(player, spot)
+	end)
+	model.Destroying:Connect(function()
+		local i = table.find(spots, spot)
+		if i then
+			table.remove(spots, i)
+		end
+	end)
+	return spot
+end
+
+local function hasKey(): boolean
+	return ReplicatedStorage:GetAttribute("HasKey") == true
+end
+
+-- 뒤지기: 잠깐 뒤진 뒤 결과. 열쇠가 있으면 팀 전체가 가진다. 결과 문자열을 돌려준다("key" | "empty" | "already" | "busy")
+function Search.search(player: Player, spot: Spot): string
+	if player:GetAttribute("Status") ~= "Alive" or player:GetAttribute("Hidden") then
+		return "busy"
+	end
+	if spot.searched then
+		RoundEvent:FireClient(player, "SearchResult", { result = "already" })
+		return "already"
+	end
+	if spot.busy then
+		return "busy"
+	end
+	spot.busy = true
+	-- 열린다(서랍 빠짐 / 뚜껑 젖힘)
+	local pivot = spot.moving:GetPivot()
+	spot.moving:PivotTo(pivot * spot.openOffset)
+	SoundBus.emit(spot.front + Vector3.new(0, 2, 0), Config.Key.SearchNoise, player, "Search")
+	RoundEvent:FireClient(player, "SearchResult", { result = "searching" })
+	task.wait(Config.Key.SearchSeconds)
+	spot.busy = false
+	spot.searched = true
+	spot.prompt.Enabled = false
+	if spot.hasKey and not hasKey() then
+		ReplicatedStorage:SetAttribute("HasKey", true)
+		RoundEvent:FireAllClients("KeyFound", { by = player.DisplayName, userId = player.UserId })
+		return "key"
+	end
+	RoundEvent:FireClient(player, "SearchResult", { result = "empty" })
+	return "empty"
+end
+
+-- 새 스테이지: 열쇠를 한 곳에 넣는다(시작에서 먼 쪽 절반 중에서 무작위)
+function Search.assignKey(start: Vector3)
+	ReplicatedStorage:SetAttribute("HasKey", false)
+	if #spots == 0 then
+		return
+	end
+	local sorted = table.clone(spots)
+	table.sort(sorted, function(a, b)
+		return (a.front - start).Magnitude > (b.front - start).Magnitude
+	end)
+	local half = math.max(1, math.ceil(#sorted / 2))
+	local pick = sorted[math.random(1, half)]
+	for _, s in spots do
+		s.hasKey = s == pick
+	end
+end
+
+function Search.all(): { Spot }
+	return spots
+end
+
+function Search.keySpot(): Spot?
+	for _, s in spots do
+		if s.hasKey then
+			return s
+		end
+	end
+	return nil
+end
+
+return Search
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">SoundBus</string>
           <string name="Source"><![CDATA[--!strict
@@ -3251,7 +3506,7 @@ return SoundBus
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">StageBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -3271,6 +3526,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Kit = require(script.Parent.MapKit)
 local Doors = require(script.Parent.Doors)
 local Hiding = require(script.Parent.Hiding)
+local Search = require(script.Parent.Search)
 
 local Builder = {}
 
@@ -3288,7 +3544,8 @@ export type Layout = {
 	Walkable: { [string]: boolean }?, -- Props 타일 중 괴물 배회 지점으로 쓸 수 있는 것
 	PitTiles: { [string]: boolean }?, -- Props 타일 중 아래층 높이인 것
 	PipeChance: number?,
-	HideStyle: string?, -- 숨는 곳(L) 모양: locker / tool / rusty / wardrobe / closet (Hiding.Styles)
+	HideStyle: string?,
+	SearchStyle: string?, -- 상자·서랍(Z) 모양: drawers / crate / toolbox / nightstand / chest (Search.Styles) -- 숨는 곳(L) 모양: locker / tool / rusty / wardrobe / closet (Hiding.Styles)
 	Seed: number?,
 }
 
@@ -3743,6 +4000,15 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 				em.CanQuery = false
 				em:SetAttribute("Sound", "AmbientFan")
 				CollectionService:AddTag(em, Config.Tags.AmbientEmitter)
+			elseif ch == "Z" then
+				local back = nil
+				for _, d in dirs do
+					if isWall(i + d.di, j + d.dj) and not isWall(i - d.di, j - d.dj) then
+						back = d.v
+						break
+					end
+				end
+				Search.create(props, c + Vector3.new(0, fy, 0), back or Vector3.new(0, 0, -1), layout.SearchStyle)
 			elseif ch == "L" then
 				-- 숨는 곳: 등을 댈 벽(맞은편이 열린 쪽)을 찾는다
 				local back = nil
@@ -3891,11 +4157,11 @@ return Builder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="26">
+      <Item class="Folder" referent="27">
         <Properties>
           <string name="Name">Stages</string>
         </Properties>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">Lobby</string>
             <string name="Source"><![CDATA[--!strict
@@ -3927,7 +4193,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">Stage1</string>
             <string name="Source"><![CDATA[--!strict
@@ -3938,20 +4204,21 @@ return {
 	Seed = 11,
 	PipeChance = 0.55,
 	HideStyle = "locker", -- 숨는 곳(L): 철제 사물함
+	SearchStyle = "drawers", -- 뒤지는 곳(Z): 철제 서랍장, 그중 한 곳에 열쇠
 	Rows = {
 		"###############################################",
 		"#S..#.......#...f..##..L#.....###cc.....A.#####",
 		"#S..D..O.O..A..cc..##..v#.###A###.O...O.#.#####",
-		"#...#.......#......##m.m#.#m............#.....#",
-		"##.###A######.####D##...#.#.....#.O.O.O.#.###.#",
+		"#...#.......#......##m.m#.#m..Z.........#.....#",
+		"##.###A######.####D##Z..#.#.....#.O.O.O.#.###.#",
 		"#...#....#....#....##...#.#mL.fv#.....cc#...#.#",
 		"#.c.#.##.#.##.#.m..###D##f###################.#",
 		"#...A.#..A..#.A....##...D.A..v#####.......fc#.#",
 		"###.###.#####.###.###.#####m.m#####.O.O.O...#.#",
-		"#.......#pppppppp..##.#####...#.cc#.........#.#",
+		"#.......#pppppppp..##.#####Z..#.cc#.........#.#",
 		"#.#####..bbbbbbbb..##A#########...#.OfO...OL#.#",
 		"#.#...#.#ppppppps..##...#..v.fD..f.......f.f#.#",
-		"#.#.m.#..spppppp#..####.#L....#...#.OfO.O.O.#.#",
+		"#.#.m.#..spppppp#..####.#L....#..Z#.OfO.O.O.#.#",
 		"#.#...D.#########D###.#.#mmm..#.Lc#...f.f..c#.#",
 		"#.##.##.#....#........#.#######D#####.###A###.#",
 		"#.......A.cc.A..O..##.....................###.#",
@@ -3960,19 +4227,19 @@ return {
 		"#.c.....#.......A..##.......###.#.....A.#####.#",
 		"#############.#######pspbpsp###.#v...v#......f#",
 		"##########E##.#######pppbppp###.#m....#.#######",
-		"#...........#.....###ppsbppp#...#f....D.#######",
+		"#...........#.....###ppsbppp#...#f.Z..D.#######",
 		"#####A#####.#####.###.......#.###.##D##########",
 		"#####....L#.###...###.......#.A...#c..cc#######",
 		"#####c....#.###.#########D###.##.##.O.f.#######",
-		"#####c.ccc#.###.........#.........#.....#cc...#",
+		"#####cZccc#.###.........#.........#.....#cc...#",
 		"###########A###A###.###A#.O.O.O.f.#.O.O.#...O.#",
 		"#.........#.#...f...cc#.#.........#.c.........#",
-		"#.#######.#.#...O...O.#.#.O.O...O.#A#####.O.O.#",
+		"#.#######.#.#Z..O...O.#.#.O.O...O.#A#####.O.O.#",
 		"#.#cL..c#.#.#.........#f#c.......c#....##c..cc#",
 		"#A#.O.O.#.#.#...O.O...#.##############D####A###",
 		"#.#.....#...#.........#...A...D...#.....f.....#",
 		"#.A.O...#####...O.O.O.#.#########.#pspbppspppp#",
-		"#.#c..cc#####c......c.D.#c.....c#.#pppbppppppp#",
+		"#.#c..cc#####c......c.D.#cZ....c#.#pppbppppppp#",
 		"#.#####################.#.f.f.O.#.#ppsbppppppp#",
 		"#..A....###########.f.#.#.......#.#...........#",
 		"#######.###########.#f#f#.O.O.O...#...........#",
@@ -3985,7 +4252,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">Stage2</string>
             <string name="Source"><![CDATA[--!strict
@@ -3997,10 +4264,11 @@ return {
 	Seed = 23,
 	PipeChance = 0.3,
 	HideStyle = "tool", -- 숨는 곳(L): 공구 캐비닛
+	SearchStyle = "crate", -- 뒤지는 곳(Z): 나무 상자, 그중 한 곳에 열쇠
 	Props = { H = Props.RackX, h = Props.RackZ, K = Props.Container, Q = Props.ContainerStack },
 	Rows = {
 		"#############################################",
-		"#SS...#####.c..c..#E#c.m..#...............#.#",
+		"#SS...#####.c..c.Z#E#c.m.Z#...............#.#",
 		"#.....#####...K...D.#.....#.HH...HHHHHHHH.#.#",
 		"#SS...#.###......c#.#.....#...............#.#",
 		"#.....#.###.......#.#.....D.HHHHH...HHHHH...#",
@@ -4008,7 +4276,7 @@ return {
 		"#######.###################.HHHHHHH.HHHHH.#.#",
 		"#####.......#...........#.#...............#.#",
 		"#####.#D#####.HHHH...HH...#.HHHH.HHHHHHHH.A.#",
-		"#####.#....c#...........#.#...............#.#",
+		"#####.#...Zc#...........#.#...............#.#",
 		"#####.#L....D.H...HHHHH.#.#.H..HHHHHHHHHH.#.#",
 		"#####.#.....#...........#.#...............#.#",
 		"#####.#...c.#.HHHHHHH...#.#################.#",
@@ -4018,7 +4286,7 @@ return {
 		"#####...#.A.....#####......K###############.#",
 		"#####..m#.#..c..A.c.........###.KK.QQ.....D.#",
 		"#####..m#.#######...#..c.c..###...........#.#",
-		"#.cL#...#.#.....#...#..c.L..###...........#.#",
+		"#.cL#Z..#.#.....#...#Z.c.L..###Z..........#.#",
 		"#...###.#.#.###.###############...........#.#",
 		"#K.c###.....#.....#..c..#.m...#........KQQ#.#",
 		"##D##########D#####.....D.....#.....c...K.A.#",
@@ -4026,7 +4294,7 @@ return {
 		"#Lc.#.HHHHHH.HHHH.###A#####A###.......KK..###",
 		"#c..#.............D.........###...QQ......###",
 		"#####.HHHHHH..HHH.###.###########A###A#######",
-		"#####.............###.#...........#...###m..#",
+		"#####.............###.#...........#...###m.Z#",
 		"#####.HHHHHH..HHH.###.#.HHHH..HHH.#.#####..c#",
 		"###.D.............###.#...........#.#####L..#",
 		"###.#.HHHH..HHHHH.###.#.HHHHHH.HH.#.######D##",
@@ -4037,15 +4305,15 @@ return {
 		"#.c.D.#K.c#.#m..#.#.#.#...........#.#.......#",
 		"#.###.#..K#.###.#.#.#.#.HHHH..HHH.#.D.......#",
 		"#.....#L..#.....#.#.#.#...........#.#.c..c..#",
-		"#.#####...#.#####.#.#.###D#########.#.KK....#",
-		"#.....#...D.......#.................#.......#",
+		"#.#####...#.#####.#.#.###D#########.#.KK...Z#",
+		"#.....#Z..D.......#.................#.......#",
 		"#############################################",
 	},
 }
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">Stage3</string>
             <string name="Source"><![CDATA[--!strict
@@ -4057,22 +4325,23 @@ return {
 	Seed = 37,
 	PipeChance = 0.75,
 	HideStyle = "rusty", -- 숨는 곳(L): 찌그러진 정비 사물함
+	SearchStyle = "toolbox", -- 뒤지는 곳(Z): 공구함, 그중 한 곳에 열쇠
 	Props = { w = Props.Water, P = Props.BigPipe },
 	PitTiles = { w = true },
 	Walkable = { w = true, P = true },
 	Rows = {
 		"###########################################",
-		"#SS...###..m..#.....#.........A.#.........#",
+		"#SS...###Z.m..#.....#.........A.#.........#",
 		"#.....###...m.#.###.###.#######.#.#######.#",
 		"#SS...###L....#.###.....#.v...#...#.....#.#",
 		"#.....#.A.....#A#########....v#########.#.#",
-		"#.....#.#.....#.#.......#v....#......A..#A#",
+		"#.....#.#....Z#.#.......#v...Z#......A..#A#",
 		"###D###.#######.#.#####.###.#####.#######.#",
 		"#.....#.#..A..#.#.#...#.....L.v.#.A...#...#",
 		"#.#####.#.###.#.#.###A#.#.......#.###.#.###",
 		"#.....#...#...#.......#.#v......#.#...#.###",
 		"#.###.#####.###########.#v......#.#.###.###",
-		"#.#.#.#...#A#m..#.......#..vv...#.#.....###",
+		"#.#.#.#.Z.#A#m..#.......#..vv...#.#.....###",
 		"#.#.#.A.v.#.#v..#.#.##A########A###########",
 		"#...#.#.v.A.#...#.#.#v..m.#...............#",
 		"#####.#...#.##A##.#.#.....#...............#",
@@ -4080,7 +4349,7 @@ return {
 		"#.###.#####.#.###.#.#.....#wwwwwwwwwwbwwww#",
 		"#...#.....#.#.#.#.#.#...m.#wwwwwwwwwsbwsww#",
 		"#.#.#######.#.#.#.#.#######...............#",
-		"#.#.#...L.#.#.A.#.#...#####...............#",
+		"#.#.#.Z.L.#.#.A.#.#...#####...............#",
 		"###.#.....#.#A###.###.######A##A###########",
 		"#...#..v..#.#...#.###.#.................A.#",
 		"#.#.#m....#.#m..#.###.#.#################A#",
@@ -4088,15 +4357,15 @@ return {
 		"#.#.#.#####.#...#.#############.##.####.###",
 		"#.#.#..A..#.#...#...#.A.....A...#..L..#.###",
 		"#.#.#.###.#.#####.#.###.######.##...v...E##",
-		"#.#...#...#.#...#.#...#.....#...#.....#####",
+		"#.#...#...#.#...#.#...#.....#..Z#.....#####",
 		"#.#########A#.###.###.#A#A###.m.###########",
 		"#.#.........#.......#.#.#..v#...#...A...L.#",
 		"#.#.#################.###...#..m###.#...v.#",
 		"#...###.............#.A.#...#...#.#.#.....#",
 		"#.###...............###.#########.#.#....v#",
-		"#.###.#.............#.....D.m..L#...#.....#",
+		"#.###.#.............#.....D.m..L#...#.Z...#",
 		"#.###A#wswwwwwbwwwww#.###D#.....#.#########",
-		"#.###.#wwwwwwwbwwwww#.#...#.....#...#...#.#",
+		"#.###.#wwwwwwwbwwwww#.#...#Z....#...#...#.#",
 		"#.###.#wwswwwwbwswww#.#...#.....###.#.#.#.#",
 		"#.#...#.............#.#m.L#.....#...#.#.A.#",
 		"#.#.#.#############A#.#..m#####.#.###.#####",
@@ -4107,7 +4376,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">Stage4</string>
             <string name="Source"><![CDATA[--!strict
@@ -4119,16 +4388,17 @@ return {
 	Seed = 41,
 	PipeChance = 0.25,
 	HideStyle = "wardrobe", -- 숨는 곳(L): 병실 옷장
+	SearchStyle = "nightstand", -- 뒤지는 곳(Z): 협탁, 그중 한 곳에 열쇠
 	Props = { R = Props.Bed, T = Props.Desk, X = Props.Surgery, k = Props.Cabinet },
 	Walkable = { R = true, k = true },
 	Rows = {
 		"#############################################",
 		"#SS...#########k..#.D.....L.#.D.#.....#######",
 		"#.....#########.T.#.#.......#.#.D....L#######",
-		"#SS...###k.k###...#.#R.R.R..D.#.#..R.R#..kk.#",
+		"#SS...###k.k###...#.#R.R.R..D.#.#..R.R#..kkZ#",
 		"#.....#.D..L#####D###########D#.#D#####.T...#",
-		"#.....D.#.kk#.............#k..D.#.k.D.D....L#",
-		"####D########.O.O.O...O.O.#.T.#.#.T.#.####D##",
+		"#.....D.#Zkk#.............#k..D.#.k.D.D....L#",
+		"####D########.O.O.O...O.O.#ZT.#.#.T.#.####D##",
 		"###R.R.R#...#.............#...#.#...#...D...#",
 		"###.....#.Tk#.O.O.O.O.O...#kT.#.#####D###.Tk#",
 		"###.L...D...#.............#...#.#.......#..k#",
@@ -4137,9 +4407,9 @@ return {
 		"####################D##D#####.D.#psppppp#####",
 		"####......#.....#RLR.R#...###.#.#ppppppp#####",
 		"####D####.D.....#.....#.TL###.#.#pppsppp#####",
-		"#....L###.#R.R.R#.....D...###...#.......#####",
+		"#....L###.#RZR.R#.....D...###...#.......#####",
 		"#.....###D#######.....###D#########D#########",
-		"#R.R..D.....#L..#R...R#.#...k.#.....#.......#",
+		"#R.R..D.....#L..#R...R#.#...k.#.....#.....Z.#",
 		"##.####.....#.T.###D###.D.T.T.#####.#.......#",
 		"##....#R.R......###.....#k....#..D..D..R.R.R#",
 		"#####.#####E#.T.###D######D#####D#########D##",
@@ -4147,18 +4417,18 @@ return {
 		"#D#######################D##############D##D#",
 		"#..L..D..k.k#####R.R.R###.D.........#R.R.R#.#",
 		"#.....#k....#####.....###.#########.#.....#.#",
-		"#R.R.R#k.X.X#...#.....###.#R.R.R#.#.#.....#.#",
-		"#######.....#.T.#D###D###.#.....#.#.#.....#.#",
+		"#R.R.R#k.X.X#...#...Z.###.#RZR.R#.#.#.....#.#",
+		"#######.....#ZT.#D###D###.#.....#.#.#.....#.#",
 		"###kk.D.k.k.#k..#.#R...R#.#.....#...#R.R.R#.#",
 		"###...###D####D##.#.....#.D.....###########.#",
 		"###k..###.........#.....###R...R###RLR..D.#D#",
 		"####.#########.#######.######D#####.....#.#.#",
-		"#.........................###.....D.....#.#.#",
+		"#.........................###.....D....Z#.#.#",
 		"####D#####D######.###########kT...#.....#.#.#",
 		"###...........###.....D.k.L.#....k#R.R..#...#",
 		"###.O.O...O.O.###k....#.T.T.#.T..L#####D#D###",
 		"###...........###..X.X#.....#kk..k#R.R..#.kk#",
-		"#.D...O.O.O.O.###.....#k..Tk#######.....#.T.#",
+		"#.D...O.O.O.O.###.....#k..Tk#######Z....#.T.#",
 		"#.#...........D.#.k.k.#L...k#####.D.....#...#",
 		"#.##D##########.#D###############.####D##D###",
 		"#.............................D...........###",
@@ -4168,7 +4438,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">Stage5</string>
             <string name="Source"><![CDATA[--!strict
@@ -4195,6 +4465,7 @@ return {
 	Seed = 53,
 	PipeChance = 0.5,
 	HideStyle = "closet", -- 숨는 곳(L): 낡은 벽장
+	SearchStyle = "chest", -- 뒤지는 곳(Z): 궤짝, 그중 한 곳에 열쇠
 	Props = { B = bigPillar, P = Props.BigPipe },
 	Walkable = { P = true },
 	Rows = {
@@ -4203,13 +4474,13 @@ return {
 		"#.....###A#.m.###############.###.............#",
 		"#SS...#...#.....#...........#.###ppsppbppppppp#",
 		"#.....#L..#####.#.B.B...B.B.#.###pppppbppppppp#",
-		"#.....#m..#.#...#...........#...#ppppsbppspppp#",
+		"#.....#m.Z#.#...#..........Z#...#ppppsbppspppp#",
 		"###.#######.#.###...B.B.B...###.#.............#",
-		"#...#...#.......#...........#...#.............#",
+		"#...#...#.......#....Z......#...#.............#",
 		"#.#.#...#.##############.####.###########D#####",
-		"#A#.#.m.#.###...###..v#..##...#########.......#",
+		"#A#.#.m.#.###..Z###..v#..##...#########.......#",
 		"#.#####A#.###L.m#.A..L#.###.#.#########.#.###.#",
-		"#.#..L#.#.###...A.#...#.....#...#######.#...#.#",
+		"#.#Z.L#.#.###...A.#...#.....#...#######.#...#.#",
 		"#.#..m#.#.#######.#########.###.#######.###.###",
 		"#.#...#.........A.....A...#.###...........#...#",
 		"#.###.###.###############.#.#######.#####A###.#",
@@ -4226,18 +4497,18 @@ return {
 		"#.....A...#########...#.........#...#...#...#.#",
 		"#.#################.#.#######.#############.#.#",
 		"#.#############.....#.......#.#.......#...A.#.#",
-		"#.#############.#########.#.#.#.B...B.#.####E.#",
+		"#.#############.#########.#.#.#ZB...B.#.####E.#",
 		"#.............#.#.mL#.....#.#.#.......#.#...#.#",
 		"#############.#.#...#.#######.#.B.B.B.#.A.mL#.#",
-		"#.............#.....#.........#.......###.....#",
+		"#.............#...Z.#.........#.......###.....#",
 		"#.###################.#########.B.B.B.#######.#",
-		"#.#...............###.#.A..A..#.......###...#.#",
+		"#.#...............###.#.A..A..#.....Z.###...#.#",
 		"#.#########.#####.###.#######A#####A#####.#.#A#",
 		"#.#.........#.#...###...A.........#.#.....#.#.#",
 		"#.#.#########.#A#################.#.#A#####.#.#",
 		"#.#.#..L#.....#...A.............#...#.#####.#.#",
 		"#A#.#...#A###.#.###############.#####.#####.#.#",
-		"#...#m....#...#.....#.....A.A.#.#####.#####...#",
+		"#...#mZ...#...#.....#.....A.A.#.#####.#####...#",
 		"#########.#####.#..m#.###.#####.#####.#########",
 		"#.........A.....#L..#...#.............#########",
 		"###############################################",
@@ -4247,7 +4518,7 @@ return {
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="33">
+      <Item class="Script" referent="34">
         <Properties>
           <string name="Name">TestHarness</string>
           <token name="RunContext">0</token>
@@ -4279,6 +4550,7 @@ local Round = require(script.Parent.Round)
 local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
 local Hiding = require(script.Parent.Hiding)
+local Search = require(script.Parent.Search)
 
 local R = { test = args.Test, finished = false, checks = {}, log = {}, errors = {}, info = {} }
 local t0 = os.clock()
@@ -4301,6 +4573,7 @@ end)
 -- 로비 테스트만 로비로, 나머지는 바로 게임으로 시작(Lobby.boot 가 읽는다)
 ReplicatedStorage:SetAttribute("ForceMode", if args.Test == "lobby" then "Lobby" else "Game")
 Config.Monster.StartDelay = 1e6
+Config.Key.Required = false -- (열쇠 시험은 core 에서 따로 켠다)
 Config.Round.ResultSeconds = 2
 Config.Round.FirstStartDelay = 1
 
@@ -4447,6 +4720,13 @@ local function monsterTests(p)
 		end
 	end
 	check("monster strokes draw as single lines (Line/Disc)", cyl > 10 and ok == cyl, ok .. "/" .. cyl)
+	local visible = 0
+	for _, d in m.model:GetDescendants() do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			visible += 1
+		end
+	end
+	check("monster body is invisible (only sonar reveals it)", visible == 0, visible)
 	-- 음파가 닿으면 괴물 모습이 선으로 나타난다
 	m.startAt = 1e9
 	local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -4772,10 +5052,12 @@ local function core()
 	local s1 = ask(p, "stats")
 	task.wait(Config.Sonar.Hold + 1)
 	local s1b = ask(p, "stats")
+	waitFor(function() s1b = ask(p, "stats") return s1b and s1b.lines.active == 0 end, 5) -- (Studio 창이 뒤에 있으면 선이 늦게 꺼진다)
 	burst()
 	local s2 = ask(p, "stats")
 	task.wait(Config.Sonar.Hold + 1)
 	local s3 = ask(p, "stats")
+	waitFor(function() s3 = ask(p, "stats") return s3 and s3.lines.active == 0 end, 5)
 	log(string.format("burst lines: active %d created %d / after %d / burst2 active %d created %d / after %d", s1.lines.active, s1.lines.created, s1b.lines.active, s2.lines.active, s2.lines.created, s3.lines.active))
 	check("repeated pulses reuse lines (no pile-up)", s2.lines.created <= s1.lines.created * 1.15 + 20 and s2.lines.active < Config.Sonar.PoolSize, string.format("created %d -> %d, active %d", s1.lines.created, s2.lines.created, s2.lines.active))
 	check("all lines released after the burst", s1b.lines.active == 0 and s3.lines.active == 0, s3.lines.active)
@@ -4921,14 +5203,50 @@ local function core()
 		m:setState("Wander")
 	end
 
-	-- 13. 출구 → 탈출 → STAGE CLEAR
+	-- 12. 열쇠: 상자·서랍 중 한 곳에 있고, 없으면 출구가 잠겨 있다
 	m.startAt = 1e9
 	m:setState("Wander")
+	Config.Key.Required = true
+	local spotsZ = Search.all()
+	check("searchable boxes/drawers built", #spotsZ >= 5, #spotsZ)
+	local ks = Search.keySpot()
+	check("exactly one of them holds the key", ks ~= nil)
+	place(p, Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
+	task.wait(1.2)
+	check("exit is locked without the key", p:GetAttribute("Status") == "Alive" and ReplicatedStorage:GetAttribute("HasKey") ~= true, p:GetAttribute("Status"))
+	local kh0 = ask(p, "keyHud")
+	check("key indicator shows no key", kh0 and kh0.visible and kh0.text:find("없음", 1, true) ~= nil, kh0 and kh0.text)
+	local empty = nil
+	for _, sp in spotsZ do
+		if not sp.hasKey then
+			empty = sp
+			break
+		end
+	end
+	if empty then
+		place(p, empty.front + Vector3.new(0, 3, 0))
+		task.wait(0.3)
+		local r1 = Search.search(p, empty)
+		local r2 = Search.search(p, empty)
+		check("searching an empty box: empty, then already searched", r1 == "empty" and r2 == "already", r1 .. "/" .. r2)
+	end
+	if ks then
+		place(p, ks.front + Vector3.new(0, 3, 0))
+		task.wait(0.3)
+		local r3 = Search.search(p, ks)
+		check("searching the right one finds the key (whole team)", r3 == "key" and ReplicatedStorage:GetAttribute("HasKey") == true, r3)
+		task.wait(0.4)
+		local kh1 = ask(p, "keyHud")
+		check("key indicator shows the key", kh1 and kh1.text:find("있음", 1, true) ~= nil, kh1 and kh1.text)
+	end
+
+	-- 13. 출구 → 탈출 → STAGE CLEAR
 	place(p, Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
 	local esc = waitFor(function()
 		return p:GetAttribute("Status") == "Escaped"
 	end, 3)
 	check("reaching the exit escapes", esc ~= nil, p:GetAttribute("Status"))
+	Config.Key.Required = false
 	local cleared = waitFor(function()
 		return Round.lastOutcome == "Clear"
 	end, 4)
@@ -4960,7 +5278,12 @@ local function core()
 		return p:GetAttribute("Status") == "Dead"
 	end, 8)
 	check("caught by the monster -> death", died ~= nil, p:GetAttribute("Status"))
-	task.wait(1.2)
+	local js = waitFor(function()
+		local x = ask(p, "jumpscare")
+		return x and x.count > 0 and x
+	end, 2)
+	check("jump scare: the monster face pops up when caught", js ~= nil, js and js.count)
+	task.wait(1.8)
 	local dui = ask(p, "stats")
 	check("YOU DIED screen shown", dui and dui.ui.overlayTitle == "YOU DIED", dui and dui.ui.overlayTitle)
 	local failed = waitFor(function()
@@ -5526,13 +5849,13 @@ end)
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="34">
+  <Item class="SoundService" referent="35">
     <Properties>
       <string name="Name">SoundService</string>
       <token name="AmbientReverb">11</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="35">
+  <Item class="StarterPlayer" referent="36">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -5544,11 +5867,11 @@ end)
       <float name="CharacterWalkSpeed">10</float>
       <bool name="EnableMouseLockOption">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="36">
+    <Item class="StarterPlayerScripts" referent="37">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="ModuleScript" referent="37">
+      <Item class="ModuleScript" referent="38">
         <Properties>
           <string name="Name">Audio</string>
           <string name="Source"><![CDATA[--!strict
@@ -5564,7 +5887,7 @@ local SoundService = game:GetService("SoundService")
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local Audio = {}
-local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number, Cut: number? } }
+local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number, Cut: number?, Fx: { Distortion: number?, Reverb: number? }?, Steps: { { number } }?, Thump: number?, Claw: string? } }
 local player = Players.LocalPlayer
 
 local master = Instance.new("SoundGroup")
@@ -5595,6 +5918,20 @@ local function makeSound(name: string, parent: Instance, looped: boolean?): Soun
 		s.RollOffMinDistance = 5
 		s.RollOffMaxDistance = def.Range
 	end
+	-- 괴성: 왜곡 + 울림 효과(Fx)
+	if def.Fx then
+		if def.Fx.Distortion then
+			local d = Instance.new("DistortionSoundEffect")
+			d.Level = def.Fx.Distortion
+			d.Parent = s
+		end
+		if def.Fx.Reverb then
+			local r = Instance.new("ReverbSoundEffect")
+			r.DecayTime = def.Fx.Reverb
+			r.WetLevel = 3 -- (ReverbSoundEffect 에는 Wetness 가 없다: 울림 크기는 WetLevel, dB)
+			r.Parent = s
+		end
+	end
 	s.Parent = parent
 	return s
 end
@@ -5602,7 +5939,7 @@ end
 -- 한 번 재생하고 지운다. at 이 Vector3 이면 그 위치에서(3D), Instance 면 거기 붙여서, nil 이면 2D.
 Audio.steps = 0 -- (테스트) 지금까지 재생한 플레이어 발소리 수
 
-function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?)
+function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?, startAt: number?, cutOverride: number?)
 	local parent: Instance
 	local holder: Attachment? = nil
 	if typeof(at) == "Vector3" then
@@ -5632,9 +5969,12 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 	if volumeScale then
 		s.Volume *= volumeScale
 	end
+	if startAt then
+		s.TimePosition = startAt
+	end
 	s:Play()
 	-- Cut: 그 시간(초)만 재생하고 짧게 줄여 끈다(여러 발짝이 든 발소리 파일에서 한 발짝만)
-	local cut = SND[name] and SND[name].Cut
+	local cut = cutOverride or (SND[name] and SND[name].Cut)
 	if cut then
 		local v0 = s.Volume
 		task.delay(cut, function()
@@ -5656,6 +5996,21 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 	end)
 end
 
+-- 괴성: Config.Screams[kind] 의 목소리들을 시간차로 겹쳐 길게 지른다
+function Audio.scream(kind: string, at: Instance)
+	local seq = (Config :: any).Screams[kind]
+	if not seq then
+		return
+	end
+	for _, layer in seq do
+		task.delay(layer.t, function()
+			if at.Parent then
+				Audio.play(layer.s, at, 0.05, layer.v, layer.p)
+			end
+		end)
+	end
+end
+
 function Audio.sonar(localShot: boolean, origin: Vector3)
 	if localShot then
 		Audio.play("Sonar", nil, 0.03)
@@ -5663,6 +6018,37 @@ function Audio.sonar(localShot: boolean, origin: Vector3)
 	else
 		Audio.play("Sonar", origin, 0.03)
 		task.delay(0.35, Audio.play, "SonarEcho", origin, 0.03)
+	end
+end
+
+-- 한 걸음: Steps 가 있으면 녹음된 여러 걸음 중 하나를(직전과 다른 것으로) 골라 재생 + Thump(낮은 툭) / Claw(괴물 발톱) 겹침
+local lastStep: { [string]: number } = {}
+function Audio.footstep(name: string, at: Instance, jitter: number, pitchScale: number?)
+	local def = SND[name]
+	if not def then
+		return
+	end
+	local steps = def.Steps
+	if steps then
+		local k = math.random(1, #steps)
+		if k == lastStep[name] then
+			k = k % #steps + 1
+		end
+		lastStep[name] = k
+		Audio.play(name, at, jitter, nil, pitchScale, steps[k][1], steps[k][2])
+	else
+		Audio.play(name, at, jitter, nil, pitchScale)
+	end
+	if def.Thump then
+		Audio.play("FootThump", at, 0.06, def.Thump, pitchScale)
+	end
+	if def.Claw then
+		local claw = def.Claw
+		task.delay(0.07, function()
+			if at.Parent then
+				Audio.footstep(claw, at, 0.06)
+			end
+		end)
 	end
 end
 
@@ -5686,9 +6072,9 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 	end
 	tr.acc += d
 	if isMonster then
-		if tr.acc >= 3.4 then
+		if tr.acc >= 4.6 then -- 사람(4.8)과 비슷한 거리지만 괴물은 느려서 쿵… 쿵… 간격이 더 길다
 			tr.acc = 0
-			Audio.play("MonsterStep", root, 0.08)
+			Audio.footstep("MonsterStep", root, 0.08)
 		end
 	else
 		local mode = (model:GetAttribute("MoveMode") :: string?) or "Walk"
@@ -5698,7 +6084,7 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 			tr.foot = -tr.foot
 			local name = if mode == "Run" then "FootRun" elseif mode == "Crouch" then "FootCrouch" else "FootWalk"
 			-- 왼발·오른발: 높낮이를 조금 다르게
-			Audio.play(name, root, 0.04, nil, 1 + tr.foot * 0.04)
+			Audio.footstep(name, root, 0.04, 1 + tr.foot * 0.04)
 			Audio.steps += 1
 		end
 	end
@@ -5720,9 +6106,9 @@ local function watchMonster(m: Instance)
 			return
 		end
 		if st == "Alert" then
-			Audio.play("MonsterAlert", root, 0.05)
+			Audio.scream("Alert", root)
 		elseif st == "Chase" then
-			Audio.play("MonsterChase", root, 0.05)
+			Audio.scream("Chase", root)
 		end
 	end))
 	monsterConns[model] = conns
@@ -5785,7 +6171,7 @@ for _, e in CollectionService:GetTagged(Config.Tags.AmbientEmitter) do
 end
 
 local nextAmbient = os.clock() + 4
-local ONE_SHOTS = { "AmbientDrip", "AmbientDrip", "AmbientMetal", "AmbientCreak" }
+local ONE_SHOTS = { "AmbientCreak" } -- 물방울·폭발음 같은 금속음은 뺐다
 
 function Audio.update()
 	-- 발소리
@@ -5802,7 +6188,7 @@ function Audio.update()
 			stepFor(m, m.PrimaryPart, true)
 			if m:GetAttribute("State") == "Wander" and idleAt[m] and now > idleAt[m] then
 				idleAt[m] = now + 7 + math.random() * 9
-				Audio.play("MonsterIdle", m.PrimaryPart, 0.1)
+				Audio.scream("Idle", m.PrimaryPart)
 			end
 		end
 	end
@@ -5828,7 +6214,252 @@ return Audio
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="38">
+      <Item class="ModuleScript" referent="39">
+        <Properties>
+          <string name="Name">JumpScare</string>
+          <string name="Source"><![CDATA[--!strict
+-- 괴물에게 잡혔을 때: 그 스테이지 괴물의 얼굴(흰 선)이 화면 가득 확 튀어나오며 흔들린다(점프스케어). 약 0.9초 뒤 YOU DIED.
+-- 머리 모양은 괴물(Monster.luau HeadSpec)과 같다: 1 삼각형 · 2 사각형 · 3 원 · 4 별 · 5 육각형.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local JumpScare = {}
+JumpScare.count = 0
+JumpScare.Duration = 0.9
+
+local player = Players.LocalPlayer
+
+-- 머리 좌표(가운데 0, 위가 +y). eye = {x, y, 반지름}, mouth = {반폭, 윗입술 y, 깊이}
+type Spec = { eye: { number }, mouth: { number }, verts: { { number } }?, circle: number?, star: { number }?, hex: number? }
+local SPECS: { Spec } = {
+	{ eye = { 0.2, 0.0, 0.08 }, mouth = { 0.5, -0.25, 0.35 }, verts = { { -0.85, -0.75 }, { 0.85, -0.75 }, { 0, 0.75 } } },
+	{ eye = { 0.28, 0.2, 0.09 }, mouth = { 0.5, -0.1, 0.4 }, verts = { { -0.8, -0.65 }, { 0.8, -0.65 }, { 0.8, 0.65 }, { -0.8, 0.65 } } },
+	{ eye = { 0.22, 0.12, 0.09 }, mouth = { 0.45, -0.2, 0.4 }, circle = 0.6 },
+	{ eye = { 0.16, 0.12, 0.065 }, mouth = { 0.3, -0.12, 0.25 }, star = { 1.0, 0.48 } },
+	{ eye = { 0.26, 0.15, 0.09 }, mouth = { 0.5, -0.12, 0.38 }, hex = 0.72 },
+}
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "JumpScare"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 50
+gui.Enabled = false
+
+local back = Instance.new("Frame")
+back.Size = UDim2.fromScale(1, 1)
+back.BackgroundColor3 = Color3.new(0, 0, 0)
+back.BorderSizePixel = 0
+back.Parent = gui
+
+local face = Instance.new("Frame")
+face.Name = "Face"
+face.AnchorPoint = Vector2.new(0.5, 0.5)
+face.Position = UDim2.fromScale(0.5, 0.5)
+face.Size = UDim2.fromScale(0.95, 0.95)
+face.BackgroundTransparency = 1
+face.Parent = back
+local aspect = Instance.new("UIAspectRatioConstraint")
+aspect.AspectRatio = 1
+aspect.Parent = face
+local scale = Instance.new("UIScale")
+scale.Parent = face
+
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local WHITE = Color3.new(1, 1, 1)
+
+local function draw(spec: Spec)
+	for _, c in face:GetChildren() do
+		if c:IsA("Frame") then
+			c:Destroy()
+		end
+	end
+	local size = face.AbsoluteSize.X
+	if size < 10 then
+		size = math.min(back.AbsoluteSize.X, back.AbsoluteSize.Y) * 0.95
+	end
+	local ext = spec.circle or (spec.star and spec.star[1]) or spec.hex or 0.85
+	local k = 0.46 / ext -- 머리가 화면을 거의 채운다
+	local thick = math.max(4, size * 0.012)
+	local function px(x: number, y: number): Vector2
+		return Vector2.new((0.5 + x * k) * size, (0.5 - y * k) * size)
+	end
+	local function line(ax: number, ay: number, bx: number, by: number, w: number?)
+		local a, b = px(ax, ay), px(bx, by)
+		local d = b - a
+		local f = Instance.new("Frame")
+		f.BackgroundColor3 = WHITE
+		f.BorderSizePixel = 0
+		f.AnchorPoint = Vector2.new(0.5, 0.5)
+		f.Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
+		f.Size = UDim2.fromOffset(d.Magnitude + (w or thick), w or thick)
+		f.Rotation = math.deg(math.atan2(d.Y, d.X))
+		f.Parent = face
+	end
+	local function ring(cx: number, cy: number, r: number, w: number?)
+		local c = px(cx, cy)
+		local f = Instance.new("Frame")
+		f.BackgroundTransparency = 1
+		f.AnchorPoint = Vector2.new(0.5, 0.5)
+		f.Position = UDim2.fromOffset(c.X, c.Y)
+		f.Size = UDim2.fromOffset(r * k * size * 2, r * k * size * 2)
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(1, 0)
+		corner.Parent = f
+		local st = Instance.new("UIStroke")
+		st.Color = WHITE
+		st.Thickness = w or thick
+		st.Parent = f
+		f.Parent = face
+	end
+	local function poly(pts: { { number } })
+		for i, a in pts do
+			local b = pts[i % #pts + 1]
+			line(a[1], a[2], b[1], b[2])
+		end
+	end
+	-- 머리
+	if spec.verts then
+		poly(spec.verts)
+	elseif spec.circle then
+		ring(0, 0, spec.circle)
+	elseif spec.star then
+		local pts = {}
+		for i = 0, 9 do
+			local r = if i % 2 == 0 then spec.star[1] else spec.star[2]
+			local a = math.pi / 2 + i * math.pi / 5
+			table.insert(pts, { math.cos(a) * r, math.sin(a) * r })
+		end
+		poly(pts)
+	elseif spec.hex then
+		local pts = {}
+		for i = 0, 5 do
+			local a = i * math.pi / 3
+			table.insert(pts, { math.cos(a) * spec.hex, math.sin(a) * spec.hex })
+		end
+		poly(pts)
+	end
+	-- 눈(크게 뜬 원 + 작은 눈동자)
+	local ex, ey, er = spec.eye[1], spec.eye[2], spec.eye[3]
+	for _, s in { -1, 1 } do
+		ring(s * ex, ey, er * 1.25)
+		ring(s * ex, ey, er * 0.35, thick * 0.8)
+	end
+	-- 이빨 드러낸 입
+	local mw, my, mh = spec.mouth[1], spec.mouth[2], spec.mouth[3]
+	local function arcY(x: number): number
+		return my - mh * (1 - (x / mw) ^ 2) * 0.35 - mh * 0.65
+	end
+	line(-mw, my, mw, my)
+	local prevX, prevY = -mw, my
+	for i = 1, 12 do
+		local x = -mw + 2 * mw * i / 12
+		local y = if i == 12 then my else arcY(x)
+		line(prevX, prevY, x, y)
+		prevX, prevY = x, y
+	end
+	for i = 1, 9 do
+		local x = -mw * 0.9 + 1.8 * mw * i / 10
+		line(x, my, x, arcY(x), thick * 0.6)
+	end
+end
+
+-- 얼굴을 띄운다(이미 떠 있으면 무시)
+local busy = false
+function JumpScare.play(scream: (() -> ())?)
+	if busy then
+		return
+	end
+	busy = true
+	JumpScare.count += 1
+	local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
+	gui.Enabled = true
+	draw(SPECS[((math.max(1, si) - 1) % #SPECS) + 1])
+	if scream then
+		task.spawn(scream)
+	end
+	local t0 = os.clock()
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - t0
+		-- 확 다가온다(0.12초) → 세게 흔들림 → 살짝 커지며 사라진다
+		local s = if t < 0.12 then 0.35 + (t / 0.12) * 0.9 else 1.25 + t * 0.15
+		scale.Scale = s
+		local shake = if t < JumpScare.Duration * 0.8 then 0.025 else 0.008
+		face.Position = UDim2.fromScale(0.5 + (math.random() - 0.5) * shake, 0.5 + (math.random() - 0.5) * shake)
+		back.BackgroundColor3 = if t < 0.05 or (t > 0.25 and t < 0.29) then Color3.fromRGB(60, 60, 60) else Color3.new(0, 0, 0)
+		if t >= JumpScare.Duration then
+			conn:Disconnect()
+			gui.Enabled = false
+			face.Position = UDim2.fromScale(0.5, 0.5)
+			busy = false
+		end
+	end)
+end
+
+function JumpScare.state()
+	return { count = JumpScare.count, showing = gui.Enabled }
+end
+
+return JumpScare
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="40">
+        <Properties>
+          <string name="Name">KeyHUD</string>
+          <string name="Source"><![CDATA[--!strict
+-- 열쇠 표시(오른쪽 위): 게임 중에만. 팀이 열쇠를 찾았는가(ReplicatedStorage 속성 HasKey).
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local KeyHUD = {}
+local player = Players.LocalPlayer
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "KeyHUD"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 5
+
+local label = Instance.new("TextLabel")
+label.AnchorPoint = Vector2.new(1, 0)
+label.Position = UDim2.new(1, -24, 0, 18)
+label.Size = UDim2.fromOffset(220, 28)
+label.BackgroundTransparency = 1
+label.Font = Enum.Font.GothamMedium
+label.TextSize = 18
+label.TextXAlignment = Enum.TextXAlignment.Right
+label.Parent = gui
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local function refresh()
+	local playing = ReplicatedStorage:GetAttribute("Mode") == "Game" and ReplicatedStorage:GetAttribute("RoundState") == "Playing" and Config.Key.Required
+	gui.Enabled = playing == true
+	local has = ReplicatedStorage:GetAttribute("HasKey") == true
+	label.Text = if has then "열쇠  있음 — 출구로" else "열쇠  없음"
+	label.TextColor3 = if has then Color3.fromRGB(235, 235, 235) else Color3.fromRGB(140, 140, 140)
+end
+
+function KeyHUD.state()
+	return { visible = gui.Enabled, text = label.Text }
+end
+
+for _, a in { "HasKey", "Mode", "RoundState" } do
+	ReplicatedStorage:GetAttributeChangedSignal(a):Connect(refresh)
+end
+refresh()
+
+return KeyHUD
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="41">
         <Properties>
           <string name="Name">LobbyUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -6122,7 +6753,7 @@ return LobbyUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="39">
+      <Item class="LocalScript" referent="42">
         <Properties>
           <string name="Name">Main</string>
           <string name="Source"><![CDATA[--!strict
@@ -6145,6 +6776,8 @@ local UI = require(script.Parent:WaitForChild("UI"))
 local MapView = require(script.Parent:WaitForChild("MapView"))
 local LobbyUI = require(script.Parent:WaitForChild("LobbyUI"))
 local Mates = require(script.Parent:WaitForChild("Mates"))
+local KeyHUD = require(script.Parent:WaitForChild("KeyHUD"))
+local JumpScare = require(script.Parent:WaitForChild("JumpScare"))
 Pulses.onReach = MapView.onReach
 
 local player = Players.LocalPlayer
@@ -6331,7 +6964,15 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		if data.stage == 1 then
 			task.delay(2.5, UI.hint, "좌클릭 — 음파      Shift — 달리기      Ctrl — 웅크리기", 7)
 		end
+		task.delay(if data.stage == 1 then 10 else 2.5, UI.hint, "상자와 서랍(E)을 뒤져 열쇠를 찾아야 출구가 열린다", 6)
 	elseif kind == "Died" then
+		if data.userId == player.UserId and data.why == "monster" then
+			-- 점프스케어: 괴물 얼굴이 확 뜬 뒤 YOU DIED
+			JumpScare.play(function()
+				Audio.play("MonsterAlert", nil, 0.03, 0.8)
+			end)
+			task.wait(JumpScare.Duration)
+		end
 		if data.userId == player.UserId then
 			if data.othersAlive > 0 then
 				UI.overlay("YOU DIED", "관전으로 전환합니다", true)
@@ -6358,6 +6999,13 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		UI.setSpectate(nil)
 		UI.setStage("로비")
 		task.delay(1.5, UI.hint, "Tab — 방 메뉴      좌클릭 — 음파      Q — 지도", 7)
+	elseif kind == "KeyFound" then
+		UI.hint((if data.userId == player.UserId then "열쇠를 찾았다" else (data.by .. " 님이 열쇠를 찾았다")) .. " — 이제 출구가 열린다", 5)
+	elseif kind == "SearchResult" then
+		local t = if data.result == "searching" then "뒤지는 중…" elseif data.result == "empty" then "비어 있다" else "이미 뒤진 곳이다"
+		UI.hint(t, if data.result == "searching" then 1 else 2)
+	elseif kind == "ExitLocked" then
+		UI.hint("출구가 잠겨 있다 — 상자나 서랍에서 열쇠를 찾아야 한다", 3)
 	elseif kind == "RoomMsg" then
 		LobbyUI.message(data.text)
 	elseif kind == "RoomStarting" then
@@ -6501,6 +7149,10 @@ task.spawn(function()
 		elseif cmd == "linesNear" then
 			local t = arg :: { any }
 			return Lines.countNear(t[1], t[2])
+		elseif cmd == "jumpscare" then
+			return JumpScare.state()
+		elseif cmd == "keyHud" then
+			return KeyHUD.state()
 		elseif cmd == "mates" then
 			return Mates.count()
 		elseif cmd == "lobby" then
@@ -6551,7 +7203,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="40">
+      <Item class="ModuleScript" referent="43">
         <Properties>
           <string name="Name">MapView</string>
           <string name="Source"><![CDATA[--!strict
@@ -6796,7 +7448,7 @@ return Map
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="41">
+      <Item class="ModuleScript" referent="44">
         <Properties>
           <string name="Name">Mates</string>
           <string name="Source"><![CDATA[--!strict
@@ -6829,7 +7481,7 @@ local function sync()
 			hl.Adornee = want
 			hl.FillTransparency = 1
 			hl.OutlineColor = Color3.new(1, 1, 1)
-			hl.OutlineTransparency = 0.05
+			hl.OutlineTransparency = 0.3
 			hl.DepthMode = Enum.HighlightDepthMode.Occluded
 			hl.Parent = want
 		elseif h and not want then
@@ -6864,7 +7516,7 @@ return Mates
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="42">
+      <Item class="ModuleScript" referent="45">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
@@ -6965,7 +7617,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="43">
+      <Item class="LocalScript" referent="46">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -6973,7 +7625,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="44">
+      <Item class="ModuleScript" referent="47">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -7210,7 +7862,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="45">
+      <Item class="ModuleScript" referent="48">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -7641,7 +8293,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="46">
+      <Item class="ModuleScript" referent="49">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -7881,6 +8533,24 @@ function World.viewPartsNear(p: Vector3, radius: number): { BasePart }
 end
 
 -- 움직이는 대상(문, 괴물, 다른 플레이어 캐릭터)
+-- 움직이는 파트: 스테이지 안(문·서랍·뚜껑)은 빌드할 때 모아 두고, 괴물은 모델마다 한 번만 모은다
+-- (예전처럼 음파마다 태그된 파트 전부를 훑으면 큰 맵에서 한 번에 수십~수백 ms 가 걸린다)
+World.stageDynamics = {} :: { BasePart }
+local monsterParts: { [Model]: { BasePart } } = setmetatable({}, { __mode = "k" }) :: any
+local function partsOfMonster(m: Model): { BasePart }
+	local l = monsterParts[m]
+	if not l then
+		l = {}
+		for _, d in m:GetDescendants() do
+			if d:IsA("BasePart") and CollectionService:HasTag(d, TAGS.Renderable) then
+				table.insert(l, d)
+			end
+		end
+		monsterParts[m] = l
+	end
+	return l
+end
+
 function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { { part: BasePart, char: boolean } }
 	local out = {}
 	local function consider(p: BasePart, isChar: boolean)
@@ -7888,9 +8558,16 @@ function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { {
 			table.insert(out, { part = p, char = isChar })
 		end
 	end
-	for _, inst in CollectionService:GetTagged(TAGS.Renderable) do
-		if inst:IsA("BasePart") and inst.Parent and isDynamic(inst, nil) and not (exclude and inst:IsDescendantOf(exclude)) then
-			consider(inst, false)
+	for _, p in World.stageDynamics do
+		if p.Parent then
+			consider(p, false)
+		end
+	end
+	for _, m in CollectionService:GetTagged(TAGS.Monster) do
+		if m:IsA("Model") and m.Parent and m ~= exclude and m.PrimaryPart and (m.PrimaryPart.Position - near).Magnitude <= radius + 12 then
+			for _, p in partsOfMonster(m) do
+				consider(p, false)
+			end
 		end
 	end
 	-- (다른 플레이어는 Mates 의 윤곽선으로 늘 보이므로 음파 선은 만들지 않는다)
@@ -7927,9 +8604,12 @@ function World.build(stage: Folder)
 
 	-- 정적 파트
 	local statics: { BasePart } = {}
+	World.stageDynamics = {}
 	for _, p in taggedParts(TAGS.Renderable, stage) do
 		if not isDynamic(p, stage) then
 			table.insert(statics, p)
+		else
+			table.insert(World.stageDynamics, p)
 		end
 	end
 
@@ -8179,7 +8859,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="47">
+      <Item class="ModuleScript" referent="50">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -8377,7 +9057,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="48">
+  <Item class="Workspace" referent="51">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

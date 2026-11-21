@@ -28,7 +28,7 @@ local function sync()
 			hl.Adornee = want
 			hl.FillTransparency = 1
 			hl.OutlineColor = Color3.new(1, 1, 1)
-			hl.OutlineTransparency = 0.05
+			hl.OutlineTransparency = 0.3
 			hl.DepthMode = Enum.HighlightDepthMode.Occluded
 			hl.Parent = want
 		elseif h and not want then

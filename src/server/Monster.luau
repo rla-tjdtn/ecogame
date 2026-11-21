@@ -233,6 +233,9 @@ local function buildModel(cf: CFrame, stage: number): Model
 	end
 	for _, p in parts do
 		p.Name = "Body"
+		-- 몸은 완전히 투명: 음파를 맞을 때만 선으로 드러난다(검은 몸이 선을 가려 위치가 드러나지 않게)
+		p.Transparency = 1
+		p.CastShadow = false
 		if not grouped[p] then
 			limb(p)
 		end

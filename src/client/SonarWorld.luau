@@ -235,6 +235,24 @@ function World.viewPartsNear(p: Vector3, radius: number): { BasePart }
 end
 
 -- 움직이는 대상(문, 괴물, 다른 플레이어 캐릭터)
+-- 움직이는 파트: 스테이지 안(문·서랍·뚜껑)은 빌드할 때 모아 두고, 괴물은 모델마다 한 번만 모은다
+-- (예전처럼 음파마다 태그된 파트 전부를 훑으면 큰 맵에서 한 번에 수십~수백 ms 가 걸린다)
+World.stageDynamics = {} :: { BasePart }
+local monsterParts: { [Model]: { BasePart } } = setmetatable({}, { __mode = "k" }) :: any
+local function partsOfMonster(m: Model): { BasePart }
+	local l = monsterParts[m]
+	if not l then
+		l = {}
+		for _, d in m:GetDescendants() do
+			if d:IsA("BasePart") and CollectionService:HasTag(d, TAGS.Renderable) then
+				table.insert(l, d)
+			end
+		end
+		monsterParts[m] = l
+	end
+	return l
+end
+
 function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { { part: BasePart, char: boolean } }
 	local out = {}
 	local function consider(p: BasePart, isChar: boolean)
@@ -242,9 +260,16 @@ function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { {
 			table.insert(out, { part = p, char = isChar })
 		end
 	end
-	for _, inst in CollectionService:GetTagged(TAGS.Renderable) do
-		if inst:IsA("BasePart") and inst.Parent and isDynamic(inst, nil) and not (exclude and inst:IsDescendantOf(exclude)) then
-			consider(inst, false)
+	for _, p in World.stageDynamics do
+		if p.Parent then
+			consider(p, false)
+		end
+	end
+	for _, m in CollectionService:GetTagged(TAGS.Monster) do
+		if m:IsA("Model") and m.Parent and m ~= exclude and m.PrimaryPart and (m.PrimaryPart.Position - near).Magnitude <= radius + 12 then
+			for _, p in partsOfMonster(m) do
+				consider(p, false)
+			end
 		end
 	end
 	-- (다른 플레이어는 Mates 의 윤곽선으로 늘 보이므로 음파 선은 만들지 않는다)
@@ -281,9 +306,12 @@ function World.build(stage: Folder)
 
 	-- 정적 파트
 	local statics: { BasePart } = {}
+	World.stageDynamics = {}
 	for _, p in taggedParts(TAGS.Renderable, stage) do
 		if not isDynamic(p, stage) then
 			table.insert(statics, p)
+		else
+			table.insert(World.stageDynamics, p)
 		end
 	end
 

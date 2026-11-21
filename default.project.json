@@ -54,7 +54,7 @@
       },
       "Bloom": {
         "$className": "BloomEffect",
-        "$properties": { "Intensity": 0.35, "Size": 10, "Threshold": 0.9 }
+        "$properties": { "Intensity": 0.2, "Size": 6, "Threshold": 0.9 }
       }
     },
     "SoundService": {

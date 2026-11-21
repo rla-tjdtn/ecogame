@@ -1,4 +1,4 @@
-// Generates the five stage layouts (src/server/Stages/StageN.luau "Rows") from per-chapter themes:
+﻿// Generates the five stage layouts (src/server/Stages/StageN.luau "Rows") from per-chapter themes:
 // rooms of several kinds + winding corridors/tunnels between them (rooms-and-mazes), doors/arches on the
 // openings, pits / water channels crossed by bridges with stairs down, and chapter props. The exit is put
 // where the shortest walk from the start is about TARGET tiles (1 tile = 8 studs; 150 tiles ≈ 2 min walking).
@@ -103,7 +103,7 @@ const deco = {
 // ── 챕터 테마 ──
 const THEMES = {
 	1: {
-		file: "Stage1.luau", W: 47, H: 41, seed: 1100, block: STAGE1_BLOCK, hides: 9, hidePrefer: ["machine", "storage"],
+		file: "Stage1.luau", W: 47, H: 41, seed: 1100, block: STAGE1_BLOCK, hides: 9, hidePrefer: ["machine", "storage"], searches: 8, searchPrefer: ["storage", "machine"],
 		winding: 0.45, extra: 0.06, keepDead: 0.35, door: 0.3, arch: 0.35, corrArch: 0.04, corrDoor: 0.01, fans: 0.03,
 		pits: "p",
 		kinds: [
@@ -115,7 +115,7 @@ const THEMES = {
 		rooms: 15,
 	},
 	2: {
-		file: "Stage2.luau", W: 45, H: 41, seed: 2300, hides: 10, hidePrefer: ["office", "stock"],
+		file: "Stage2.luau", W: 45, H: 41, seed: 2300, hides: 10, hidePrefer: ["office", "stock"], searches: 9, searchPrefer: ["stock", "yard", "office"],
 		start: [5, 5], winding: 0.25, extra: 0.1, keepDead: 0.25, door: 0.45, arch: 0.25, corrArch: 0.0, corrDoor: 0.0, fans: 0.0,
 		pits: "p",
 		kinds: [
@@ -127,7 +127,7 @@ const THEMES = {
 		rooms: 16,
 	},
 	3: {
-		file: "Stage3.luau", W: 43, H: 41, seed: 3700, hides: 8, hidePrefer: ["pump", "junction"],
+		file: "Stage3.luau", W: 43, H: 41, seed: 3700, hides: 8, hidePrefer: ["pump", "junction"], searches: 8, searchPrefer: ["pump", "junction"],
 		start: [5, 5], winding: 0.7, extra: 0.05, keepDead: 0.45, door: 0.05, arch: 0.55, corrArch: 0.07, corrDoor: 0.0, fans: 0.0,
 		pits: "w",
 		kinds: [
@@ -138,7 +138,7 @@ const THEMES = {
 		rooms: 14,
 	},
 	4: {
-		file: "Stage4.luau", W: 45, H: 41, seed: 4100, hides: 14, hidePrefer: ["ward", "office"],
+		file: "Stage4.luau", W: 45, H: 41, seed: 5892, hides: 14, hidePrefer: ["ward", "office"], searches: 10, searchPrefer: ["ward", "office", "surgery"],
 		start: [5, 5], winding: 0.05, extra: 0.12, keepDead: 0.2, door: 0.8,
 		halls: [[1, 11, 27, 1], [17, 21, 27, 1], [1, 31, 25, 1], [31, 1, 1, 15]], arch: 0.05, corrArch: 0.0, corrDoor: 0.03, fans: 0.0,
 		pits: "p",
@@ -152,7 +152,7 @@ const THEMES = {
 		rooms: 34,
 	},
 	5: {
-		file: "Stage5.luau", W: 47, H: 43, seed: 5300, hides: 9, hidePrefer: ["cell"],
+		file: "Stage5.luau", W: 47, H: 43, seed: 5300, hides: 9, hidePrefer: ["cell"], searches: 9, searchPrefer: ["cell", "colonnade"],
 		start: [5, 5], winding: 0.6, extra: 0.04, keepDead: 0.6, door: 0.15, arch: 0.35, corrArch: 0.05, corrDoor: 0.0, fans: 0.0,
 		pits: "p",
 		kinds: [
@@ -457,6 +457,27 @@ function generate(theme, seed) {
 		if (g[c.y][c.x] === "L") hides.push(c);
 	}
 
+	// 뒤질 수 있는 상자·서랍(Z): 그중 하나에 열쇠(서버가 라운드마다 고른다). 맵 곳곳에 흩어 놓는다
+	const searches = [];
+	const zc = [];
+	for (let y = 1; y < H - 1; y++)
+		for (let x = 1; x < W - 1; x++) {
+			if (g[y][x] !== "." || reserved[y][x] || avoid(x, y) || !backWall(x, y)) continue;
+			const rm = roomAt(x, y);
+			if (rm && (rm.band || rm === startRoom || (rm.kind && rm.kind.name === "hall"))) continue;
+			if (!rm && openN(x, y) !== 1) continue;
+			const pref = rm && rm.kind && (theme.searchPrefer || []).includes(rm.kind.name) ? 0 : rm ? 0.6 : 1.2;
+			zc.push({ x, y, k: pref + r() });
+		}
+	zc.sort((a, b) => a.k - b.k);
+	for (const c of zc) {
+		if (searches.length >= (theme.searches || 0)) break;
+		if (searches.some((h) => Math.abs(h.x - c.x) + Math.abs(h.y - c.y) < 8)) continue;
+		if (hides.some((h) => Math.abs(h.x - c.x) + Math.abs(h.y - c.y) < 2)) continue;
+		place(c.x, c.y, "Z");
+		if (g[c.y][c.x] === "Z") searches.push(c);
+	}
+
 	// 닿지 않는 곳은 벽으로
 	const reach = bfs("player");
 	for (let y = 0; y < H; y++)
@@ -480,7 +501,7 @@ function generate(theme, seed) {
 	if (!best || Math.abs(best.d - TARGET) > TOL) return { fail: "exit", maxd: best && best.d };
 	g[best.y][best.x] = "E";
 	const deadEnds = (() => { let n = 0; for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) if (g[y][x] === "." && openN(x, y) === 1) n++; return n; })();
-	return { rows: g.map((row) => row.join("")), dist: best.d, rooms: rooms.length, deadEnds, hides: hides.length, monsterDist: md.get(`${D4.map(([dx, dy]) => [best.x + dx, best.y + dy]).find(([nx, ny]) => at(nx, ny) !== "#").join(",")},0`) + 1 };
+	return { rows: g.map((row) => row.join("")), dist: best.d, rooms: rooms.length, deadEnds, hides: hides.length, searches: searches.length, monsterDist: md.get(`${D4.map(([dx, dy]) => [best.x + dx, best.y + dy]).find(([nx, ny]) => at(nx, ny) !== "#").join(",")},0`) + 1 };
 }
 
 // check-layout.js 와 같은 규칙으로 검사
@@ -524,7 +545,7 @@ for (const id of only.length ? only : [1, 2, 3, 4, 5]) {
 		res = { ...out, seed: s };
 	}
 	if (!res) { console.log(`stage ${id}: FAILED after ${tries} seeds`, lastFail); process.exitCode = 1; continue; }
-	console.log(`stage ${id}: seed ${res.seed} ${theme.W}x${theme.H} rooms ${res.rooms} hides ${res.hides} exit ${res.dist} tiles (monster ${res.monsterDist}) dead-ends ${res.deadEnds}`);
+	console.log(`stage ${id}: seed ${res.seed} ${theme.W}x${theme.H} rooms ${res.rooms} hides ${res.hides} searches ${res.searches} exit ${res.dist} tiles (monster ${res.monsterDist}) dead-ends ${res.deadEnds}`);
 	if (dry) console.log(res.rows.join("\n"));
 	else writeRows(path.join(__dirname, "..", "src", "server", "Stages", theme.file), res.rows);
 }

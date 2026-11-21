@@ -11,7 +11,7 @@ local SoundService = game:GetService("SoundService")
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local Audio = {}
-local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number, Cut: number? } }
+local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number, Cut: number?, Fx: { Distortion: number?, Reverb: number? }?, Steps: { { number } }?, Thump: number?, Claw: string? } }
 local player = Players.LocalPlayer
 
 local master = Instance.new("SoundGroup")
@@ -42,6 +42,20 @@ local function makeSound(name: string, parent: Instance, looped: boolean?): Soun
 		s.RollOffMinDistance = 5
 		s.RollOffMaxDistance = def.Range
 	end
+	-- 괴성: 왜곡 + 울림 효과(Fx)
+	if def.Fx then
+		if def.Fx.Distortion then
+			local d = Instance.new("DistortionSoundEffect")
+			d.Level = def.Fx.Distortion
+			d.Parent = s
+		end
+		if def.Fx.Reverb then
+			local r = Instance.new("ReverbSoundEffect")
+			r.DecayTime = def.Fx.Reverb
+			r.WetLevel = 3 -- (ReverbSoundEffect 에는 Wetness 가 없다: 울림 크기는 WetLevel, dB)
+			r.Parent = s
+		end
+	end
 	s.Parent = parent
 	return s
 end
@@ -49,7 +63,7 @@ end
 -- 한 번 재생하고 지운다. at 이 Vector3 이면 그 위치에서(3D), Instance 면 거기 붙여서, nil 이면 2D.
 Audio.steps = 0 -- (테스트) 지금까지 재생한 플레이어 발소리 수
 
-function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?)
+function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?, startAt: number?, cutOverride: number?)
 	local parent: Instance
 	local holder: Attachment? = nil
 	if typeof(at) == "Vector3" then
@@ -79,9 +93,12 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 	if volumeScale then
 		s.Volume *= volumeScale
 	end
+	if startAt then
+		s.TimePosition = startAt
+	end
 	s:Play()
 	-- Cut: 그 시간(초)만 재생하고 짧게 줄여 끈다(여러 발짝이 든 발소리 파일에서 한 발짝만)
-	local cut = SND[name] and SND[name].Cut
+	local cut = cutOverride or (SND[name] and SND[name].Cut)
 	if cut then
 		local v0 = s.Volume
 		task.delay(cut, function()
@@ -103,6 +120,21 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 	end)
 end
 
+-- 괴성: Config.Screams[kind] 의 목소리들을 시간차로 겹쳐 길게 지른다
+function Audio.scream(kind: string, at: Instance)
+	local seq = (Config :: any).Screams[kind]
+	if not seq then
+		return
+	end
+	for _, layer in seq do
+		task.delay(layer.t, function()
+			if at.Parent then
+				Audio.play(layer.s, at, 0.05, layer.v, layer.p)
+			end
+		end)
+	end
+end
+
 function Audio.sonar(localShot: boolean, origin: Vector3)
 	if localShot then
 		Audio.play("Sonar", nil, 0.03)
@@ -110,6 +142,37 @@ function Audio.sonar(localShot: boolean, origin: Vector3)
 	else
 		Audio.play("Sonar", origin, 0.03)
 		task.delay(0.35, Audio.play, "SonarEcho", origin, 0.03)
+	end
+end
+
+-- 한 걸음: Steps 가 있으면 녹음된 여러 걸음 중 하나를(직전과 다른 것으로) 골라 재생 + Thump(낮은 툭) / Claw(괴물 발톱) 겹침
+local lastStep: { [string]: number } = {}
+function Audio.footstep(name: string, at: Instance, jitter: number, pitchScale: number?)
+	local def = SND[name]
+	if not def then
+		return
+	end
+	local steps = def.Steps
+	if steps then
+		local k = math.random(1, #steps)
+		if k == lastStep[name] then
+			k = k % #steps + 1
+		end
+		lastStep[name] = k
+		Audio.play(name, at, jitter, nil, pitchScale, steps[k][1], steps[k][2])
+	else
+		Audio.play(name, at, jitter, nil, pitchScale)
+	end
+	if def.Thump then
+		Audio.play("FootThump", at, 0.06, def.Thump, pitchScale)
+	end
+	if def.Claw then
+		local claw = def.Claw
+		task.delay(0.07, function()
+			if at.Parent then
+				Audio.footstep(claw, at, 0.06)
+			end
+		end)
 	end
 end
 
@@ -133,9 +196,9 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 	end
 	tr.acc += d
 	if isMonster then
-		if tr.acc >= 3.4 then
+		if tr.acc >= 4.6 then -- 사람(4.8)과 비슷한 거리지만 괴물은 느려서 쿵… 쿵… 간격이 더 길다
 			tr.acc = 0
-			Audio.play("MonsterStep", root, 0.08)
+			Audio.footstep("MonsterStep", root, 0.08)
 		end
 	else
 		local mode = (model:GetAttribute("MoveMode") :: string?) or "Walk"
@@ -145,7 +208,7 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 			tr.foot = -tr.foot
 			local name = if mode == "Run" then "FootRun" elseif mode == "Crouch" then "FootCrouch" else "FootWalk"
 			-- 왼발·오른발: 높낮이를 조금 다르게
-			Audio.play(name, root, 0.04, nil, 1 + tr.foot * 0.04)
+			Audio.footstep(name, root, 0.04, 1 + tr.foot * 0.04)
 			Audio.steps += 1
 		end
 	end
@@ -167,9 +230,9 @@ local function watchMonster(m: Instance)
 			return
 		end
 		if st == "Alert" then
-			Audio.play("MonsterAlert", root, 0.05)
+			Audio.scream("Alert", root)
 		elseif st == "Chase" then
-			Audio.play("MonsterChase", root, 0.05)
+			Audio.scream("Chase", root)
 		end
 	end))
 	monsterConns[model] = conns
@@ -232,7 +295,7 @@ for _, e in CollectionService:GetTagged(Config.Tags.AmbientEmitter) do
 end
 
 local nextAmbient = os.clock() + 4
-local ONE_SHOTS = { "AmbientDrip", "AmbientDrip", "AmbientMetal", "AmbientCreak" }
+local ONE_SHOTS = { "AmbientCreak" } -- 물방울·폭발음 같은 금속음은 뺐다
 
 function Audio.update()
 	-- 발소리
@@ -249,7 +312,7 @@ function Audio.update()
 			stepFor(m, m.PrimaryPart, true)
 			if m:GetAttribute("State") == "Wander" and idleAt[m] and now > idleAt[m] then
 				idleAt[m] = now + 7 + math.random() * 9
-				Audio.play("MonsterIdle", m.PrimaryPart, 0.1)
+				Audio.scream("Idle", m.PrimaryPart)
 			end
 		end
 	end

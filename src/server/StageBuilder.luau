@@ -15,6 +15,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Kit = require(script.Parent.MapKit)
 local Doors = require(script.Parent.Doors)
 local Hiding = require(script.Parent.Hiding)
+local Search = require(script.Parent.Search)
 
 local Builder = {}
 
@@ -32,7 +33,8 @@ export type Layout = {
 	Walkable: { [string]: boolean }?, -- Props 타일 중 괴물 배회 지점으로 쓸 수 있는 것
 	PitTiles: { [string]: boolean }?, -- Props 타일 중 아래층 높이인 것
 	PipeChance: number?,
-	HideStyle: string?, -- 숨는 곳(L) 모양: locker / tool / rusty / wardrobe / closet (Hiding.Styles)
+	HideStyle: string?,
+	SearchStyle: string?, -- 상자·서랍(Z) 모양: drawers / crate / toolbox / nightstand / chest (Search.Styles) -- 숨는 곳(L) 모양: locker / tool / rusty / wardrobe / closet (Hiding.Styles)
 	Seed: number?,
 }
 
@@ -487,6 +489,15 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 				em.CanQuery = false
 				em:SetAttribute("Sound", "AmbientFan")
 				CollectionService:AddTag(em, Config.Tags.AmbientEmitter)
+			elseif ch == "Z" then
+				local back = nil
+				for _, d in dirs do
+					if isWall(i + d.di, j + d.dj) and not isWall(i - d.di, j - d.dj) then
+						back = d.v
+						break
+					end
+				end
+				Search.create(props, c + Vector3.new(0, fy, 0), back or Vector3.new(0, 0, -1), layout.SearchStyle)
 			elseif ch == "L" then
 				-- 숨는 곳: 등을 댈 벽(맞은편이 열린 쪽)을 찾는다
 				local back = nil

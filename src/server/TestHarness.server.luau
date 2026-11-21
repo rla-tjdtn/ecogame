@@ -26,6 +26,7 @@ local Round = require(script.Parent.Round)
 local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
 local Hiding = require(script.Parent.Hiding)
+local Search = require(script.Parent.Search)
 
 local R = { test = args.Test, finished = false, checks = {}, log = {}, errors = {}, info = {} }
 local t0 = os.clock()
@@ -48,6 +49,7 @@ end)
 -- 로비 테스트만 로비로, 나머지는 바로 게임으로 시작(Lobby.boot 가 읽는다)
 ReplicatedStorage:SetAttribute("ForceMode", if args.Test == "lobby" then "Lobby" else "Game")
 Config.Monster.StartDelay = 1e6
+Config.Key.Required = false -- (열쇠 시험은 core 에서 따로 켠다)
 Config.Round.ResultSeconds = 2
 Config.Round.FirstStartDelay = 1
 
@@ -194,6 +196,13 @@ local function monsterTests(p)
 		end
 	end
 	check("monster strokes draw as single lines (Line/Disc)", cyl > 10 and ok == cyl, ok .. "/" .. cyl)
+	local visible = 0
+	for _, d in m.model:GetDescendants() do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			visible += 1
+		end
+	end
+	check("monster body is invisible (only sonar reveals it)", visible == 0, visible)
 	-- 음파가 닿으면 괴물 모습이 선으로 나타난다
 	m.startAt = 1e9
 	local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -519,10 +528,12 @@ local function core()
 	local s1 = ask(p, "stats")
 	task.wait(Config.Sonar.Hold + 1)
 	local s1b = ask(p, "stats")
+	waitFor(function() s1b = ask(p, "stats") return s1b and s1b.lines.active == 0 end, 5) -- (Studio 창이 뒤에 있으면 선이 늦게 꺼진다)
 	burst()
 	local s2 = ask(p, "stats")
 	task.wait(Config.Sonar.Hold + 1)
 	local s3 = ask(p, "stats")
+	waitFor(function() s3 = ask(p, "stats") return s3 and s3.lines.active == 0 end, 5)
 	log(string.format("burst lines: active %d created %d / after %d / burst2 active %d created %d / after %d", s1.lines.active, s1.lines.created, s1b.lines.active, s2.lines.active, s2.lines.created, s3.lines.active))
 	check("repeated pulses reuse lines (no pile-up)", s2.lines.created <= s1.lines.created * 1.15 + 20 and s2.lines.active < Config.Sonar.PoolSize, string.format("created %d -> %d, active %d", s1.lines.created, s2.lines.created, s2.lines.active))
 	check("all lines released after the burst", s1b.lines.active == 0 and s3.lines.active == 0, s3.lines.active)
@@ -668,14 +679,50 @@ local function core()
 		m:setState("Wander")
 	end
 
-	-- 13. 출구 → 탈출 → STAGE CLEAR
+	-- 12. 열쇠: 상자·서랍 중 한 곳에 있고, 없으면 출구가 잠겨 있다
 	m.startAt = 1e9
 	m:setState("Wander")
+	Config.Key.Required = true
+	local spotsZ = Search.all()
+	check("searchable boxes/drawers built", #spotsZ >= 5, #spotsZ)
+	local ks = Search.keySpot()
+	check("exactly one of them holds the key", ks ~= nil)
+	place(p, Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
+	task.wait(1.2)
+	check("exit is locked without the key", p:GetAttribute("Status") == "Alive" and ReplicatedStorage:GetAttribute("HasKey") ~= true, p:GetAttribute("Status"))
+	local kh0 = ask(p, "keyHud")
+	check("key indicator shows no key", kh0 and kh0.visible and kh0.text:find("없음", 1, true) ~= nil, kh0 and kh0.text)
+	local empty = nil
+	for _, sp in spotsZ do
+		if not sp.hasKey then
+			empty = sp
+			break
+		end
+	end
+	if empty then
+		place(p, empty.front + Vector3.new(0, 3, 0))
+		task.wait(0.3)
+		local r1 = Search.search(p, empty)
+		local r2 = Search.search(p, empty)
+		check("searching an empty box: empty, then already searched", r1 == "empty" and r2 == "already", r1 .. "/" .. r2)
+	end
+	if ks then
+		place(p, ks.front + Vector3.new(0, 3, 0))
+		task.wait(0.3)
+		local r3 = Search.search(p, ks)
+		check("searching the right one finds the key (whole team)", r3 == "key" and ReplicatedStorage:GetAttribute("HasKey") == true, r3)
+		task.wait(0.4)
+		local kh1 = ask(p, "keyHud")
+		check("key indicator shows the key", kh1 and kh1.text:find("있음", 1, true) ~= nil, kh1 and kh1.text)
+	end
+
+	-- 13. 출구 → 탈출 → STAGE CLEAR
 	place(p, Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
 	local esc = waitFor(function()
 		return p:GetAttribute("Status") == "Escaped"
 	end, 3)
 	check("reaching the exit escapes", esc ~= nil, p:GetAttribute("Status"))
+	Config.Key.Required = false
 	local cleared = waitFor(function()
 		return Round.lastOutcome == "Clear"
 	end, 4)
@@ -707,7 +754,12 @@ local function core()
 		return p:GetAttribute("Status") == "Dead"
 	end, 8)
 	check("caught by the monster -> death", died ~= nil, p:GetAttribute("Status"))
-	task.wait(1.2)
+	local js = waitFor(function()
+		local x = ask(p, "jumpscare")
+		return x and x.count > 0 and x
+	end, 2)
+	check("jump scare: the monster face pops up when caught", js ~= nil, js and js.count)
+	task.wait(1.8)
 	local dui = ask(p, "stats")
 	check("YOU DIED screen shown", dui and dui.ui.overlayTitle == "YOU DIED", dui and dui.ui.overlayTitle)
 	local failed = waitFor(function()
