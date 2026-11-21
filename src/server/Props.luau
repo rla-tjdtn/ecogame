@@ -129,7 +129,7 @@ function Props.BigPipe(ctx, i: number, j: number)
 	if ctx.isWall(i - 1, j) and ctx.isWall(i + 1, j) then
 		axis = Vector3.new(0, 0, 1)
 	end
-	local y = ctx.floorY(i, j) + 10
+	local y = ctx.floorY(i, j) + 11 -- (가로대 밑이 8.9 — 괴물(키 8)도 밑으로 지나간다)
 	local a = c - axis * (ctx.T / 2) + Vector3.new(0, y, 0)
 	local b = c + axis * (ctx.T / 2) + Vector3.new(0, y, 0)
 	Kit.pipe(ctx.props, a, b, 1.7, { 0 }, true)

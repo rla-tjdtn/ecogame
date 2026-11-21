@@ -9,7 +9,7 @@ return {
 	HideStyle = "wardrobe", -- 숨는 곳(L): 병실 옷장
 	SearchStyle = "nightstand", -- 뒤지는 곳(Z): 협탁, 그중 한 곳에 열쇠
 	Props = { R = Props.Bed, T = Props.Desk, X = Props.Surgery, k = Props.Cabinet },
-	Walkable = { R = true, k = true },
+	Walkable = { k = true }, -- (침대 R 은 막힌 칸: 괴물이 침대 위를 배회 목표로 잡지 않게)
 	Rows = {
 		"#############################################",
 		"#SS.k.#########k.k#.D..R..L.#.D.#R.R..#######",

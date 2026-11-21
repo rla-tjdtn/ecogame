@@ -1388,6 +1388,86 @@ local function stages()
 	end
 end
 
+-- ─────────────────────────────── seal ───────────────────────────────
+-- 스테이지 1~5 를 지어, 실제로 만들어진 벽·바닥에 구멍이 없는지 광선으로 확인한다:
+--   바닥 칸마다 아래로(바닥이 있나), 벽 칸 쪽으로(그 벽이 실제로 막고 있나),
+--   두 벽이 만나는 모서리 너머가 바닥이면 대각선으로(모서리 틈으로 빠져나갈 수 없나)
+local function seal()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local FLOOR = { ["."] = true, S = true, E = true, D = true, A = true, p = true, w = true, b = true, n = true, s = true }
+	for i = 1, #Config.Stages do
+		Round.startStage(i)
+		readyPlayers(1)
+		task.wait(1)
+		local s = workspace.Stage:GetAttribute("Rows")
+		local rows = string.split(s, "/")
+		local H, W = #rows, #rows[1]
+		local function at(x, y)
+			if y < 1 or y > H or x < 1 or x > W then
+				return "#"
+			end
+			return string.sub(rows[y], x, x)
+		end
+		local params = RaycastParams.new()
+		local chars = {}
+		for _, pl in Players:GetPlayers() do
+			if pl.Character then
+				table.insert(chars, pl.Character)
+			end
+		end
+		for _, m in Round.monsters do
+			if m.model then
+				table.insert(chars, m.model)
+			end
+		end
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = chars
+		params.RespectCanCollide = true
+		local noFloor, gaps, corner, tiles = {}, {}, {}, 0
+		for y = 1, H do
+			for x = 1, W do
+				local c = at(x, y)
+				if FLOOR[c] then
+					tiles += 1
+					local o = Vector3.new((x - 1) * 8 + 4, 3, (y - 1) * 8 + 4)
+					if not workspace:Raycast(o, Vector3.new(0, -40, 0), params) then
+						table.insert(noFloor, string.format("r%dc%d%s", y - 1, x - 1, c))
+					end
+					for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+						if at(x + d[1], y + d[2]) == "#" then
+							for _, h in { 1, 3, 6 } do
+								local o2 = Vector3.new(o.X, h, o.Z)
+								if not workspace:Raycast(o2, Vector3.new(d[1], 0, d[2]) * 6, params) then
+									table.insert(gaps, string.format("r%dc%d->(%d,%d)@%d", y - 1, x - 1, d[1], d[2], h))
+									break
+								end
+							end
+						end
+					end
+					for _, d in { { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } } do
+						if at(x + d[1], y) == "#" and at(x, y + d[2]) == "#" and at(x + d[1], y + d[2]) ~= "#" then
+							-- (선 하나는 두 벽 블록이 맞닿은 모서리 선을 정확히 지나갈 수 있어, 몸 크기쯤 되는 공으로 굴려 본다)
+							if not workspace:Spherecast(o, 0.6, Vector3.new(d[1], 0, d[2]) * 8, params) then
+								table.insert(corner, string.format("r%dc%d->(%d,%d)", y - 1, x - 1, d[1], d[2]))
+							end
+						end
+					end
+				end
+			end
+		end
+		local function first(t)
+			return table.concat(t, " ", 1, math.min(#t, 8))
+		end
+		check(string.format("stage %d: every floor tile has a floor under it (%d tiles)", i, tiles), #noFloor == 0, first(noFloor))
+		check(string.format("stage %d: walls really block (no gaps beside floor)", i), #gaps == 0, first(gaps))
+		check(string.format("stage %d: no leaks through wall corners", i), #corner == 0, first(corner))
+	end
+end
+
 -- ─────────────────────────────── probe ───────────────────────────────
 -- 한 스테이지(args.Stage)에서 시작 → 모든 바닥 칸으로 경로를 계산해, 길이 끊기는 경계(갈 수 있는 칸 ↔ 못 가는 칸)를 보고한다.
 local function probe()
@@ -1435,7 +1515,20 @@ local function probe()
 		for _, b in bad do
 			for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
 				if okSet[(b[1] + d[1]) .. "," .. (b[2] + d[2])] then
-					table.insert(edge, string.format("c%d r%d <- c%d r%d", b[1] - 1, b[2] - 1, b[1] + d[1] - 1, b[2] + d[2] - 1))
+					-- 원인 찾기: 바로 옆 칸에서 가까이 다시 계산(먼 거리 탐색 한계인지), 그 칸 안의 부딪히는 파트
+					local c0 = Vector3.new((b[1] - 1) * 8 + 4, 0, (b[2] - 1) * 8 + 4)
+					local c1 = Vector3.new((b[1] + d[1] - 1) * 8 + 4, 0, (b[2] + d[2] - 1) * 8 + 4)
+					pcall(function()
+						path:ComputeAsync(c1 + Vector3.new(0, 0.5, 0), c0 + Vector3.new(0, 0.5, 0))
+					end)
+					local near = path.Status.Name
+					local parts = {}
+					for _, part in workspace:GetPartBoundsInBox(CFrame.new(c0 + Vector3.new(0, 3, 0)), Vector3.new(7.6, 5, 7.6)) do
+						if part.CanCollide and not part:IsDescendantOf(Players) and #parts < 4 then
+							table.insert(parts, part.Name)
+						end
+					end
+					table.insert(edge, string.format("c%d r%d <- c%d r%d near:%s [%s]", b[1] - 1, b[2] - 1, b[1] + d[1] - 1, b[2] + d[2] - 1, near, table.concat(parts, ",")))
 					break
 				end
 			end
@@ -1488,6 +1581,8 @@ task.spawn(function()
 			perf()
 		elseif args.Test == "stages" then
 			stages()
+		elseif args.Test == "seal" then
+			seal()
 		else
 			core()
 		end

@@ -390,6 +390,46 @@ for (const id of only.length ? only : [1, 2, 3, 4, 5]) {
 		info = `rooms ${d.rooms} ` + Object.entries(d.kinds).map(([k, v]) => `${k}${v}`).join(" ");
 	}
 	{
+		// 숨는 곳·열쇠 상자 앞(게임이 등질 벽을 고르는 방식 그대로)에 소품이 있으면 치운다 — 그 앞에 서야 쓸 수 있다
+		const g = rows.map((row) => row.split(""));
+		const at = (x, y) => (y < 0 || y >= g.length || x < 0 || x >= g[0].length ? "#" : g[y][x]);
+		let cleared = 0;
+		for (let y = 1; y < g.length - 1; y++)
+			for (let x = 1; x < g[0].length - 1; x++) {
+				if (g[y][x] !== "L" && g[y][x] !== "Z") continue;
+				const d = D4.find(([a, b]) => at(x + a, y + b) === "#" && at(x - a, y - b) !== "#");
+				const fc = d && at(x - d[0], y - d[1]);
+				if (d && fc !== "#" && !PASS.has(fc) && !"LZSE".includes(fc)) { g[y - d[1]][x - d[0]] = "."; cleared++; }
+			}
+		rows = g.map((row) => row.join(""));
+		if (cleared) info += ` fronts cleared ${cleared}`;
+	}
+	{
+		// 아무 데서도 닿지 않는 소품 칸(사물함 뒤에 갇힌 상자 등)은 벽으로
+		const g = rows.map((row) => row.split(""));
+		const W = g[0].length, H = g.length;
+		const at = (x, y) => (y < 0 || y >= H || x < 0 || x >= W ? "#" : g[y][x]);
+		let S = null;
+		for (let y = 0; y < H && !S; y++) for (let x = 0; x < W; x++) if (g[y][x] === "S") { S = [x, y]; break; }
+		const seen = new Set([S.join(",")]);
+		const q = [S];
+		while (q.length) {
+			const [x, y] = q.pop();
+			for (const [dx, dy] of D4) {
+				const k = x + dx + "," + (y + dy);
+				if (seen.has(k) || !PASS.has(at(x + dx, y + dy))) continue;
+				seen.add(k);
+				q.push([x + dx, y + dy]);
+			}
+		}
+		let walled = 0;
+		for (let y = 1; y < H - 1; y++)
+			for (let x = 1; x < W - 1; x++)
+				if (CLEAR.has(g[y][x]) && !D4.some(([dx, dy]) => seen.has(x + dx + "," + (y + dy)))) { g[y][x] = "#"; walled++; }
+		rows = g.map((row) => row.join(""));
+		if (walled) info += ` sealed ${walled}`;
+	}
+	{
 		const g = rows.map((row) => row.split(""));
 		let fixed = 0;
 		for (let y = 1; y < g.length - 1; y++)

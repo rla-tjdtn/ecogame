@@ -59,6 +59,47 @@ for (const file of fs.readdirSync(dir).filter((f) => /^Stage\d+\.luau$/.test(f))
 	const un = [];
 	for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const c = at(i, j); if (pass(c, "player") && !lv(c).some((l) => p.seen.has(`${i},${j},${l}`))) un.push(`r${j}c${i}${c}`); }
 	if (p.exit === undefined) bad.push("exit unreachable");
+	// ── 엄격한 검사: 모르는 문자, 바깥 테두리, 소품을 전부 막힌 것으로 쳐도 모든 바닥에 갈 수 있는가, 숨는 곳·열쇠 상자 앞에 설 수 있는가 ──
+	const propKeys = ((src.match(/Props = \{([^}]*)\}/) || ["", ""])[1].match(/(\w) = /g) || []).map((x) => x[0]);
+	const walkKeys = ((src.match(/Walkable = \{([^}]*)\}/) || ["", ""])[1].match(/(\w) = true/g) || []).map((x) => x[0]);
+	const known = new Set(["#", ".", "S", "E", "D", "A", "p", "b", "n", "s", "O", "c", "m", "v", "f", "L", "Z", ...pitExtra, ...propKeys]);
+	const unknown = new Set();
+	for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if (!known.has(at(i, j))) unknown.add(at(i, j));
+	if (unknown.size) bad.push("unknown tiles " + [...unknown].join(""));
+	for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if ((i === 0 || j === 0 || i === W - 1 || j === H - 1) && at(i, j) !== "#") bad.push(`border open r${j}c${i}`);
+	const OPEN = new Set([".", "S", "E", "D", "A", "f", "p", "b", "n", "s", ...pitExtra, ...walkKeys]);
+	const strict = (() => {
+		let S = null;
+		for (let j = 0; j < H && !S; j++) for (let i = 0; i < W; i++) if (at(i, j) === "S") { S = [i, j]; break; }
+		const seen = new Set([`${S[0]},${S[1]},0`]);
+		const q = [[S[0], S[1], 0]];
+		for (let h = 0; h < q.length; h++) {
+			const [i, j, l] = q[h];
+			if (at(i, j) === "s") for (const L of [0, 1]) if (!seen.has(`${i},${j},${L}`)) { seen.add(`${i},${j},${L}`); q.push([i, j, L]); }
+			for (const [a, b] of D4) {
+				const ni = i + a, nj = j + b, c = at(ni, nj);
+				if (!OPEN.has(c) || !lv(c).includes(l)) continue;
+				const k = `${ni},${nj},${l}`;
+				if (!seen.has(k)) { seen.add(k); q.push([ni, nj, l]); }
+			}
+		}
+		return seen;
+	})();
+	const reachable = (i, j) => lv(at(i, j)).some((l) => strict.has(`${i},${j},${l}`));
+	const cut = [];
+	for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if ([".", "D", "A", "E", "S"].includes(at(i, j)) && !reachable(i, j)) cut.push(`r${j}c${i}${at(i, j)}`);
+	if (cut.length) bad.push("floor cut off by props/walls: " + cut.slice(0, 8).join(" "));
+	// 숨는 곳·열쇠 상자: StageBuilder 처럼 등질 벽을 고르고, 그 앞 칸에 설 수 있어야 한다
+	const noFront = [];
+	for (let j = 0; j < H; j++)
+		for (let i = 0; i < W; i++) {
+			const c = at(i, j);
+			if (c !== "L" && c !== "Z") continue;
+			const d = D4.find(([a, b]) => wall(i + a, j + b) && !wall(i - a, j - b));
+			const fi = d ? i - d[0] : -1, fj = d ? j - d[1] : -1;
+			if (!d || !OPEN.has(at(fi, fj)) || !reachable(fi, fj)) noFront.push(`${c}@r${j}c${i}`);
+		}
+	if (noFront.length) bad.push("hide/search spot without a reachable front: " + noFront.join(" "));
 	if (bad.length) failed = true;
 	console.log(`${file} ${W}x${H} | exit: player ${p.exit} tiles, monster ${m.exit ?? "no path"} | ${bad.join("; ") || "ok"}${un.length ? " | unreachable " + un.join(" ") : ""}`);
 }
