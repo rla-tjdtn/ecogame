@@ -67,6 +67,7 @@ local function tryBuild()
 		Lines.clear()
 		World.build(stage)
 		MapView.load(stage)
+		task.spawn(Lines.prewarm, 2500) -- 선 파트 미리 만들기(음파 도중 끊김 방지)
 		building = false
 		if stage:GetAttribute("BuildId") ~= World.buildId then
 			tryBuild()
@@ -372,6 +373,7 @@ task.spawn(function()
 			table.clear(frameTimes)
 			table.clear(luaTimes)
 			prof.pulses, prof.lines, prof.frames = 0, 0, 0
+			Lines.maxColor, Lines.maxPlace = 0, 0
 			return true
 		elseif cmd == "resetCooldown" then
 			lastFire = -math.huge

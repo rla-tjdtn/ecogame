@@ -39,23 +39,25 @@ local function rack(ctx, i: number, j: number, axis: Vector3)
 	local m = Instance.new("Model")
 	m.Name = "Rack"
 	m.Parent = ctx.props
-	for _, a in { -1, 0, 1 } do
+	-- (선반 창고는 음파 선이 아주 많아지는 곳이라 꼭 필요한 모서리만: 기둥은 세로선, 보·판은 긴 선만)
+	for _, a in { -1, 1 } do
 		for _, b in { -1, 1 } do
 			local c = p + axis * (a * (len / 2 - 0.15)) + across * (b * (depth / 2 - 0.15))
-			Kit.box(m, CFrame.lookAt(c + Vector3.new(0, height / 2, 0), c + Vector3.new(0, height / 2, 0) + axis), Vector3.new(0.3, height, 0.3), { blocks = false })
+			Kit.box(m, CFrame.lookAt(c + Vector3.new(0, height / 2, 0), c + Vector3.new(0, height / 2, 0) + axis), Vector3.new(0.3, height, 0.3), { blocks = false, axis = "Y" })
 		end
 	end
 	for k, y in { 0.4, 3.6, 6.8, 9.8 } do
 		for _, b in { -1, 1 } do
 			local c = p + across * (b * (depth / 2 - 0.15)) + Vector3.new(0, y, 0)
-			Kit.box(m, CFrame.lookAt(c, c + axis), Vector3.new(0.25, 0.4, len), { blocks = false })
+			Kit.box(m, CFrame.lookAt(c, c + axis), Vector3.new(0.25, 0.4, len), { blocks = false, axis = "Z" })
 		end
 		local deck = p + Vector3.new(0, y + 0.25, 0)
-		Kit.box(m, CFrame.lookAt(deck, deck + axis), Vector3.new(depth - 0.3, 0.12, len - 0.3), { blocks = false, collide = k == 1 })
+		-- 선반 판은 선을 그리지 않는다(양옆 보가 이미 선반 모양을 보여 준다)
+		Kit.box(m, CFrame.lookAt(deck, deck + axis), Vector3.new(depth - 0.3, 0.12, len - 0.3), { blocks = false, collide = k == 1, shape = "None" })
 		-- 상자들(층마다 위치를 바꿔서)
-		if k < 4 then
+		if k < 3 then
 			local h = ctx.hash(i * 3 + k, j, 5)
-			local n = 1 + math.floor(h * 3)
+			local n = 1
 			for q = 1, n do
 				local off = (q - (n + 1) / 2) * 2.3 + (h - 0.5) * 0.8
 				local sz = Vector3.new(1.6 + h * 0.6, 1.4 + ((q * 7 + k) % 3) * 0.4, 1.7)

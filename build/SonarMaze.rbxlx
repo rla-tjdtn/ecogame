@@ -117,6 +117,7 @@ Config.Sonar = {
 	AttachDistance = 2.6, -- 선분이 이 거리 안의 빈 복셀을 통해 음파를 받는다
 	PoolSize = 4500, -- 동시에 존재할 수 있는 선 파트 최대 수(재사용)
 	RemoteViewDistance = 110, -- 다른 플레이어 음파를 그리는 최대 거리
+	RevealPerFrame = 450, -- 한 프레임에 새로 나타나게 할 선(조각) 수 상한(모든 음파 합계, 넘으면 다음 프레임으로)
 	ExpandBudget = 5000, -- 프레임당 파동 전파 연산량 상한(복셀 확장 수)
 	ThinCylinder = 0.3, -- 이보다 가는 원통은 끝 링 없이 실루엣 두 줄만
 }
@@ -440,28 +441,14 @@ Config.ScreamRecipe = 0 -- 0 = 쓰지 않음(위의 ScreamStyle 사용), 1~60 = 
 -- 번호 하나(Config.RealScream)로 고른다. 0 이면 위의 합성 시안을 쓴다. 들어 보기: tools/sound-preview/real.html
 -- Start = 파일에서 시작 지점(초), Dur = 괴성 길이(초)
 Config.RealScreams = {
-	{ Id = 9114572653, Start = 0.5, Dur = 3, Volume = 0.55, Name = "귀신 비명 (다가오는 소름끼치는 쉿소리)" },
-	{ Id = 9114038256, Start = 0, Dur = 3, Volume = 0.45, Name = "악마 비명 (고통스럽게 쥐어짜는 비명)" },
-	{ Id = 9118850866, Start = 0, Dur = 2, Volume = 0.45, Name = "날카롭게 부풀어 오르는 비명" },
-	{ Id = 9113123369, Start = 0, Dur = 3, Volume = 0.6, Name = "천사 곡소리 (공허한 합창 울음)" },
-	{ Id = 9120358057, Start = 0, Dur = 3, Volume = 0.6, Name = "불협화음 합창 곡소리 (숨 섞인)" },
-	{ Id = 9126213995, Start = 0, Dur = 2.5, Volume = 0.7, Name = "귀신 속삭임 폭발 (알아들을 수 없는 악령)" },
-	{ Id = 9114573103, Start = 0, Dur = 3, Volume = 0.6, Name = "귀신의 긴 날숨 (느린 숨결)" },
-	{ Id = 9114568703, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 1 (Ghastly Screams 1)" },
-	{ Id = 9114567451, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 2" },
-	{ Id = 9114567638, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 6" },
-	{ Id = 9114567965, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 11 (짧음)" },
-	{ Id = 9114570562, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 13" },
-	{ Id = 9114569607, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 15 (짧음)" },
-	{ Id = 9114568392, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 20" },
-	{ Id = 9114568534, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 24" },
-	{ Id = 9125438341, Start = 0, Dur = 3, Volume = 0.5, Name = "악몽 속 아이 비명 (멀리서 긁히는 비명)" },
-	{ Id = 9118153393, Start = 0, Dur = 3, Volume = 0.5, Name = "울리는 긴 비명 (음이 이어지는 비명)" },
-	{ Id = 9114226295, Start = 0, Dur = 3, Volume = 0.6, Name = "공허한 숨결 울부짖음 (울림 가득)" },
-	{ Id = 9114572483, Start = 0.5, Dur = 3, Volume = 0.55, Name = "귀신 비명 2 (다가오는 쉿소리, 다른 녹음)" },
+	{ Id = 9117339703, Start = 0, Dur = 3.5, Volume = 0.5, Name = "날카롭게 찢어지는 비명 (Piercing Scream 1)" },
+	{ Id = 9125474518, Start = 0, Dur = 2.6, Volume = 0.5, Name = "괴물 괴성 — 익룡 같은 날카로운 울부짖음 (Creature Screech)" },
+	{ Id = 9113985971, Start = 0, Dur = 2, Volume = 0.5, Name = "고통에 찬 괴물의 찢어지는 비명 (Creature Scream Piercing Pain)" },
+	{ Id = 9114037660, Start = 0, Dur = 2.5, Volume = 0.5, Name = "악마 비명 (Demon Scream 2, 앞 2.5초)" },
+	{ Id = 9118307005, Start = 0, Dur = 2.8, Volume = 0.45, Name = "쇳소리 섞인 일그러진 괴성 (Robot Screams Intense Screeching)" },
 }
-Config.RealScream = 1 -- 위 목록 번호(0 = 합성 시안)
-Config.ScreamGate = { 0.2, 0.1 } -- 끊기는 박자: { 켜짐초, 꺼짐초 }
+Config.RealScream = 1 -- 위 목록 번호 1~5 (0 = 합성 시안). 들어 보기: tools/sound-preview/real.html
+Config.ScreamGate = nil :: { number }? -- 끊기는 박자 { 켜짐초, 꺼짐초 } (nil = 끊지 않고 한 번에 지른다. 예전 끊기는 방식: { 0.2, 0.1 })
 Config.ScreamCustom = nil :: any -- 예: { src = "ouch", pitch = 1.25, fx = "ghost", gate = { 0.22, 0.14 }, dur = 2.4, air = "wind" }
 -- src: "ouch"(비명) / "oof"(낮은 목소리) / "wind"(바람 숨결)   pitch: 음 높이 배율(클수록 높음)
 -- fx: ghost hollow breath siren stutter echo flange screech roar pulse   gate: { 켜짐초, 꺼짐초 } (끊기는 박자, 없으면 이어짐)
@@ -577,7 +564,7 @@ do
 		local id = "rbxassetid://" .. real.Id
 		style = {
 			Sounds = {
-				MonsterChase = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Fx = { { "ReverbSoundEffect", { DecayTime = 2.5, WetLevel = -8 } } } },
+				MonsterChase = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Cut = real.Dur, Fx = { { "ReverbSoundEffect", { DecayTime = 2.5, WetLevel = -8 } } } },
 				MonsterAlert = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Cut = real.Dur }, -- (잡힐 때 점프스케어가 2D 로 튼다)
 				MonsterIdle = { Id = "", Volume = 0, Pitch = 1, Range = 0 }, -- 평소에는 소리를 내지 않는다
 				MonsterScream2 = { Id = "", Volume = 0, Pitch = 1, Range = 0 },
@@ -2890,23 +2877,25 @@ local function rack(ctx, i: number, j: number, axis: Vector3)
 	local m = Instance.new("Model")
 	m.Name = "Rack"
 	m.Parent = ctx.props
-	for _, a in { -1, 0, 1 } do
+	-- (선반 창고는 음파 선이 아주 많아지는 곳이라 꼭 필요한 모서리만: 기둥은 세로선, 보·판은 긴 선만)
+	for _, a in { -1, 1 } do
 		for _, b in { -1, 1 } do
 			local c = p + axis * (a * (len / 2 - 0.15)) + across * (b * (depth / 2 - 0.15))
-			Kit.box(m, CFrame.lookAt(c + Vector3.new(0, height / 2, 0), c + Vector3.new(0, height / 2, 0) + axis), Vector3.new(0.3, height, 0.3), { blocks = false })
+			Kit.box(m, CFrame.lookAt(c + Vector3.new(0, height / 2, 0), c + Vector3.new(0, height / 2, 0) + axis), Vector3.new(0.3, height, 0.3), { blocks = false, axis = "Y" })
 		end
 	end
 	for k, y in { 0.4, 3.6, 6.8, 9.8 } do
 		for _, b in { -1, 1 } do
 			local c = p + across * (b * (depth / 2 - 0.15)) + Vector3.new(0, y, 0)
-			Kit.box(m, CFrame.lookAt(c, c + axis), Vector3.new(0.25, 0.4, len), { blocks = false })
+			Kit.box(m, CFrame.lookAt(c, c + axis), Vector3.new(0.25, 0.4, len), { blocks = false, axis = "Z" })
 		end
 		local deck = p + Vector3.new(0, y + 0.25, 0)
-		Kit.box(m, CFrame.lookAt(deck, deck + axis), Vector3.new(depth - 0.3, 0.12, len - 0.3), { blocks = false, collide = k == 1 })
+		-- 선반 판은 선을 그리지 않는다(양옆 보가 이미 선반 모양을 보여 준다)
+		Kit.box(m, CFrame.lookAt(deck, deck + axis), Vector3.new(depth - 0.3, 0.12, len - 0.3), { blocks = false, collide = k == 1, shape = "None" })
 		-- 상자들(층마다 위치를 바꿔서)
-		if k < 4 then
+		if k < 3 then
 			local h = ctx.hash(i * 3 + k, j, 5)
-			local n = 1 + math.floor(h * 3)
+			local n = 1
 			for q = 1, n do
 				local off = (q - (n + 1) / 2) * 2.3 + (h - 0.5) * 0.8
 				local sz = Vector3.new(1.6 + h * 0.6, 1.4 + ((q * 7 + k) % 3) * 0.4, 1.7)
@@ -6193,6 +6182,57 @@ local function lobbyTest()
 	check("room panel is back in the lobby", lu2 ~= nil)
 end
 
+-- ─────────────────────────────── dense ───────────────────────────────
+-- 음파로 보여 줄 게 가장 많은 곳(스테이지마다 반경 안 파트가 가장 많은 바닥 칸)에서 음파를 계속 쏴 최악의 프레임을 잰다
+local function dense()
+	local ps = readyPlayers(1)
+	if not ps then
+		check("ready", false)
+		return
+	end
+	local p = ps[1]
+	local out = {}
+	local only = tonumber(args.Stage) or 0
+	for i = 1, #Config.Stages do
+		if only == 0 or only == i then
+			Round.startStage(i)
+			readyPlayers(1)
+			waitFor(function()
+				local st = ask(p, "stats")
+				return st and st.buildId == stageFolder():GetAttribute("BuildId") and st.build.segs > 0
+			end, 30)
+			-- 가장 빽빽한 곳
+			local best, bn = nil, -1
+			local params = OverlapParams.new()
+			params.FilterType = Enum.RaycastFilterType.Include
+			params.FilterDescendantsInstances = { stageFolder() }
+			for k, n in Round.info.nodes do
+				if k % 3 == 0 then
+					local c = #workspace:GetPartBoundsInRadius(n, 30, params)
+					if c > bn then
+						best, bn = n, c
+					end
+				end
+			end
+			place(p, best + Vector3.new(0, 0, 0), best + Vector3.new(1, 0, 0))
+			task.wait(1)
+			ask(p, "resetPerf")
+			for _ = 1, 8 do
+				ask(p, "resetCooldown")
+				ask(p, "fire")
+				task.wait(Config.Sonar.Cooldown + 0.05)
+			end
+			task.wait(1)
+			local st = ask(p, "stats")
+			local r = { stage = i, parts = bn, luaAvg = math.floor(st.lua.avg * 100000) / 100, luaWorst = math.floor(st.lua.worst * 100000) / 100, frameWorst = math.floor(st.worstFrame * 10000) / 10, created = st.lines.created, stolen = st.lines.stolen, active = st.lines.active, pulsesMs = st.prof.pulsesMs, linesMs = st.prof.linesMs, segs = st.build.segs, maxColor = st.lines.maxColor, maxPlace = st.lines.maxPlace, dropped = st.lines.dropped }
+			table.insert(out, r)
+			log(HttpService:JSONEncode(r))
+			check(string.format("stage %d dense spot: sonar worst frame cost < 8ms", i), r.luaWorst < 8, string.format("avg %.2f worst %.2f ms, created %d stolen %d dropped %d", r.luaAvg, r.luaWorst, r.created, r.stolen, st.lines.dropped or 0))
+		end
+	end
+	R.info.dense = out
+end
+
 -- ─────────────────────────────── walk ───────────────────────────────
 -- 괴물이 실제로 돌아다니는가: 60초 동안 1초마다 위치를 재서 이동 거리·멈춰 있던 시간을 본다(플레이어는 숨겨 둔다)
 local function walk()
@@ -6370,7 +6410,9 @@ end
 
 task.spawn(function()
 	local ok, err = pcall(function()
-		if args.Test == "lobby" then
+		if args.Test == "dense" then
+			dense()
+		elseif args.Test == "lobby" then
 			lobbyTest()
 		elseif args.Test == "walk" then
 			walk()
@@ -7431,6 +7473,7 @@ local function tryBuild()
 		Lines.clear()
 		World.build(stage)
 		MapView.load(stage)
+		task.spawn(Lines.prewarm, 2500) -- 선 파트 미리 만들기(음파 도중 끊김 방지)
 		building = false
 		if stage:GetAttribute("BuildId") ~= World.buildId then
 			tryBuild()
@@ -7736,6 +7779,7 @@ task.spawn(function()
 			table.clear(frameTimes)
 			table.clear(luaTimes)
 			prof.pulses, prof.lines, prof.frames = 0, 0, 0
+			Lines.maxColor, Lines.maxPlace = 0, 0
 			return true
 		elseif cmd == "resetCooldown" then
 			lastFire = -math.huge
@@ -8387,7 +8431,7 @@ local Lines = {}
 
 local HIDDEN = CFrame.new(0, -10000, 0)
 local LR, LG, LB = S.LineColor.R, S.LineColor.G, S.LineColor.B
-local QUANT = 40
+local QUANT = 16 -- 밝기 단계 수(색을 바꾸는 횟수를 줄인다: 검은 바탕에서는 16단계로도 부드럽다)
 
 type Rec = {
 	part: Part,
@@ -8404,6 +8448,10 @@ local free: { Part } = {}
 local created = 0
 local active: { Rec } = {}
 local byKey: { [number]: Rec } = {}
+-- 켜진 순서(가장 오래된 것부터). 풀이 가득 찼을 때 가장 오래된 선을 O(1)로 찾는다
+-- (예전에는 선 하나마다 켜진 선 전부를 훑어서, 빽빽한 곳에서 한 프레임이 1초 가까이 걸렸다)
+local order: { { rec: Rec, t0: number } } = {}
+local head = 1
 local moveParts: { BasePart } = {}
 local moveCFs: { CFrame } = {}
 Lines.stolen = 0
@@ -8448,13 +8496,17 @@ local function release(i: number)
 	if rec.key then
 		byKey[rec.key] = nil
 	end
-	rec.part.Color = Color3.new(0, 0, 0)
+	-- (색은 그대로 두고 화면 밖으로만 옮긴다: 다시 쓸 때 첫 갱신에서 색을 정한다)
 	table.insert(moveParts, rec.part)
 	table.insert(moveCFs, HIDDEN)
 	table.insert(free, rec.part)
 end
 
-local function take(): Part
+Lines.dropped = 0
+-- (테스트) 한 프레임에 한 일의 양: 색 바꾸기, 위치·크기 바꾸기 — 가장 많았던 프레임
+local frameColor, framePlace = 0, 0
+Lines.maxColor, Lines.maxPlace = 0, 0
+local function take(now: number): Part?
 	local p = table.remove(free)
 	if p then
 		return p
@@ -8462,19 +8514,31 @@ local function take(): Part
 	if created < S.PoolSize then
 		return newPart()
 	end
-	-- 풀이 가득: 가장 오래된 선을 빼앗는다
-	local oldest, oi = math.huge, 1
-	for i, r in active do
-		if r.t0 < oldest then
-			oldest, oi = r.t0, i
+	-- 풀이 가득: 이미 사라지는 중인 가장 오래된 선만 가져온다(켜진 순서 큐의 앞, 그사이 다시 켜졌거나 꺼진 것은 건너뛴다).
+	-- 아직 또렷한 선뿐이면 새(더 먼) 선을 그리지 않는다 — 가까운 선이 지워졌다 다시 그려지는 일(깜빡임·렉)을 막는다
+	local fadeAt = S.Hold - S.FadeTime
+	while head <= #order do
+		local e = order[head]
+		local r = e.rec
+		if not (active[r.slot] == r and r.t0 == e.t0) then
+			order[head] = nil :: any
+			head += 1
+		elseif now - r.t0 >= fadeAt then
+			order[head] = nil :: any
+			head += 1
+			Lines.stolen += 1
+			release(r.slot)
+			return table.remove(free)
+		else
+			break
 		end
 	end
-	Lines.stolen += 1
-	release(oi)
-	return table.remove(free) :: Part
+	Lines.dropped += 1
+	return nil
 end
 
 local function place(part: Part, a: Vector3, b: Vector3, cam: Vector3)
+	framePlace += 1
 	local d = b - a
 	local len = d.Magnitude
 	local mid = (a + b) / 2
@@ -8496,6 +8560,7 @@ function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: numb
 		local rec = byKey[key]
 		if rec then
 			rec.t0 = now
+			table.insert(order, { rec = rec, t0 = now })
 			rec.peak = math.max(peak, rec.peak * 0.5)
 			rec.q = -1
 			rec.wake = nil
@@ -8505,10 +8570,23 @@ function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: numb
 			return
 		end
 	end
-	local part = take()
+	local part = take(now)
+	if not part then
+		return
+	end
 	place(part, a, b, cam)
 	local rec: Rec = { part = part, t0 = now, peak = peak, key = key, q = -1, slot = #active + 1 }
 	active[rec.slot] = rec
+	table.insert(order, { rec = rec, t0 = now })
+	-- 큐 앞쪽 빈자리 정리
+	if head > 4096 then
+		local n = #order - head + 1
+		table.move(order, head, #order, 1)
+		for i = n + 1, #order do
+			order[i] = nil :: any
+		end
+		head = 1
+	end
 	if key then
 		byKey[key] = rec
 	end
@@ -8542,13 +8620,19 @@ function Lines.update(now: number)
 		else
 			-- 플래시가 끝난 뒤 사라지기 시작할 때까지는 밝기가 같다: 그동안은 계산하지 않는다
 			local fadeStart = S.Hold - S.FadeTime
-			rec.wake = if age >= S.FlashTime and age < fadeStart then rec.t0 + fadeStart else nil
+			-- 다음에 밝기가 바뀔 때까지 쉰다(매 프레임 색을 바꾸지 않게):
+			--   플래시 동안: 플래시가 끝날 때(밝게 → 보통, 두 번만 바뀜)
+			--   유지 동안: 사라지기 시작할 때
+			--   사라지는 동안: 다음 단계쯤 — 같은 프레임에 켜진 선들이 한꺼번에 바뀌지 않게 조금씩 어긋나게
+			local step = S.FadeTime / QUANT
+			rec.wake = if age < S.FlashTime then rec.t0 + S.FlashTime elseif age < fadeStart then rec.t0 + fadeStart else now + step * (0.6 + math.random() * 0.8)
 			local l = level(age) * rec.peak
 			local q = math.floor(l * QUANT + 0.5)
 			if q ~= rec.q then
 				rec.q = q
 				local v = q / QUANT
 				rec.part.Color = Color3.new(LR * v, LG * v, LB * v)
+				frameColor += 1
 			end
 			i += 1
 		end
@@ -8558,6 +8642,9 @@ function Lines.update(now: number)
 		table.clear(moveParts)
 		table.clear(moveCFs)
 	end
+	Lines.maxColor = math.max(Lines.maxColor, frameColor)
+	Lines.maxPlace = math.max(Lines.maxPlace, framePlace)
+	frameColor, framePlace = 0, 0
 end
 
 -- 테스트: p 에서 r 안에 켜져 있는 선 수
@@ -8571,10 +8658,26 @@ function Lines.countNear(p: Vector3, r: number): number
 	return n
 end
 
+-- 선 파트를 미리 만들어 둔다(음파 도중에 새로 만들면 그 프레임이 끊긴다). 스테이지를 불러올 때 조금씩 만든다
+function Lines.prewarm(n: number)
+	local want = math.min(n, S.PoolSize)
+	while created < want do
+		for _ = 1, 150 do
+			if created >= want then
+				break
+			end
+			table.insert(free, newPart())
+		end
+		task.wait()
+	end
+end
+
 function Lines.clear()
 	while #active > 0 do
 		release(#active)
 	end
+	table.clear(order)
+	head = 1
 	if #moveParts > 0 then
 		workspace:BulkMoveTo(moveParts, moveCFs, Enum.BulkMoveMode.FireCFrameChanged)
 		table.clear(moveParts)
@@ -8589,7 +8692,7 @@ function Lines.stats()
 			lit += 1
 		end
 	end
-	return { active = #active, lit = lit, created = created, free = #free, stolen = Lines.stolen, shown = Lines.shownTotal }
+	return { active = #active, lit = lit, created = created, free = #free, stolen = Lines.stolen, dropped = Lines.dropped, shown = Lines.shownTotal, maxColor = Lines.maxColor, maxPlace = Lines.maxPlace }
 end
 
 -- 테스트용: 현재 켜진 선의 가운데 점들
@@ -8635,6 +8738,7 @@ type Pulse = {
 	seen: { [number]: boolean },
 	buckets: { [number]: { number } },
 	nextBucket: number,
+	bucketPos: number, -- 지금 버킷에서 다음에 보여 줄 위치(한 프레임 상한에 걸려 버킷 중간에서 멈췄을 때)
 	dynA: { Vector3 },
 	dynB: { Vector3 },
 	dynM: { Vector3 },
@@ -8871,6 +8975,7 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 		seen = {},
 		buckets = {},
 		nextBucket = 0,
+		bucketPos = 1,
 		dynA = {},
 		dynB = {},
 		dynM = {},
@@ -8991,6 +9096,7 @@ function Pulses.update(now: number)
 	end
 	local budget = S.ExpandBudget
 	local R = S.Radius
+	local showLeft = S.RevealPerFrame -- 이 프레임에 새로 보여 줄 선 수(모든 음파 합계)
 	local i = 1
 	while i <= #pulses do
 		local p = pulses[i]
@@ -9001,14 +9107,23 @@ function Pulses.update(now: number)
 		-- 확정된 거리(힙의 최소값)까지, 그리고 파면까지만 보여 준다
 		local settled = if p.hn > 0 then p.hk[1] else math.huge
 		local limit = math.min(front, settled)
-		while p.nextBucket <= limit and p.nextBucket <= R + 1 do
+		-- 한 프레임에 새로 보여 줄 선 수를 제한한다(모든 음파 합계, 버킷 중간에서도 멈춘다 — 빽빽한 곳에서 한 프레임이 길어지지 않게)
+		while p.nextBucket <= limit and p.nextBucket <= R + 1 and showLeft > 0 do
 			local l = p.buckets[p.nextBucket]
 			if l then
-				for _, id in l do
-					reveal(p, id, p.nextBucket, now)
+				local k = p.bucketPos
+				while k <= #l and showLeft > 0 do
+					reveal(p, l[k], p.nextBucket, now)
+					k += 1
+					showLeft -= 1
+				end
+				if k <= #l then
+					p.bucketPos = k
+					break
 				end
 				p.buckets[p.nextBucket] = nil
 			end
+			p.bucketPos = 1
 			p.nextBucket += 1
 		end
 		if p.nextBucket > R + 1 and (p.hn == 0 or p.hk[1] > R) then

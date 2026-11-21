@@ -1230,6 +1230,57 @@ local function lobbyTest()
 	check("room panel is back in the lobby", lu2 ~= nil)
 end
 
+-- ─────────────────────────────── dense ───────────────────────────────
+-- 음파로 보여 줄 게 가장 많은 곳(스테이지마다 반경 안 파트가 가장 많은 바닥 칸)에서 음파를 계속 쏴 최악의 프레임을 잰다
+local function dense()
+	local ps = readyPlayers(1)
+	if not ps then
+		check("ready", false)
+		return
+	end
+	local p = ps[1]
+	local out = {}
+	local only = tonumber(args.Stage) or 0
+	for i = 1, #Config.Stages do
+		if only == 0 or only == i then
+			Round.startStage(i)
+			readyPlayers(1)
+			waitFor(function()
+				local st = ask(p, "stats")
+				return st and st.buildId == stageFolder():GetAttribute("BuildId") and st.build.segs > 0
+			end, 30)
+			-- 가장 빽빽한 곳
+			local best, bn = nil, -1
+			local params = OverlapParams.new()
+			params.FilterType = Enum.RaycastFilterType.Include
+			params.FilterDescendantsInstances = { stageFolder() }
+			for k, n in Round.info.nodes do
+				if k % 3 == 0 then
+					local c = #workspace:GetPartBoundsInRadius(n, 30, params)
+					if c > bn then
+						best, bn = n, c
+					end
+				end
+			end
+			place(p, best + Vector3.new(0, 0, 0), best + Vector3.new(1, 0, 0))
+			task.wait(1)
+			ask(p, "resetPerf")
+			for _ = 1, 8 do
+				ask(p, "resetCooldown")
+				ask(p, "fire")
+				task.wait(Config.Sonar.Cooldown + 0.05)
+			end
+			task.wait(1)
+			local st = ask(p, "stats")
+			local r = { stage = i, parts = bn, luaAvg = math.floor(st.lua.avg * 100000) / 100, luaWorst = math.floor(st.lua.worst * 100000) / 100, frameWorst = math.floor(st.worstFrame * 10000) / 10, created = st.lines.created, stolen = st.lines.stolen, active = st.lines.active, pulsesMs = st.prof.pulsesMs, linesMs = st.prof.linesMs, segs = st.build.segs, maxColor = st.lines.maxColor, maxPlace = st.lines.maxPlace, dropped = st.lines.dropped }
+			table.insert(out, r)
+			log(HttpService:JSONEncode(r))
+			check(string.format("stage %d dense spot: sonar worst frame cost < 8ms", i), r.luaWorst < 8, string.format("avg %.2f worst %.2f ms, created %d stolen %d dropped %d", r.luaAvg, r.luaWorst, r.created, r.stolen, st.lines.dropped or 0))
+		end
+	end
+	R.info.dense = out
+end
+
 -- ─────────────────────────────── walk ───────────────────────────────
 -- 괴물이 실제로 돌아다니는가: 60초 동안 1초마다 위치를 재서 이동 거리·멈춰 있던 시간을 본다(플레이어는 숨겨 둔다)
 local function walk()
@@ -1407,7 +1458,9 @@ end
 
 task.spawn(function()
 	local ok, err = pcall(function()
-		if args.Test == "lobby" then
+		if args.Test == "dense" then
+			dense()
+		elseif args.Test == "lobby" then
 			lobbyTest()
 		elseif args.Test == "walk" then
 			walk()

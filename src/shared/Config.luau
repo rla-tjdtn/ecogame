@@ -25,6 +25,7 @@ Config.Sonar = {
 	AttachDistance = 2.6, -- 선분이 이 거리 안의 빈 복셀을 통해 음파를 받는다
 	PoolSize = 4500, -- 동시에 존재할 수 있는 선 파트 최대 수(재사용)
 	RemoteViewDistance = 110, -- 다른 플레이어 음파를 그리는 최대 거리
+	RevealPerFrame = 450, -- 한 프레임에 새로 나타나게 할 선(조각) 수 상한(모든 음파 합계, 넘으면 다음 프레임으로)
 	ExpandBudget = 5000, -- 프레임당 파동 전파 연산량 상한(복셀 확장 수)
 	ThinCylinder = 0.3, -- 이보다 가는 원통은 끝 링 없이 실루엣 두 줄만
 }
@@ -348,28 +349,14 @@ Config.ScreamRecipe = 0 -- 0 = 쓰지 않음(위의 ScreamStyle 사용), 1~60 = 
 -- 번호 하나(Config.RealScream)로 고른다. 0 이면 위의 합성 시안을 쓴다. 들어 보기: tools/sound-preview/real.html
 -- Start = 파일에서 시작 지점(초), Dur = 괴성 길이(초)
 Config.RealScreams = {
-	{ Id = 9114572653, Start = 0.5, Dur = 3, Volume = 0.55, Name = "귀신 비명 (다가오는 소름끼치는 쉿소리)" },
-	{ Id = 9114038256, Start = 0, Dur = 3, Volume = 0.45, Name = "악마 비명 (고통스럽게 쥐어짜는 비명)" },
-	{ Id = 9118850866, Start = 0, Dur = 2, Volume = 0.45, Name = "날카롭게 부풀어 오르는 비명" },
-	{ Id = 9113123369, Start = 0, Dur = 3, Volume = 0.6, Name = "천사 곡소리 (공허한 합창 울음)" },
-	{ Id = 9120358057, Start = 0, Dur = 3, Volume = 0.6, Name = "불협화음 합창 곡소리 (숨 섞인)" },
-	{ Id = 9126213995, Start = 0, Dur = 2.5, Volume = 0.7, Name = "귀신 속삭임 폭발 (알아들을 수 없는 악령)" },
-	{ Id = 9114573103, Start = 0, Dur = 3, Volume = 0.6, Name = "귀신의 긴 날숨 (느린 숨결)" },
-	{ Id = 9114568703, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 1 (Ghastly Screams 1)" },
-	{ Id = 9114567451, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 2" },
-	{ Id = 9114567638, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 6" },
-	{ Id = 9114567965, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 11 (짧음)" },
-	{ Id = 9114570562, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 13" },
-	{ Id = 9114569607, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 15 (짧음)" },
-	{ Id = 9114568392, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 20" },
-	{ Id = 9114568534, Start = 0, Dur = 3, Volume = 0.55, Name = "귀신 비명 시리즈 24" },
-	{ Id = 9125438341, Start = 0, Dur = 3, Volume = 0.5, Name = "악몽 속 아이 비명 (멀리서 긁히는 비명)" },
-	{ Id = 9118153393, Start = 0, Dur = 3, Volume = 0.5, Name = "울리는 긴 비명 (음이 이어지는 비명)" },
-	{ Id = 9114226295, Start = 0, Dur = 3, Volume = 0.6, Name = "공허한 숨결 울부짖음 (울림 가득)" },
-	{ Id = 9114572483, Start = 0.5, Dur = 3, Volume = 0.55, Name = "귀신 비명 2 (다가오는 쉿소리, 다른 녹음)" },
+	{ Id = 9117339703, Start = 0, Dur = 3.5, Volume = 0.5, Name = "날카롭게 찢어지는 비명 (Piercing Scream 1)" },
+	{ Id = 9125474518, Start = 0, Dur = 2.6, Volume = 0.5, Name = "괴물 괴성 — 익룡 같은 날카로운 울부짖음 (Creature Screech)" },
+	{ Id = 9113985971, Start = 0, Dur = 2, Volume = 0.5, Name = "고통에 찬 괴물의 찢어지는 비명 (Creature Scream Piercing Pain)" },
+	{ Id = 9114037660, Start = 0, Dur = 2.5, Volume = 0.5, Name = "악마 비명 (Demon Scream 2, 앞 2.5초)" },
+	{ Id = 9118307005, Start = 0, Dur = 2.8, Volume = 0.45, Name = "쇳소리 섞인 일그러진 괴성 (Robot Screams Intense Screeching)" },
 }
-Config.RealScream = 1 -- 위 목록 번호(0 = 합성 시안)
-Config.ScreamGate = { 0.2, 0.1 } -- 끊기는 박자: { 켜짐초, 꺼짐초 }
+Config.RealScream = 1 -- 위 목록 번호 1~5 (0 = 합성 시안). 들어 보기: tools/sound-preview/real.html
+Config.ScreamGate = nil :: { number }? -- 끊기는 박자 { 켜짐초, 꺼짐초 } (nil = 끊지 않고 한 번에 지른다. 예전 끊기는 방식: { 0.2, 0.1 })
 Config.ScreamCustom = nil :: any -- 예: { src = "ouch", pitch = 1.25, fx = "ghost", gate = { 0.22, 0.14 }, dur = 2.4, air = "wind" }
 -- src: "ouch"(비명) / "oof"(낮은 목소리) / "wind"(바람 숨결)   pitch: 음 높이 배율(클수록 높음)
 -- fx: ghost hollow breath siren stutter echo flange screech roar pulse   gate: { 켜짐초, 꺼짐초 } (끊기는 박자, 없으면 이어짐)
@@ -485,7 +472,7 @@ do
 		local id = "rbxassetid://" .. real.Id
 		style = {
 			Sounds = {
-				MonsterChase = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Fx = { { "ReverbSoundEffect", { DecayTime = 2.5, WetLevel = -8 } } } },
+				MonsterChase = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Cut = real.Dur, Fx = { { "ReverbSoundEffect", { DecayTime = 2.5, WetLevel = -8 } } } },
 				MonsterAlert = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Cut = real.Dur }, -- (잡힐 때 점프스케어가 2D 로 튼다)
 				MonsterIdle = { Id = "", Volume = 0, Pitch = 1, Range = 0 }, -- 평소에는 소리를 내지 않는다
 				MonsterScream2 = { Id = "", Volume = 0, Pitch = 1, Range = 0 },

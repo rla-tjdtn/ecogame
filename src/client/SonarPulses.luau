@@ -23,6 +23,7 @@ type Pulse = {
 	seen: { [number]: boolean },
 	buckets: { [number]: { number } },
 	nextBucket: number,
+	bucketPos: number, -- 지금 버킷에서 다음에 보여 줄 위치(한 프레임 상한에 걸려 버킷 중간에서 멈췄을 때)
 	dynA: { Vector3 },
 	dynB: { Vector3 },
 	dynM: { Vector3 },
@@ -259,6 +260,7 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 		seen = {},
 		buckets = {},
 		nextBucket = 0,
+		bucketPos = 1,
 		dynA = {},
 		dynB = {},
 		dynM = {},
@@ -379,6 +381,7 @@ function Pulses.update(now: number)
 	end
 	local budget = S.ExpandBudget
 	local R = S.Radius
+	local showLeft = S.RevealPerFrame -- 이 프레임에 새로 보여 줄 선 수(모든 음파 합계)
 	local i = 1
 	while i <= #pulses do
 		local p = pulses[i]
@@ -389,14 +392,23 @@ function Pulses.update(now: number)
 		-- 확정된 거리(힙의 최소값)까지, 그리고 파면까지만 보여 준다
 		local settled = if p.hn > 0 then p.hk[1] else math.huge
 		local limit = math.min(front, settled)
-		while p.nextBucket <= limit and p.nextBucket <= R + 1 do
+		-- 한 프레임에 새로 보여 줄 선 수를 제한한다(모든 음파 합계, 버킷 중간에서도 멈춘다 — 빽빽한 곳에서 한 프레임이 길어지지 않게)
+		while p.nextBucket <= limit and p.nextBucket <= R + 1 and showLeft > 0 do
 			local l = p.buckets[p.nextBucket]
 			if l then
-				for _, id in l do
-					reveal(p, id, p.nextBucket, now)
+				local k = p.bucketPos
+				while k <= #l and showLeft > 0 do
+					reveal(p, l[k], p.nextBucket, now)
+					k += 1
+					showLeft -= 1
+				end
+				if k <= #l then
+					p.bucketPos = k
+					break
 				end
 				p.buckets[p.nextBucket] = nil
 			end
+			p.bucketPos = 1
 			p.nextBucket += 1
 		end
 		if p.nextBucket > R + 1 and (p.hn == 0 or p.hk[1] > R) then
