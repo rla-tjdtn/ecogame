@@ -408,6 +408,9 @@ task.spawn(function()
 			local ids = {}
 			for _, r in (Config :: any).RealScreams do
 				table.insert(ids, "rbxassetid://" .. r.Id)
+				if r.Layer then
+					table.insert(ids, "rbxassetid://" .. r.Layer.Id)
+				end
 			end
 			table.insert(ids, (Config.Sounds :: any).MonsterStep.Id)
 			local sounds = {}

@@ -357,8 +357,13 @@ Config.RealScreams = {
 	{ Id = 9114628818, Start = 0, Dur = 2, Volume = 0.55, Name = "거인의 낮게 으르렁거리는 목소리 (Goliath Vocal Deep Growling)" },
 	{ Id = 9125548429, Start = 0, Dur = 3, Volume = 0.5, Name = "느리게 웅웅거리는 드론 소리 (Slow Buzzing Synth Drone Hum)" },
 	{ Id = 9113980319, Start = 0, Dur = 3, Volume = 0.5, Name = "거대 게 괴물의 포효와 으르렁 (Giant Crab Monster Roar Growl)" },
+	-- 9~12: 4번(낮게 웅웅 울리는 외계 에너지) + 소름 끼치는 비명을 겹친 것. Layer = 겹치는 비명(Delay 초 뒤에 시작)
+	{ Id = 9119839011, Start = 0, Dur = 3, Volume = 0.45, Name = "4번 웅웅 + 날카롭게 찢어지는 비명", Layer = { Id = 9117339703, Start = 0, Dur = 2.4, Volume = 0.4, Delay = 0.5 } },
+	{ Id = 9119839011, Start = 0, Dur = 3, Volume = 0.45, Name = "4번 웅웅 + 고통에 찬 괴물 비명", Layer = { Id = 9113985971, Start = 0, Dur = 2, Volume = 0.4, Delay = 0.5 } },
+	{ Id = 9119839011, Start = 0, Dur = 3, Volume = 0.45, Name = "4번 웅웅 + 다가오는 귀신 비명", Layer = { Id = 9114572653, Start = 0.5, Dur = 2.4, Volume = 0.45, Delay = 0.4 } },
+	{ Id = 9119839011, Start = 0, Dur = 3, Volume = 0.45, Name = "4번 웅웅 + 악마 비명", Layer = { Id = 9114037660, Start = 0, Dur = 2.4, Volume = 0.4, Delay = 0.5 } },
 }
-Config.RealScream = 1 -- 위 목록 번호 1~8 (0 = 합성 시안). 들어 보기: tools/sound-preview/real.html
+Config.RealScream = 9 -- 위 목록 번호 1~12 (9~12 = 4번 웅웅 + 비명). Studio 에서 Play 중 숫자키 1~4 로 9~12번을 바로 들어 볼 수 있다 (0 = 합성 시안). 들어 보기: tools/sound-preview/real.html
 Config.ScreamGate = nil :: { number }? -- 끊기는 박자 { 켜짐초, 꺼짐초 } (nil = 끊지 않고 한 번에 지른다. 예전 끊기는 방식: { 0.2, 0.1 })
 Config.ScreamCustom = nil :: any -- 예: { src = "ouch", pitch = 1.25, fx = "ghost", gate = { 0.22, 0.14 }, dur = 2.4, air = "wind" }
 -- src: "ouch"(비명) / "oof"(낮은 목소리) / "wind"(바람 숨결)   pitch: 음 높이 배율(클수록 높음)
@@ -476,13 +481,19 @@ do
 		style = {
 			Sounds = {
 				MonsterChase = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Cut = real.Dur, Fx = { { "ReverbSoundEffect", { DecayTime = 2.5, WetLevel = -8 } } } },
-				MonsterAlert = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Cut = real.Dur }, -- (잡힐 때 점프스케어가 2D 로 튼다)
+				MonsterAlert = if real.Layer
+					then { Id = "rbxassetid://" .. real.Layer.Id, Volume = real.Layer.Volume, Pitch = 1, Range = 110, Cut = real.Layer.Dur }
+					else { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Cut = real.Dur }, -- (잡힐 때 점프스케어가 2D 로 튼다: 겹친 비명이 있으면 그 비명)
+				MonsterChaseLayer = if real.Layer then { Id = "rbxassetid://" .. real.Layer.Id, Volume = real.Layer.Volume, Pitch = 1, Range = 110, Cut = real.Layer.Dur } else { Id = "", Volume = 0, Pitch = 1, Range = 0 },
 				MonsterIdle = { Id = "", Volume = 0, Pitch = 1, Range = 0 }, -- 평소에는 소리를 내지 않는다
 				MonsterScream2 = { Id = "", Volume = 0, Pitch = 1, Range = 0 },
 			},
 			-- 추격 괴성: 끊었다 켰다 하며(Config.ScreamGate) 같은 음 높이로
 			Screams = { Chase = { { s = "MonsterChase", t = 0, p = 1, v = 1, dur = real.Dur, gate = Config.ScreamGate, start = real.Start } } },
 		}
+		if real.Layer then
+			table.insert(style.Screams.Chase, { s = "MonsterChaseLayer", t = real.Layer.Delay, p = 1, v = 1, start = real.Layer.Start })
+		end
 	end
 	for name, def in style.Sounds do
 		(Config.Sounds :: any)[name] = def

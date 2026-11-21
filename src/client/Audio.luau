@@ -383,4 +383,42 @@ function Audio.update()
 	end
 end
 
+-- ── (Studio 전용) 괴물 소리 미리 듣기: Play 중 숫자키 1~4 = 목록 9~12번(4번 웅웅 + 비명) ──
+-- 게시된 게임에서는 동작하지 않는다.
+local function playClip(id: number, start: number, dur: number, vol: number)
+	local s = Instance.new("Sound")
+	s.SoundId = "rbxassetid://" .. id
+	s.Volume = vol
+	s.SoundGroup = master
+	s.Parent = SoundService
+	s.TimePosition = start
+	s:Play()
+	task.delay(dur, function()
+		for k = 1, 5 do
+			s.Volume = vol * (1 - k / 5)
+			task.wait(0.03)
+		end
+		s:Destroy()
+	end)
+end
+function Audio.previewScream(index: number)
+	local r = (Config :: any).RealScreams[index]
+	if not r then
+		return
+	end
+	playClip(r.Id, r.Start, r.Dur, r.Volume)
+	if r.Layer then
+		task.delay(r.Layer.Delay, playClip, r.Layer.Id, r.Layer.Start, r.Layer.Dur, r.Layer.Volume)
+	end
+end
+if game:GetService("RunService"):IsStudio() then
+	local keys = { [Enum.KeyCode.One] = 9, [Enum.KeyCode.Two] = 10, [Enum.KeyCode.Three] = 11, [Enum.KeyCode.Four] = 12 }
+	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
+		local idx = keys[input.KeyCode]
+		if idx and not processed then
+			Audio.previewScream(idx)
+		end
+	end)
+end
+
 return Audio
