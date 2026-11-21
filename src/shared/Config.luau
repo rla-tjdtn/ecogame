@@ -120,8 +120,8 @@ Config.Sounds = {
 	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.35, Pitch = 0.85, Range = 40, Cut = 0.2 },
 	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.6, Pitch = 0.95, Range = 70, Cut = 0.17 },
 	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.12, Pitch = 0.75, Range = 18, Cut = 0.22 },
-	Sonar = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.9, Pitch = 0.35, Range = 90 },
-	SonarEcho = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.35, Pitch = 0.28, Range = 90 },
+	Sonar = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.3, Pitch = 0.35, Range = 90 }, -- (크면 머리가 아프다: 0.9 → 0.3)
+	SonarEcho = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.12, Pitch = 0.28, Range = 90 },
 	Door = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.8, Pitch = 0.55, Range = 60 },
 	MonsterStep = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.9, Pitch = 0.5, Range = 95 },
 	MonsterIdle = { Id = "rbxasset://sounds/oof.ogg", Volume = 0.55, Pitch = 0.32, Range = 70 },

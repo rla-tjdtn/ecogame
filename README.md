@@ -108,6 +108,7 @@ src/client/   → StarterPlayerScripts
   Audio.luau                    발소리·음파·문·괴물·환경음(전부 클라이언트, 3D)
   UI.luau                       조준점, 음파 대기 막대, 스테이지 이름, 안내, YOU DIED / STAGE CLEAR
   MapView.luau                  지도(Q): 내 음파가 닿은 칸의 벽 윤곽을 기록
+  Mates.luau                    팀원: 음파 없이도 늘 흰 윤곽선(실제 아바타, Highlight)
   RbxCharacterSounds.client.luau  기본 캐릭터 소리 끄기(빈 스크립트)
 ```
 

@@ -247,16 +247,7 @@ function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { {
 			consider(inst, false)
 		end
 	end
-	for _, plr in Players:GetPlayers() do
-		local char = plr.Character
-		if char and char ~= exclude and plr ~= Players.LocalPlayer then
-			for _, d in char:GetChildren() do
-				if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
-					consider(d, true)
-				end
-			end
-		end
-	end
+	-- (다른 플레이어는 Mates 의 윤곽선으로 늘 보이므로 음파 선은 만들지 않는다)
 	return out
 end
 

@@ -207,8 +207,8 @@ Config.Sounds = {
 	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.35, Pitch = 0.85, Range = 40, Cut = 0.2 },
 	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.6, Pitch = 0.95, Range = 70, Cut = 0.17 },
 	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.12, Pitch = 0.75, Range = 18, Cut = 0.22 },
-	Sonar = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.9, Pitch = 0.35, Range = 90 },
-	SonarEcho = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.35, Pitch = 0.28, Range = 90 },
+	Sonar = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.3, Pitch = 0.35, Range = 90 }, -- (크면 머리가 아프다: 0.9 → 0.3)
+	SonarEcho = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.12, Pitch = 0.28, Range = 90 },
 	Door = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.8, Pitch = 0.55, Range = 60 },
 	MonsterStep = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.9, Pitch = 0.5, Range = 95 },
 	MonsterIdle = { Id = "rbxasset://sounds/oof.ogg", Volume = 0.55, Pitch = 0.32, Range = 70 },
@@ -5276,6 +5276,13 @@ local function lobbyTest()
 	task.wait(1.2)
 	local lit2 = ask(p2, "stats")
 	check("P2's sonar works in the game", lit2 and lit2.lines.lit > 50, lit2 and lit2.lines.lit)
+	-- 팀원은 음파 없이도 실제 아바타 윤곽선으로 보인다
+	local mt1 = waitFor(function()
+		local n = ask(p1, "mates")
+		return n == 1 and n
+	end, 5)
+	local mt2 = ask(p2, "mates")
+	check("teammates always shown as an outline of their avatar", mt1 == 1 and mt2 == 1, tostring(mt1) .. "/" .. tostring(mt2))
 	-- 시야 공유: P2 의 음파가 P1 의 지도에도 남고, 지도에 팀원이 보인다
 	task.wait(1.5)
 	local mp1 = ask(p1, "map")
@@ -6137,6 +6144,7 @@ local Audio = require(script.Parent:WaitForChild("Audio"))
 local UI = require(script.Parent:WaitForChild("UI"))
 local MapView = require(script.Parent:WaitForChild("MapView"))
 local LobbyUI = require(script.Parent:WaitForChild("LobbyUI"))
+local Mates = require(script.Parent:WaitForChild("Mates"))
 Pulses.onReach = MapView.onReach
 
 local player = Players.LocalPlayer
@@ -6493,6 +6501,8 @@ task.spawn(function()
 		elseif cmd == "linesNear" then
 			local t = arg :: { any }
 			return Lines.countNear(t[1], t[2])
+		elseif cmd == "mates" then
+			return Mates.count()
 		elseif cmd == "lobby" then
 			return LobbyUI.state()
 		elseif cmd == "lobbyClick" then
@@ -6788,6 +6798,74 @@ return Map
       </Item>
       <Item class="ModuleScript" referent="41">
         <Properties>
+          <string name="Name">Mates</string>
+          <string name="Source"><![CDATA[--!strict
+-- 함께 하는 플레이어(팀원)는 음파와 상관없이 늘 흰 윤곽선으로 보인다(실제 아바타 모양, Highlight).
+-- 벽 너머는 가려진다(DepthMode Occluded). 살아 있는(Status "Alive") 다른 플레이어만, 내 캐릭터는 제외.
+-- Highlight 는 이 클라이언트에만 만들어진다(복제되지 않음).
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Mates = {}
+local player = Players.LocalPlayer
+local NAME = "MateOutline"
+
+local function wanted(p: Player): Model?
+	if p == player or p:GetAttribute("Status") ~= "Alive" then
+		return nil
+	end
+	return p.Character
+end
+
+local function sync()
+	for _, p in Players:GetPlayers() do
+		local char = p.Character
+		local want = wanted(p)
+		local h = char and char:FindFirstChild(NAME) :: Highlight?
+		if want and not h then
+			local hl = Instance.new("Highlight")
+			hl.Name = NAME
+			hl.Adornee = want
+			hl.FillTransparency = 1
+			hl.OutlineColor = Color3.new(1, 1, 1)
+			hl.OutlineTransparency = 0.05
+			hl.DepthMode = Enum.HighlightDepthMode.Occluded
+			hl.Parent = want
+		elseif h and not want then
+			h:Destroy()
+		end
+	end
+end
+
+-- (테스트) 윤곽선이 켜진 팀원 수
+function Mates.count(): number
+	local n = 0
+	for _, p in Players:GetPlayers() do
+		local char = p.Character
+		local h = char and char:FindFirstChild(NAME) :: Highlight?
+		if h and h.Enabled and p ~= player then
+			n += 1
+		end
+	end
+	return n
+end
+
+local acc = 0
+RunService.Heartbeat:Connect(function(dt)
+	acc += dt
+	if acc >= 0.25 then
+		acc = 0
+		sync()
+	end
+end)
+
+return Mates
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="42">
+        <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
 -- 이동(걷기/달리기/웅크리기)과 1인칭 카메라 효과(아주 약한 헤드밥, 웅크릴 때 시점 낮춤, 추격 중 미세한 긴장감).
@@ -6887,7 +6965,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="42">
+      <Item class="LocalScript" referent="43">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -6895,7 +6973,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="43">
+      <Item class="ModuleScript" referent="44">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -7132,7 +7210,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="44">
+      <Item class="ModuleScript" referent="45">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -7563,7 +7641,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="45">
+      <Item class="ModuleScript" referent="46">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -7815,16 +7893,7 @@ function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { {
 			consider(inst, false)
 		end
 	end
-	for _, plr in Players:GetPlayers() do
-		local char = plr.Character
-		if char and char ~= exclude and plr ~= Players.LocalPlayer then
-			for _, d in char:GetChildren() do
-				if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
-					consider(d, true)
-				end
-			end
-		end
-	end
+	-- (다른 플레이어는 Mates 의 윤곽선으로 늘 보이므로 음파 선은 만들지 않는다)
 	return out
 end
 
@@ -8110,7 +8179,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="46">
+      <Item class="ModuleScript" referent="47">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -8308,7 +8377,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="47">
+  <Item class="Workspace" referent="48">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

@@ -17,6 +17,7 @@ local Audio = require(script.Parent:WaitForChild("Audio"))
 local UI = require(script.Parent:WaitForChild("UI"))
 local MapView = require(script.Parent:WaitForChild("MapView"))
 local LobbyUI = require(script.Parent:WaitForChild("LobbyUI"))
+local Mates = require(script.Parent:WaitForChild("Mates"))
 Pulses.onReach = MapView.onReach
 
 local player = Players.LocalPlayer
@@ -373,6 +374,8 @@ task.spawn(function()
 		elseif cmd == "linesNear" then
 			local t = arg :: { any }
 			return Lines.countNear(t[1], t[2])
+		elseif cmd == "mates" then
+			return Mates.count()
 		elseif cmd == "lobby" then
 			return LobbyUI.state()
 		elseif cmd == "lobbyClick" then

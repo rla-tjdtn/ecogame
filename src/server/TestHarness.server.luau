@@ -1023,6 +1023,13 @@ local function lobbyTest()
 	task.wait(1.2)
 	local lit2 = ask(p2, "stats")
 	check("P2's sonar works in the game", lit2 and lit2.lines.lit > 50, lit2 and lit2.lines.lit)
+	-- 팀원은 음파 없이도 실제 아바타 윤곽선으로 보인다
+	local mt1 = waitFor(function()
+		local n = ask(p1, "mates")
+		return n == 1 and n
+	end, 5)
+	local mt2 = ask(p2, "mates")
+	check("teammates always shown as an outline of their avatar", mt1 == 1 and mt2 == 1, tostring(mt1) .. "/" .. tostring(mt2))
 	-- 시야 공유: P2 의 음파가 P1 의 지도에도 남고, 지도에 팀원이 보인다
 	task.wait(1.5)
 	local mp1 = ask(p1, "map")
