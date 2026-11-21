@@ -289,9 +289,20 @@ local function hideTests(p)
 	end
 	m.startAt = 1e9
 	place(p, spot.front + Vector3.new(0, 3, 0), spot.center + Vector3.new(0, 3, 0))
-	task.wait(0.5)
-	local ui0 = ask(p, "stats")
-	check("hide prompt shown near the cabinet", ui0 and ui0.ui.prompt == "E   숨기", ui0 and tostring(ui0.ui.prompt))
+	-- 1인칭 카메라 방향은 클라이언트가 정한다: 사물함을 바라보게(안내는 화면 안에 있을 때만 뜬다)
+	local ui0 = nil
+	waitFor(function()
+		-- (순간이동 직후엔 카메라가 아직 옛 자리라, 자리를 잡을 때까지 다시 바라보게 한다)
+		ask(p, "lookTarget", spot.center + Vector3.new(0, 3, 0))
+		ui0 = ask(p, "stats")
+		return ui0 ~= nil and ui0.ui.prompt == "E   숨기"
+	end, 3)
+	local nearDoor = math.huge
+	for _, d in Doors.all() do
+		nearDoor = math.min(nearDoor, ((d.prompt.Parent :: BasePart).Position - spot.front).Magnitude)
+	end
+	local pinfo = if not (ui0 and ui0.ui.prompt == "E   숨기") then ask(p, "prompts") else ""
+	check("hide prompt shown near the cabinet", ui0 and ui0.ui.prompt == "E   숨기", string.format("%s | %s | tile %d,%d door %.1f enabled %s", ui0 and tostring(ui0.ui.prompt) or "no ui", tostring(pinfo), math.floor(spot.center.X / 8), math.floor(spot.center.Z / 8), nearDoor, tostring(spot.prompt.Enabled)))
 	local ok = Hiding.enter(p, spot)
 	local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local inside = root and (Vector3.new(root.Position.X, 0, root.Position.Z) - Vector3.new(spot.center.X, 0, spot.center.Z)).Magnitude
@@ -1196,8 +1207,11 @@ local function lobbyTest()
 	local mt2 = ask(p2, "mates")
 	check("teammates always shown as an outline of their avatar", mt1 == 1 and mt2 == 1, tostring(mt1) .. "/" .. tostring(mt2))
 	-- 시야 공유: P2 의 음파가 P1 의 지도에도 남고, 지도에 팀원이 보인다
-	task.wait(1.5)
-	local mp1 = ask(p1, "map")
+	local mp1 = nil
+	waitFor(function()
+		mp1 = ask(p1, "map")
+		return mp1 ~= nil and mp1.explored > 5
+	end, 8)
 	check("teammate's echo is recorded on my map", mp1 and mp1.explored > 5, mp1 and mp1.explored)
 	ask(p1, "toggleMap")
 	task.wait(0.4)

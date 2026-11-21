@@ -164,19 +164,26 @@ local function promptText(prompt: ProximityPrompt): string
 	end
 	return "E   " .. prompt.ActionText
 end
+-- 지금 안내 중인 것: 다른 안내가 사라지는 신호가 늦게 와도(문 → 사물함으로 바로 옮길 때) 지금 것을 지우지 않는다
+local shownPrompt: ProximityPrompt? = nil
 ProximityPromptService.PromptShown:Connect(function(prompt)
 	if prompt.Style == Enum.ProximityPromptStyle.Custom then
+		shownPrompt = prompt
 		UI.setPrompt(promptText(prompt))
-		local conn = prompt:GetPropertyChangedSignal("ActionText"):Connect(function()
-			UI.setPrompt(promptText(prompt))
-		end)
-		local conn2 = player:GetAttributeChangedSignal("Hidden"):Connect(function()
-			UI.setPrompt(promptText(prompt))
-		end)
+		local function refresh()
+			if shownPrompt == prompt then
+				UI.setPrompt(promptText(prompt))
+			end
+		end
+		local conn = prompt:GetPropertyChangedSignal("ActionText"):Connect(refresh)
+		local conn2 = player:GetAttributeChangedSignal("Hidden"):Connect(refresh)
 		prompt.PromptHidden:Once(function()
 			conn:Disconnect()
 			conn2:Disconnect()
-			UI.setPrompt(nil)
+			if shownPrompt == prompt then
+				shownPrompt = nil
+				UI.setPrompt(nil)
+			end
 		end)
 	end
 end)
@@ -435,6 +442,20 @@ task.spawn(function()
 				snd:Destroy()
 			end
 			return { total = #ids, bad = bad, lengths = lengths }
+		elseif cmd == "prompts" then
+			-- 주변 ProximityPrompt(거리·켜짐·이름) — 안내가 안 뜰 때 원인 찾기
+			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local out = {}
+			for _, d in workspace:GetDescendants() do
+				if d:IsA("ProximityPrompt") and d.Parent and d.Parent:IsA("BasePart") and root then
+					local dist = ((d.Parent :: BasePart).Position - root.Position).Magnitude
+					if dist < 12 then
+						table.insert(out, string.format("%s %.1f/%d en=%s %s", d.ActionText, dist, d.MaxActivationDistance, tostring(d.Enabled), d.Parent:GetFullName()))
+					end
+				end
+			end
+			table.insert(out, "svc=" .. tostring(game:GetService("ProximityPromptService").Enabled))
+			return table.concat(out, " ; ")
 		elseif cmd == "jump" then
 			local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 			if h then

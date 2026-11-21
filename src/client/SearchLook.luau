@@ -1,6 +1,6 @@
 --!strict
 -- 상자·서랍 조작: 조준점(화면 가운데)으로 서랍이나 뚜껑을 보고 E → 열기/닫기(서버 Search 가 판정).
--- 서랍마다 따로 열고 닫을 수 있다. 안내 문구는 UI.setPrompt 로 보여 준다.
+-- 서랍마다 따로 열고 닫을 수 있다. 안내 문구는 UI.setLookPrompt 로 보여 준다.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -75,10 +75,10 @@ RunService.RenderStepped:Connect(function(dt)
 	if current then
 		local open = current.model:GetAttribute("Open") == true
 		local what = if current.label == "서랍장" or current.label == "협탁" then "서랍" else current.label
-		UI.setPrompt(if open then ("E   " .. what .. " 닫기") else ("E   " .. what .. " 열기"))
+		UI.setLookPrompt(if open then ("E   " .. what .. " 닫기") else ("E   " .. what .. " 열기"))
 		shown = true
 	elseif shown then
-		UI.setPrompt(nil)
+		UI.setLookPrompt(nil)
 		shown = false
 	end
 end)

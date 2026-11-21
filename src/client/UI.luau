@@ -136,9 +136,24 @@ function UI.hint(text: string, seconds: number)
 	end)
 end
 
-function UI.setPrompt(text: string?)
+-- 안내 문구는 두 곳에서 온다: 문·숨는 곳(가까이 가면) / 서랍·상자(조준하면). 조준한 것이 먼저 보이고,
+-- 한쪽이 지워도 다른 쪽 문구는 남는다(서랍에서 눈을 떼도 옆 사물함의 '숨기'가 사라지지 않게)
+local nearText: string? = nil
+local lookText: string? = nil
+local function showPrompt()
+	local text = lookText or nearText
 	prompt.Visible = text ~= nil
 	prompt.Text = text or ""
+end
+
+function UI.setPrompt(text: string?)
+	nearText = text
+	showPrompt()
+end
+
+function UI.setLookPrompt(text: string?)
+	lookText = text
+	showPrompt()
 end
 
 -- 결과 화면. black: 화면을 검게 덮는다(아니면 글자만)
