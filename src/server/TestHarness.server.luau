@@ -177,6 +177,43 @@ local function stageFolder()
 	return workspace:FindFirstChild("Stage")
 end
 
+-- ─────────────────────────────── 문 끼임 ───────────────────────────────
+-- 문 바로 앞(예전에 문짝이 휘두르던 자리)에 서서 열고 지나간다 — 양쪽에서. 문짝은 여는 사람 반대쪽으로 열려야 한다
+local function doorTests(p)
+	local door = nil
+	for _, d in Doors.all() do
+		if (d.panel.Position - tile(5, 3, 4.5)).Magnitude < 4 then
+			door = d
+		end
+	end
+	if not door then
+		check("door for the stuck test", false)
+		return
+	end
+	local x0 = door.panel.Position.X
+	for _, side in { -1, 1 } do
+		if door.open then
+			Doors.toggle(door)
+			task.wait(1)
+		end
+		local from = Vector3.new(x0 + side * 2.2, 3, tile(5, 3).Z)
+		local to = Vector3.new(x0 - side * 9, 3, tile(5, 3).Z)
+		place(p, from, to)
+		task.wait(0.4)
+		Doors.toggle(door, p)
+		task.wait(0.8)
+		ask(p, "move", to)
+		local crossed = waitFor(function()
+			local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			return r and (r.Position.X - x0) * -side > 2.5
+		end, 4)
+		check(string.format("open a door standing right at it and walk through (%s side)", if side < 0 then "west" else "east"), crossed ~= nil)
+	end
+	if door.open then
+		Doors.toggle(door)
+	end
+end
+
 -- ─────────────────────────────── 괴물 모습·등장 ───────────────────────────────
 local function monsterTests(p)
 	local m = Round.monsters[1]
@@ -685,8 +722,8 @@ local function core()
 	Config.Key.Required = true
 	local spotsZ = Search.all()
 	check("searchable boxes/drawers built", #spotsZ >= 5, #spotsZ)
-	local ks = Search.keySpot()
-	check("exactly one of them holds the key", ks ~= nil)
+	local ks, ki = Search.keySpot()
+	check("exactly one of them holds the key", ks ~= nil and ki ~= nil)
 	place(p, Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
 	task.wait(1.2)
 	check("exit is locked without the key", p:GetAttribute("Status") == "Alive" and ReplicatedStorage:GetAttribute("HasKey") ~= true, p:GetAttribute("Status"))
@@ -700,16 +737,50 @@ local function core()
 		end
 	end
 	if empty then
-		place(p, empty.front + Vector3.new(0, 3, 0))
+		place(p, empty.front + Vector3.new(0, 3, 0), empty.center + Vector3.new(0, 3, 0))
 		task.wait(0.3)
-		local r1 = Search.search(p, empty)
-		local r2 = Search.search(p, empty)
-		check("searching an empty box: empty, then already searched", r1 == "empty" and r2 == "already", r1 .. "/" .. r2)
+		-- 서랍(뚜껑)마다 따로 열고 닫는다: 처음 열면 뒤짐(비어 있음), 닫고 다시 열 수 있다
+		local r1 = Search.toggle(p, empty, 1)
+		local r2 = Search.toggle(p, empty, 1)
+		local r3 = Search.toggle(p, empty, 1)
+		check("a drawer opens (empty), closes, and opens again", r1 == "empty" and r2 == "closed" and r3 == "opened", r1 .. "/" .. r2 .. "/" .. r3)
+		local allOpen = true
+		for i = 2, #empty.comps do
+			Search.toggle(p, empty, i)
+		end
+		for _, c in empty.comps do
+			allOpen = allOpen and c.open
+		end
+		check("every drawer of a cabinet can be opened", allOpen, #empty.comps)
+		local fwd = (empty.front - empty.center).Unit
+		local c1 = empty.comps[1]
+		local moved = c1.model:GetPivot().Position - c1.closedPivot.Position
+		check("an opened drawer/lid moves toward the player, not sideways", (moved:Dot(fwd) > 0.4 or moved.Y > 0.4) and math.abs(moved:Dot(Vector3.new(fwd.Z, 0, -fwd.X))) < 0.2, string.format("fwd %.2f side %.2f up %.2f", moved:Dot(fwd), moved:Dot(Vector3.new(fwd.Z, 0, -fwd.X)), moved.Y))
+		for i = 1, #empty.comps do
+			Search.toggle(p, empty, i)
+		end
+		local allClosed = true
+		for _, c in empty.comps do
+			allClosed = allClosed and not c.open
+		end
+		check("every drawer closes again", allClosed)
+		-- 조준점으로 보고 E(클라이언트 경로)
+		local c1pos = c1.model:GetPivot().Position
+		place(p, c1pos + fwd * 3.2 + Vector3.new(0, 1.2, 0), c1pos)
+		task.wait(0.6)
+		local tgt = ask(p, "lookTarget", c1pos)
+		check("crosshair on a drawer targets it", tgt ~= nil and tgt.spot == empty.id, tgt and (tgt.spot .. ":" .. tgt.comp))
+		local wasOpen = tgt and empty.comps[tgt.comp].open
+		ask(p, "useLook", c1pos)
+		local toggled = waitFor(function()
+			return tgt and empty.comps[tgt.comp].open ~= wasOpen
+		end, 3)
+		check("E while looking opens/closes that drawer", toggled ~= nil)
 	end
-	if ks then
+	if ks and ki then
 		place(p, ks.front + Vector3.new(0, 3, 0))
 		task.wait(0.3)
-		local r3 = Search.search(p, ks)
+		local r3 = Search.toggle(p, ks, ki)
 		check("searching the right one finds the key (whole team)", r3 == "key" and ReplicatedStorage:GetAttribute("HasKey") == true, r3)
 		task.wait(0.4)
 		local kh1 = ask(p, "keyHud")
@@ -771,6 +842,7 @@ local function core()
 	local fs = ask(p, "stats")
 	R.info.frame = fs and { avg = fs.avgFrame, worst = fs.worstFrame }
 	if back then
+		doorTests(p)
 		monsterTests(p)
 		hideTests(p)
 	end
@@ -988,8 +1060,13 @@ local function lobbyTest()
 	check("sonar lights up the lobby", lit and lit.lines.lit > 50, lit and lit.lines.lit)
 	local u = ask(p1, "lobby")
 	check("room panel shown in the lobby", u and u.visible and table.find(u.buttons, "방 만들기") ~= nil, u and table.concat(u.buttons, ","))
+	local c0 = ask(p1, "cursor")
+	check("cursor hidden while looking around", c0 == false, tostring(c0))
 	local m = ask(p1, "lobbyMenu", true)
 	check("Tab menu frees the mouse", m and m.mouseFree == true)
+	task.wait(0.2)
+	local c1 = ask(p1, "cursor")
+	check("cursor shown only while the menu is open", c1 == true, tostring(c1))
 	ask(p1, "lobbyClick", "방 만들기")
 	local id = waitFor(function()
 		return p1:GetAttribute("RoomId")

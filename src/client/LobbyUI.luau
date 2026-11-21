@@ -266,6 +266,11 @@ function LobbyUI.click(text: string): boolean
 	return false
 end
 
+-- 메뉴가 열려 마우스가 풀려 있는가(커서 표시 여부)
+function LobbyUI.mouseFree(): boolean
+	return modal.Visible
+end
+
 function LobbyUI.state()
 	local names = {}
 	for t in buttons do

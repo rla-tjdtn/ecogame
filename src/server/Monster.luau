@@ -487,7 +487,7 @@ function Monster.follow(self: Monster): boolean
 	end
 	self.hum:MoveTo(wp.Position)
 	-- 앞에 닫힌 문이 있으면 연다
-	Doors.openNear(pos + self.root.CFrame.LookVector * 2, 6)
+	Doors.openNear(pos + self.root.CFrame.LookVector * 2, 6, self.root.Position)
 	return false
 end
 
@@ -723,7 +723,7 @@ function Monster.tick(self: Monster)
 		if los and d < 14 and math.abs(tp.Y - self.root.Position.Y) < 3 then
 			self.waypoints = {}
 			self.hum:MoveTo(tp)
-			Doors.openNear(self.root.Position + self.root.CFrame.LookVector * 2, 6)
+			Doors.openNear(self.root.Position + self.root.CFrame.LookVector * 2, 6, self.root.Position)
 		else
 			if #self.waypoints == 0 or now - self.lastRepath > MC.RepathChase then
 				local goal = self.lastKnown or tp

@@ -30,12 +30,40 @@ local function setPose(d: Door, t: number)
 	d.panel.CFrame = d.hinge * rot * d.closedRel
 end
 
-function Doors.toggle(d: Door, source: Player?)
+-- 문짝이나 그 근처에 캐릭터(플레이어·괴물)가 겹쳐 있는가
+local overlap = OverlapParams.new()
+overlap.FilterType = Enum.RaycastFilterType.Exclude
+local function someoneInside(panel: BasePart): boolean
+	overlap.FilterDescendantsInstances = { panel.Parent :: Instance }
+	for _, p in workspace:GetPartBoundsInBox(panel.CFrame, panel.Size + Vector3.new(0.4, 0, 0.6), overlap) do
+		local m = p:FindFirstAncestorOfClass("Model")
+		if m and m:FindFirstChildOfClass("Humanoid") then
+			return true
+		end
+	end
+	return false
+end
+
+-- from: 여는 사람(또는 괴물) 위치. 열 때 그 반대쪽으로 열려서 문짝이 사람을 치거나 가두지 않는다
+function Doors.toggle(d: Door, source: Player?, from: Vector3?)
 	if d.busy then
 		return
 	end
 	d.busy = true
 	local opening = not d.open
+	if opening then
+		local pos = from
+		if not pos and source and source.Character then
+			local r = source.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			pos = r and r.Position
+		end
+		if pos then
+			-- 문짝은 경첩 기준 -Z*swing 쪽으로 열린다: 여는 사람이 있는 쪽의 반대
+			d.swing = if (pos - d.hinge.Position):Dot(d.hinge.ZVector) >= 0 then 1 else -1
+		end
+	end
+	-- 움직이는 동안은 부딪히지 않는다(끼임 방지)
+	d.panel.CanCollide = false
 	d.open = opening
 	d.model:SetAttribute("Open", opening)
 	d.prompt.ActionText = if opening then "문 닫기" else "문 열기"
@@ -53,6 +81,15 @@ function Doors.toggle(d: Door, source: Player?)
 			RunService.Heartbeat:Wait()
 		end
 		d.busy = false
+		-- 멈춘 뒤: 아무도 겹쳐 있지 않을 때 다시 단단해진다
+		local waited = 0
+		while d.panel.Parent and someoneInside(d.panel) and waited < 10 do
+			task.wait(0.2)
+			waited += 0.2
+		end
+		if d.panel.Parent and not d.busy then
+			d.panel.CanCollide = true
+		end
 	end)
 end
 
@@ -132,11 +169,11 @@ function Doors.all(): { Door }
 end
 
 -- 괴물용: pos 근처 닫힌 문을 연다
-function Doors.openNear(pos: Vector3, radius: number): boolean
+function Doors.openNear(pos: Vector3, radius: number, from: Vector3?): boolean
 	local any = false
 	for _, d in doors do
 		if not d.open and not d.busy and (d.panel.Position - pos).Magnitude <= radius then
-			Doors.toggle(d, nil)
+			Doors.toggle(d, nil, from or pos)
 			any = true
 		end
 	end

@@ -20,6 +20,7 @@ local LobbyUI = require(script.Parent:WaitForChild("LobbyUI"))
 local Mates = require(script.Parent:WaitForChild("Mates"))
 local KeyHUD = require(script.Parent:WaitForChild("KeyHUD"))
 local JumpScare = require(script.Parent:WaitForChild("JumpScare"))
+local SearchLook = require(script.Parent:WaitForChild("SearchLook"))
 Pulses.onReach = MapView.onReach
 
 local player = Players.LocalPlayer
@@ -266,6 +267,8 @@ end)
 -- ── 매 프레임 ──
 RunService.RenderStepped:Connect(function(dt)
 	local now = os.clock()
+	-- 마우스 커서: 1인칭에서는 숨긴다(조준점만). 로비 메뉴(Tab)를 열었을 때만 보인다
+	UserInputService.MouseIconEnabled = LobbyUI.mouseFree()
 	table.insert(frameTimes, dt)
 	if #frameTimes > 240 then
 		table.remove(frameTimes, 1)
@@ -391,6 +394,15 @@ task.spawn(function()
 		elseif cmd == "linesNear" then
 			local t = arg :: { any }
 			return Lines.countNear(t[1], t[2])
+		elseif cmd == "lookTarget" or cmd == "useLook" then
+			-- (테스트) arg 위치를 바라보게 한 뒤
+			if typeof(arg) == "Vector3" then
+				local cam = workspace.CurrentCamera
+				cam.CFrame = CFrame.lookAt(cam.CFrame.Position, arg :: Vector3)
+			end
+			return if cmd == "lookTarget" then SearchLook.target() else SearchLook.use()
+		elseif cmd == "cursor" then
+			return UserInputService.MouseIconEnabled
 		elseif cmd == "jumpscare" then
 			return JumpScare.state()
 		elseif cmd == "keyHud" then
