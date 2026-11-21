@@ -560,6 +560,16 @@ local function core()
 		return table.concat(t, ",")
 	end)())
 
+	-- 발소리는 한 발짝씩: 걷기(10/초)로 16스터드 → 약 3발(파일 하나에 여러 발짝이 들어 있어 잘라서 한 발만)
+	place(p, tile(2, 6, 3), tile(2, 8, 3))
+	task.wait(0.4)
+	local st0 = ask(p, "stats")
+	ask(p, "move", tile(2, 8, 3))
+	task.wait(2.2)
+	local st1 = ask(p, "stats")
+	local steps = (st1 and st0) and (st1.steps - st0.steps) or -1
+	check("footsteps: about one sound per step while walking (~2 per second)", steps >= 2 and steps <= 5, steps)
+
 	-- 소리 감쇠
 	local a, b = tile(2, 3, 3), tile(2, 5, 3) -- 시작 방과 그 아래(벽 사이)
 	local walls = SoundBus.wallsBetween(a, b)
@@ -934,6 +944,27 @@ local function lobbyTest()
 	end, 5)
 	check("P1 creates a room (button)", id ~= nil, tostring(id))
 	local joinText = "참가 " .. tostring(id)
+	-- 친구만: 방장이 켜면 친구가 아닌 P2 는 못 들어오고, 끄면 들어온다
+	ask(p1, "lobbyClick", "친구만 켜기")
+	waitFor(function()
+		local x = ask(p1, "lobby")
+		return x and table.find(x.buttons, "친구만 끄기") ~= nil
+	end, 5)
+	waitFor(function()
+		local x = ask(p2, "lobby")
+		return x and table.find(x.buttons, joinText) ~= nil
+	end, 5)
+	ask(p2, "lobbyClick", joinText)
+	task.wait(1)
+	local fm = ask(p2, "lobby")
+	check("friends-only room keeps non-friends out", p2:GetAttribute("RoomId") == nil and fm and fm.message:find("친구", 1, true) ~= nil, fm and fm.message)
+	ask(p1, "lobbyClick", "친구만 끄기")
+	waitFor(function()
+		local x = ask(p1, "lobby")
+		return x and table.find(x.buttons, "친구만 켜기") ~= nil
+	end, 5)
+	local inv = ask(p1, "lobby")
+	check("invite-friends button in the lobby", inv and table.find(inv.buttons, "친구 초대") ~= nil, inv and table.concat(inv.buttons, ","))
 	local seen = waitFor(function()
 		local x = ask(p2, "lobby")
 		return x and x.rooms == 1 and table.find(x.buttons, joinText) ~= nil and x

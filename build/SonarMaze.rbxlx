@@ -203,9 +203,10 @@ Config.Stages = {
 -- 기본값은 Roblox 클라이언트에 기본 포함된 rbxasset:// 파일만 쓴다(외부 에셋 ID 없음).
 -- 더 어울리는 소리가 있으면 Id 를 "rbxassetid://숫자" 로 바꾸면 된다. Id = "" 이면 그 소리는 재생하지 않는다.
 Config.Sounds = {
-	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.35, Pitch = 0.85, Range = 40 },
-	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.6, Pitch = 0.95, Range = 70 },
-	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.12, Pitch = 0.75, Range = 18 },
+	-- 발소리 파일에는 여러 발짝이 들어 있어 Cut 초만 재생해 한 발짝만 낸다
+	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.35, Pitch = 0.85, Range = 40, Cut = 0.2 },
+	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.6, Pitch = 0.95, Range = 70, Cut = 0.17 },
+	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.12, Pitch = 0.75, Range = 18, Cut = 0.22 },
 	Sonar = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.9, Pitch = 0.35, Range = 90 },
 	SonarEcho = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.35, Pitch = 0.28, Range = 90 },
 	Door = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.8, Pitch = 0.55, Range = 60 },
@@ -926,10 +927,11 @@ return Hiding
           <string name="Source"><![CDATA[--!strict
 -- 로비와 방.
 --   · 서버가 시작되면: 예약 서버(방에서 텔레포트로 온 게임 서버)면 바로 게임, 아니면 로비.
---   · 로비: 방 만들기 / 참가 / 나가기 / 시작(방장만). 방 목록은 ReplicatedStorage 속성 "Rooms"(JSON), 내 방은 Player 속성 "RoomId".
+--   · 로비: 방 만들기 / 참가 / 나가기 / 시작(방장만) / 친구만(방장만, 켜면 방장의 친구만 참가). 방 목록은 ReplicatedStorage 속성 "Rooms"(JSON), 내 방은 Player 속성 "RoomId".
 --   · 시작: 게임에서는 방 사람들을 새 예약 서버로 텔레포트(방마다 따로 플레이).
 --           Studio(텔레포트 불가)에서는 이 서버에서 그 방 사람들로 바로 시작하고, 다 깨면 로비로 돌아온다.
--- 클라이언트 요청: Remotes.RoomAction:FireServer(action, arg)  action = "create" | "join"(arg = 방 번호) | "leave" | "start"
+-- 클라이언트 요청: Remotes.RoomAction:FireServer(action, arg)  action = "create" | "join"(arg = 방 번호) | "leave" | "start" | "friendsOnly"(arg = true/false)
+-- 친구 초대는 클라이언트가 SocialService 초대 창으로 한다(초대받은 친구는 이 로비 서버로 들어온다).
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -945,7 +947,7 @@ local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
 
 local Lobby = {}
 
-type Room = { id: number, host: Player, members: { Player }, started: boolean }
+type Room = { id: number, host: Player, members: { Player }, started: boolean, friendsOnly: boolean }
 local rooms: { [number]: Room } = {}
 local nextId = 0
 Lobby.rooms = rooms
@@ -958,7 +960,7 @@ local function publish()
 			table.insert(names, m.DisplayName)
 			table.insert(ids, m.UserId)
 		end
-		table.insert(list, { id = r.id, host = r.host.DisplayName, hostId = r.host.UserId, names = names, ids = ids, started = r.started, max = Config.Lobby.MaxPlayers })
+		table.insert(list, { id = r.id, host = r.host.DisplayName, hostId = r.host.UserId, names = names, ids = ids, started = r.started, friendsOnly = r.friendsOnly, max = Config.Lobby.MaxPlayers })
 	end
 	table.sort(list, function(a, b)
 		return a.id < b.id
@@ -1002,6 +1004,13 @@ local function join(p: Player, r: Room): boolean
 	if #r.members >= Config.Lobby.MaxPlayers then
 		message(p, "방이 가득 찼습니다")
 		return false
+	end
+	if r.friendsOnly and p ~= r.host then
+		local ok, friend = pcall(p.IsFriendsWith, p, r.host.UserId)
+		if not (ok and friend) then
+			message(p, "방장의 친구만 들어올 수 있는 방입니다")
+			return false
+		end
 	end
 	leave(p)
 	table.insert(r.members, p)
@@ -1098,7 +1107,7 @@ function Lobby.act(p: Player, action: any, arg: any)
 			return
 		end
 		nextId += 1
-		local r: Room = { id = nextId, host = p, members = {}, started = false }
+		local r: Room = { id = nextId, host = p, members = {}, started = false, friendsOnly = false }
 		rooms[r.id] = r
 		join(p, r)
 	elseif action == "join" then
@@ -1110,6 +1119,12 @@ function Lobby.act(p: Player, action: any, arg: any)
 		leave(p)
 	elseif action == "start" then
 		start(p)
+	elseif action == "friendsOnly" then
+		local r = roomOf(p)
+		if r and r.host == p then
+			r.friendsOnly = arg == true
+			publish()
+		end
 	end
 end
 
@@ -4798,6 +4813,16 @@ local function core()
 		return table.concat(t, ",")
 	end)())
 
+	-- 발소리는 한 발짝씩: 걷기(10/초)로 16스터드 → 약 3발(파일 하나에 여러 발짝이 들어 있어 잘라서 한 발만)
+	place(p, tile(2, 6, 3), tile(2, 8, 3))
+	task.wait(0.4)
+	local st0 = ask(p, "stats")
+	ask(p, "move", tile(2, 8, 3))
+	task.wait(2.2)
+	local st1 = ask(p, "stats")
+	local steps = (st1 and st0) and (st1.steps - st0.steps) or -1
+	check("footsteps: about one sound per step while walking (~2 per second)", steps >= 2 and steps <= 5, steps)
+
 	-- 소리 감쇠
 	local a, b = tile(2, 3, 3), tile(2, 5, 3) -- 시작 방과 그 아래(벽 사이)
 	local walls = SoundBus.wallsBetween(a, b)
@@ -5172,6 +5197,27 @@ local function lobbyTest()
 	end, 5)
 	check("P1 creates a room (button)", id ~= nil, tostring(id))
 	local joinText = "참가 " .. tostring(id)
+	-- 친구만: 방장이 켜면 친구가 아닌 P2 는 못 들어오고, 끄면 들어온다
+	ask(p1, "lobbyClick", "친구만 켜기")
+	waitFor(function()
+		local x = ask(p1, "lobby")
+		return x and table.find(x.buttons, "친구만 끄기") ~= nil
+	end, 5)
+	waitFor(function()
+		local x = ask(p2, "lobby")
+		return x and table.find(x.buttons, joinText) ~= nil
+	end, 5)
+	ask(p2, "lobbyClick", joinText)
+	task.wait(1)
+	local fm = ask(p2, "lobby")
+	check("friends-only room keeps non-friends out", p2:GetAttribute("RoomId") == nil and fm and fm.message:find("친구", 1, true) ~= nil, fm and fm.message)
+	ask(p1, "lobbyClick", "친구만 끄기")
+	waitFor(function()
+		local x = ask(p1, "lobby")
+		return x and table.find(x.buttons, "친구만 켜기") ~= nil
+	end, 5)
+	local inv = ask(p1, "lobby")
+	check("invite-friends button in the lobby", inv and table.find(inv.buttons, "친구 초대") ~= nil, inv and table.concat(inv.buttons, ","))
 	local seen = waitFor(function()
 		local x = ask(p2, "lobby")
 		return x and x.rooms == 1 and table.find(x.buttons, joinText) ~= nil and x
@@ -5511,7 +5557,7 @@ local SoundService = game:GetService("SoundService")
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local Audio = {}
-local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number } }
+local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number, Cut: number? } }
 local player = Players.LocalPlayer
 
 local master = Instance.new("SoundGroup")
@@ -5547,7 +5593,9 @@ local function makeSound(name: string, parent: Instance, looped: boolean?): Soun
 end
 
 -- 한 번 재생하고 지운다. at 이 Vector3 이면 그 위치에서(3D), Instance 면 거기 붙여서, nil 이면 2D.
-function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?)
+Audio.steps = 0 -- (테스트) 지금까지 재생한 플레이어 발소리 수
+
+function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?)
 	local parent: Instance
 	local holder: Attachment? = nil
 	if typeof(at) == "Vector3" then
@@ -5571,10 +5619,28 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 	if pitchJitter then
 		s.PlaybackSpeed *= 1 + (math.random() * 2 - 1) * pitchJitter
 	end
+	if pitchScale then
+		s.PlaybackSpeed *= pitchScale
+	end
 	if volumeScale then
 		s.Volume *= volumeScale
 	end
 	s:Play()
+	-- Cut: 그 시간(초)만 재생하고 짧게 줄여 끈다(여러 발짝이 든 발소리 파일에서 한 발짝만)
+	local cut = SND[name] and SND[name].Cut
+	if cut then
+		local v0 = s.Volume
+		task.delay(cut, function()
+			for k = 1, 4 do
+				if not s.Parent then
+					return
+				end
+				s.Volume = v0 * (1 - k / 4)
+				task.wait(0.015)
+			end
+			s:Stop()
+		end)
+	end
 	task.delay(6, function()
 		s:Destroy()
 		if holder then
@@ -5594,14 +5660,15 @@ function Audio.sonar(localShot: boolean, origin: Vector3)
 end
 
 -- ── 발소리(캐릭터마다 이동 거리 누적) ──
-type Tracker = { last: Vector3, acc: number, root: BasePart }
+type Tracker = { last: Vector3, acc: number, root: BasePart, foot: number }
 local trackers: { [Model]: Tracker } = {}
-local STRIDE = { Walk = 3.6, Run = 5.0, Crouch = 2.4 }
+-- 한 발짝 거리(스터드): 걷기 10/초면 초당 약 2발, 달리기 18/초면 약 2.8발, 웅크리기 5/초면 약 1.7발
+local STRIDE = { Walk = 4.8, Run = 6.5, Crouch = 3.0 }
 
 local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 	local tr = trackers[model]
 	if not tr or tr.root ~= root then
-		tr = { last = root.Position, acc = 0, root = root }
+		tr = { last = root.Position, acc = 0, root = root, foot = 1 }
 		trackers[model] = tr
 	end
 	local p = root.Position
@@ -5621,8 +5688,11 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 		local stride = STRIDE[mode] or 3.6
 		if tr.acc >= stride then
 			tr.acc = 0
+			tr.foot = -tr.foot
 			local name = if mode == "Run" then "FootRun" elseif mode == "Crouch" then "FootCrouch" else "FootWalk"
-			Audio.play(name, root, 0.1)
+			-- 왼발·오른발: 높낮이를 조금 다르게
+			Audio.play(name, root, 0.04, nil, 1 + tr.foot * 0.04)
+			Audio.steps += 1
 		end
 	end
 end
@@ -5760,6 +5830,7 @@ return Audio
 -- 방 목록은 서버가 ReplicatedStorage 속성 "Rooms"(JSON)로, 내 방은 Player 속성 "RoomId" 로 알려 준다.
 
 local HttpService = game:GetService("HttpService")
+local SocialService = game:GetService("SocialService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -5784,7 +5855,7 @@ local panel = Instance.new("Frame")
 panel.Name = "Panel"
 panel.AnchorPoint = Vector2.new(1, 0.5)
 panel.Position = UDim2.new(1, -24, 0.5, 0)
-panel.Size = UDim2.fromOffset(340, 420)
+panel.Size = UDim2.fromOffset(460, 420)
 panel.BackgroundColor3 = Color3.new(0, 0, 0)
 panel.BackgroundTransparency = 0.15
 panel.BorderSizePixel = 0
@@ -5918,7 +5989,7 @@ local function render()
 		t.TextColor3 = if r.id == myId then WHITE else GREY
 		t.TextXAlignment = Enum.TextXAlignment.Left
 		t.TextTruncate = Enum.TextTruncate.AtEnd
-		t.Text = string.format("방 %d · %s · %d/%d%s", r.id, r.host, #r.names, r.max, if r.started then " · 시작 중" else "")
+		t.Text = string.format("방 %d · %s · %d/%d%s%s", r.id, r.host, #r.names, r.max, if r.friendsOnly then " · 친구만" else "", if r.started then " · 시작 중" else "")
 		t.Parent = row
 		if r.id ~= myId and not r.started and #r.names < r.max then
 			local b = button(row, "참가 " .. r.id, 78, function()
@@ -5945,8 +6016,12 @@ local function render()
 			LobbyUI.act("leave")
 		end)
 		if mine.hostId == player.UserId then
-			button(bar, "시작", 100, function()
+			button(bar, "시작", 70, function()
 				LobbyUI.act("start")
+			end)
+			local fo = mine.friendsOnly == true
+			button(bar, if fo then "친구만 끄기" else "친구만 켜기", 110, function()
+				LobbyUI.act("friendsOnly", not fo)
 			end)
 		else
 			local w = Instance.new("TextLabel")
@@ -5964,6 +6039,17 @@ local function render()
 			LobbyUI.act("create")
 		end)
 	end
+	-- 친구 초대(Roblox 초대 창): 초대받은 친구는 이 로비 서버로 들어온다
+	button(bar, "친구 초대", 100, function()
+		task.spawn(function()
+			local ok, can = pcall(SocialService.CanSendGameInviteAsync, SocialService, player)
+			if ok and can then
+				pcall(SocialService.PromptGameInvite, SocialService, player)
+			else
+				LobbyUI.message("지금은 초대 창을 열 수 없습니다(Studio 에서는 열리지 않습니다)")
+			end
+		end)
+	end)
 	msg.Text = if os.clock() < msgUntil then message else ""
 	hint.Text = if menuOpen then "Tab: 메뉴 닫기 (둘러보기)" else "Tab: 메뉴 열기 (마우스)"
 end
@@ -6336,6 +6422,7 @@ task.spawn(function()
 			return {
 				ready = World.ready,
 				buildId = World.buildId,
+				steps = Audio.steps,
 				build = { seconds = World.buildSeconds, cpu = World.buildCpu, segs = World.segCount },
 				prof = { pulsesMs = if prof.frames > 0 then prof.pulses / prof.frames * 1000 else 0, linesMs = if prof.frames > 0 then prof.lines / prof.frames * 1000 else 0 },
 				segs = World.segCount,

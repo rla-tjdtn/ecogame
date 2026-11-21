@@ -4,6 +4,7 @@
 -- 방 목록은 서버가 ReplicatedStorage 속성 "Rooms"(JSON)로, 내 방은 Player 속성 "RoomId" 로 알려 준다.
 
 local HttpService = game:GetService("HttpService")
+local SocialService = game:GetService("SocialService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -28,7 +29,7 @@ local panel = Instance.new("Frame")
 panel.Name = "Panel"
 panel.AnchorPoint = Vector2.new(1, 0.5)
 panel.Position = UDim2.new(1, -24, 0.5, 0)
-panel.Size = UDim2.fromOffset(340, 420)
+panel.Size = UDim2.fromOffset(460, 420)
 panel.BackgroundColor3 = Color3.new(0, 0, 0)
 panel.BackgroundTransparency = 0.15
 panel.BorderSizePixel = 0
@@ -162,7 +163,7 @@ local function render()
 		t.TextColor3 = if r.id == myId then WHITE else GREY
 		t.TextXAlignment = Enum.TextXAlignment.Left
 		t.TextTruncate = Enum.TextTruncate.AtEnd
-		t.Text = string.format("방 %d · %s · %d/%d%s", r.id, r.host, #r.names, r.max, if r.started then " · 시작 중" else "")
+		t.Text = string.format("방 %d · %s · %d/%d%s%s", r.id, r.host, #r.names, r.max, if r.friendsOnly then " · 친구만" else "", if r.started then " · 시작 중" else "")
 		t.Parent = row
 		if r.id ~= myId and not r.started and #r.names < r.max then
 			local b = button(row, "참가 " .. r.id, 78, function()
@@ -189,8 +190,12 @@ local function render()
 			LobbyUI.act("leave")
 		end)
 		if mine.hostId == player.UserId then
-			button(bar, "시작", 100, function()
+			button(bar, "시작", 70, function()
 				LobbyUI.act("start")
+			end)
+			local fo = mine.friendsOnly == true
+			button(bar, if fo then "친구만 끄기" else "친구만 켜기", 110, function()
+				LobbyUI.act("friendsOnly", not fo)
 			end)
 		else
 			local w = Instance.new("TextLabel")
@@ -208,6 +213,17 @@ local function render()
 			LobbyUI.act("create")
 		end)
 	end
+	-- 친구 초대(Roblox 초대 창): 초대받은 친구는 이 로비 서버로 들어온다
+	button(bar, "친구 초대", 100, function()
+		task.spawn(function()
+			local ok, can = pcall(SocialService.CanSendGameInviteAsync, SocialService, player)
+			if ok and can then
+				pcall(SocialService.PromptGameInvite, SocialService, player)
+			else
+				LobbyUI.message("지금은 초대 창을 열 수 없습니다(Studio 에서는 열리지 않습니다)")
+			end
+		end)
+	end)
 	msg.Text = if os.clock() < msgUntil then message else ""
 	hint.Text = if menuOpen then "Tab: 메뉴 닫기 (둘러보기)" else "Tab: 메뉴 열기 (마우스)"
 end

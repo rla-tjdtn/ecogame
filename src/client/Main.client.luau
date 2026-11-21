@@ -302,6 +302,7 @@ task.spawn(function()
 			return {
 				ready = World.ready,
 				buildId = World.buildId,
+				steps = Audio.steps,
 				build = { seconds = World.buildSeconds, cpu = World.buildCpu, segs = World.segCount },
 				prof = { pulsesMs = if prof.frames > 0 then prof.pulses / prof.frames * 1000 else 0, linesMs = if prof.frames > 0 then prof.lines / prof.frames * 1000 else 0 },
 				segs = World.segCount,

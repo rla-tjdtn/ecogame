@@ -1,10 +1,11 @@
 --!strict
 -- 로비와 방.
 --   · 서버가 시작되면: 예약 서버(방에서 텔레포트로 온 게임 서버)면 바로 게임, 아니면 로비.
---   · 로비: 방 만들기 / 참가 / 나가기 / 시작(방장만). 방 목록은 ReplicatedStorage 속성 "Rooms"(JSON), 내 방은 Player 속성 "RoomId".
+--   · 로비: 방 만들기 / 참가 / 나가기 / 시작(방장만) / 친구만(방장만, 켜면 방장의 친구만 참가). 방 목록은 ReplicatedStorage 속성 "Rooms"(JSON), 내 방은 Player 속성 "RoomId".
 --   · 시작: 게임에서는 방 사람들을 새 예약 서버로 텔레포트(방마다 따로 플레이).
 --           Studio(텔레포트 불가)에서는 이 서버에서 그 방 사람들로 바로 시작하고, 다 깨면 로비로 돌아온다.
--- 클라이언트 요청: Remotes.RoomAction:FireServer(action, arg)  action = "create" | "join"(arg = 방 번호) | "leave" | "start"
+-- 클라이언트 요청: Remotes.RoomAction:FireServer(action, arg)  action = "create" | "join"(arg = 방 번호) | "leave" | "start" | "friendsOnly"(arg = true/false)
+-- 친구 초대는 클라이언트가 SocialService 초대 창으로 한다(초대받은 친구는 이 로비 서버로 들어온다).
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -20,7 +21,7 @@ local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
 
 local Lobby = {}
 
-type Room = { id: number, host: Player, members: { Player }, started: boolean }
+type Room = { id: number, host: Player, members: { Player }, started: boolean, friendsOnly: boolean }
 local rooms: { [number]: Room } = {}
 local nextId = 0
 Lobby.rooms = rooms
@@ -33,7 +34,7 @@ local function publish()
 			table.insert(names, m.DisplayName)
 			table.insert(ids, m.UserId)
 		end
-		table.insert(list, { id = r.id, host = r.host.DisplayName, hostId = r.host.UserId, names = names, ids = ids, started = r.started, max = Config.Lobby.MaxPlayers })
+		table.insert(list, { id = r.id, host = r.host.DisplayName, hostId = r.host.UserId, names = names, ids = ids, started = r.started, friendsOnly = r.friendsOnly, max = Config.Lobby.MaxPlayers })
 	end
 	table.sort(list, function(a, b)
 		return a.id < b.id
@@ -77,6 +78,13 @@ local function join(p: Player, r: Room): boolean
 	if #r.members >= Config.Lobby.MaxPlayers then
 		message(p, "방이 가득 찼습니다")
 		return false
+	end
+	if r.friendsOnly and p ~= r.host then
+		local ok, friend = pcall(p.IsFriendsWith, p, r.host.UserId)
+		if not (ok and friend) then
+			message(p, "방장의 친구만 들어올 수 있는 방입니다")
+			return false
+		end
 	end
 	leave(p)
 	table.insert(r.members, p)
@@ -173,7 +181,7 @@ function Lobby.act(p: Player, action: any, arg: any)
 			return
 		end
 		nextId += 1
-		local r: Room = { id = nextId, host = p, members = {}, started = false }
+		local r: Room = { id = nextId, host = p, members = {}, started = false, friendsOnly = false }
 		rooms[r.id] = r
 		join(p, r)
 	elseif action == "join" then
@@ -185,6 +193,12 @@ function Lobby.act(p: Player, action: any, arg: any)
 		leave(p)
 	elseif action == "start" then
 		start(p)
+	elseif action == "friendsOnly" then
+		local r = roomOf(p)
+		if r and r.host == p then
+			r.friendsOnly = arg == true
+			publish()
+		end
 	end
 end
 

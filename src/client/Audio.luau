@@ -11,7 +11,7 @@ local SoundService = game:GetService("SoundService")
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local Audio = {}
-local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number } }
+local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number, Cut: number? } }
 local player = Players.LocalPlayer
 
 local master = Instance.new("SoundGroup")
@@ -47,7 +47,9 @@ local function makeSound(name: string, parent: Instance, looped: boolean?): Soun
 end
 
 -- 한 번 재생하고 지운다. at 이 Vector3 이면 그 위치에서(3D), Instance 면 거기 붙여서, nil 이면 2D.
-function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?)
+Audio.steps = 0 -- (테스트) 지금까지 재생한 플레이어 발소리 수
+
+function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?)
 	local parent: Instance
 	local holder: Attachment? = nil
 	if typeof(at) == "Vector3" then
@@ -71,10 +73,28 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 	if pitchJitter then
 		s.PlaybackSpeed *= 1 + (math.random() * 2 - 1) * pitchJitter
 	end
+	if pitchScale then
+		s.PlaybackSpeed *= pitchScale
+	end
 	if volumeScale then
 		s.Volume *= volumeScale
 	end
 	s:Play()
+	-- Cut: 그 시간(초)만 재생하고 짧게 줄여 끈다(여러 발짝이 든 발소리 파일에서 한 발짝만)
+	local cut = SND[name] and SND[name].Cut
+	if cut then
+		local v0 = s.Volume
+		task.delay(cut, function()
+			for k = 1, 4 do
+				if not s.Parent then
+					return
+				end
+				s.Volume = v0 * (1 - k / 4)
+				task.wait(0.015)
+			end
+			s:Stop()
+		end)
+	end
 	task.delay(6, function()
 		s:Destroy()
 		if holder then
@@ -94,14 +114,15 @@ function Audio.sonar(localShot: boolean, origin: Vector3)
 end
 
 -- ── 발소리(캐릭터마다 이동 거리 누적) ──
-type Tracker = { last: Vector3, acc: number, root: BasePart }
+type Tracker = { last: Vector3, acc: number, root: BasePart, foot: number }
 local trackers: { [Model]: Tracker } = {}
-local STRIDE = { Walk = 3.6, Run = 5.0, Crouch = 2.4 }
+-- 한 발짝 거리(스터드): 걷기 10/초면 초당 약 2발, 달리기 18/초면 약 2.8발, 웅크리기 5/초면 약 1.7발
+local STRIDE = { Walk = 4.8, Run = 6.5, Crouch = 3.0 }
 
 local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 	local tr = trackers[model]
 	if not tr or tr.root ~= root then
-		tr = { last = root.Position, acc = 0, root = root }
+		tr = { last = root.Position, acc = 0, root = root, foot = 1 }
 		trackers[model] = tr
 	end
 	local p = root.Position
@@ -121,8 +142,11 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 		local stride = STRIDE[mode] or 3.6
 		if tr.acc >= stride then
 			tr.acc = 0
+			tr.foot = -tr.foot
 			local name = if mode == "Run" then "FootRun" elseif mode == "Crouch" then "FootCrouch" else "FootWalk"
-			Audio.play(name, root, 0.1)
+			-- 왼발·오른발: 높낮이를 조금 다르게
+			Audio.play(name, root, 0.04, nil, 1 + tr.foot * 0.04)
+			Audio.steps += 1
 		end
 	end
 end
