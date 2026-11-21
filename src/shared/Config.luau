@@ -354,8 +354,13 @@ Config.RealScreams = {
 	{ Id = 9113985971, Start = 0, Dur = 2, Volume = 0.5, Name = "고통에 찬 괴물의 찢어지는 비명 (Creature Scream Piercing Pain)" },
 	{ Id = 9114037660, Start = 0, Dur = 2.5, Volume = 0.5, Name = "악마 비명 (Demon Scream 2, 앞 2.5초)" },
 	{ Id = 9118307005, Start = 0, Dur = 2.8, Volume = 0.45, Name = "쇳소리 섞인 일그러진 괴성 (Robot Screams Intense Screeching)" },
+	{ Id = 9118847820, Start = 0, Dur = 3, Volume = 0.45, Name = "사이렌 비명 — 빠르게 높낮이가 오가는 웅웅거리는 비명 (Scream Siren 1)" },
+	{ Id = 9118847061, Start = 0, Dur = 2, Volume = 0.45, Name = "사이렌 비명 짧은 것 (Scream Siren 5)" },
+	{ Id = 9125939158, Start = 0, Dur = 3, Volume = 0.45, Name = "물결치며 이어지는 날카로운 비명 (Shrill Scream Undulating)" },
+	{ Id = 9113073742, Start = 1, Dur = 3, Volume = 0.4, Name = "옛날 공습 사이렌 — 사이렌 괴물 느낌 (Air Raid Siren)" },
+	{ Id = 9118841838, Start = 0, Dur = 3, Volume = 0.45, Name = "기계적인 비명 톤 (Screaming Tone 3)" },
 }
-Config.RealScream = 1 -- 위 목록 번호 1~5 (0 = 합성 시안). 들어 보기: tools/sound-preview/real.html
+Config.RealScream = 1 -- 위 목록 번호 1~10 (0 = 합성 시안). 들어 보기: tools/sound-preview/real.html
 Config.ScreamGate = nil :: { number }? -- 끊기는 박자 { 켜짐초, 꺼짐초 } (nil = 끊지 않고 한 번에 지른다. 예전 끊기는 방식: { 0.2, 0.1 })
 Config.ScreamCustom = nil :: any -- 예: { src = "ouch", pitch = 1.25, fx = "ghost", gate = { 0.22, 0.14 }, dur = 2.4, air = "wind" }
 -- src: "ouch"(비명) / "oof"(낮은 목소리) / "wind"(바람 숨결)   pitch: 음 높이 배율(클수록 높음)
