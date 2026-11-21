@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Kit = require(script.Parent.MapKit)
 local Doors = require(script.Parent.Doors)
+local Hiding = require(script.Parent.Hiding)
 
 local Builder = {}
 
@@ -31,6 +32,7 @@ export type Layout = {
 	Walkable: { [string]: boolean }?, -- Props 타일 중 괴물 배회 지점으로 쓸 수 있는 것
 	PitTiles: { [string]: boolean }?, -- Props 타일 중 아래층 높이인 것
 	PipeChance: number?,
+	HideStyle: string?, -- 숨는 곳(L) 모양: locker / tool / rusty / wardrobe / closet (Hiding.Styles)
 	Seed: number?,
 }
 
@@ -41,6 +43,9 @@ export type StageInfo = {
 	exitSize: Vector3,
 	nodes: { Vector3 },
 	bounds: { min: Vector3, max: Vector3 },
+	-- 타일 격자 위 최단 경로(타일 가운데 바닥 높이 좌표들). PathfindingService 는 시작·목표 주변만 탐색하므로
+	-- 큰 맵에서 멀리 돌아가야 하는 길은 이 경로를 짧은 구간으로 나눠 계산한다. monster = true 면 좁은 다리(n) 제외
+	route: (from: Vector3, to: Vector3, monster: boolean?) -> { Vector3 }?,
 }
 
 local PIT = { p = true, b = true, s = true, n = true }
@@ -164,7 +169,104 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 		exitSize = Vector3.new(6, 8, 6),
 		nodes = {},
 		bounds = { min = Vector3.new(0, BOTTOM, 0), max = Vector3.new(nx * T, H + 2, nz * T) },
+		route = nil,
 	}
+
+	-- ── 타일 경로(tools/check-layout.js 와 같은 규칙: 구덩이 = 아래층, 다리 = 위층, 계단 = 둘 다) ──
+	local passable: { [string]: boolean } = { ["."] = true, S = true, E = true, D = true, A = true, f = true, P = true, s = true }
+	for k in pitSet do
+		passable[k] = true
+	end
+	for k, v in layout.Walkable or {} do
+		passable[k] = v
+	end
+	local function levels(c: string): { number }
+		if pitSet[c] then
+			if bridgeChar(c) then
+				return { 0 }
+			elseif c == "s" then
+				return { 0, 1 }
+			end
+			return { 1 }
+		end
+		return { 0 }
+	end
+	local function hasLevel(c: string, l: number): boolean
+		for _, x in levels(c) do
+			if x == l then
+				return true
+			end
+		end
+		return false
+	end
+	info.route = function(from: Vector3, to: Vector3, monster: boolean?): { Vector3 }?
+		local function tileOf(p: Vector3): (number, number, number)
+			local i, j = math.floor(p.X / T) + 1, math.floor(p.Z / T) + 1
+			local c = at(i, j)
+			local l = if p.Y < PIT_Y / 2 then 1 else 0
+			if not hasLevel(c, l) then
+				l = levels(c)[1]
+			end
+			return i, j, l
+		end
+		local si, sj, sl = tileOf(from)
+		local gi, gj, gl = tileOf(to)
+		if not passable[at(si, sj)] or not passable[at(gi, gj)] then
+			return nil
+		end
+		local function k(i: number, j: number, l: number): number
+			return (l * nz + (j - 1)) * (nx + 2) + i
+		end
+		local prev: { [number]: number } = { [k(si, sj, sl)] = -1 }
+		local q = { { si, sj, sl } }
+		local head = 1
+		local found = false
+		while head <= #q do
+			local cur = q[head]
+			head += 1
+			local i, j, l = cur[1], cur[2], cur[3]
+			if i == gi and j == gj and l == gl then
+				found = true
+				break
+			end
+			local here = k(i, j, l)
+			if at(i, j) == "s" then
+				local other = k(i, j, 1 - l)
+				if prev[other] == nil then
+					prev[other] = here
+					table.insert(q, { i, j, 1 - l })
+				end
+			end
+			for _, d in dirs do
+				local ni, nj = i + d.di, j + d.dj
+				local c = at(ni, nj)
+				if passable[c] and not (monster and c == "n") and hasLevel(c, l) then
+					local nk = k(ni, nj, l)
+					if prev[nk] == nil then
+						prev[nk] = here
+						table.insert(q, { ni, nj, l })
+					end
+				end
+			end
+		end
+		if not found then
+			return nil
+		end
+		local out = {}
+		local cur = k(gi, gj, gl)
+		while cur ~= -1 do
+			local l = cur // ((nx + 2) * nz)
+			local rest = cur % ((nx + 2) * nz)
+			local j, i = rest // (nx + 2) + 1, rest % (nx + 2)
+			local y = if l == 1 then PIT_Y else 0
+			if at(i, j) == "s" then
+				y = PIT_Y / 2
+			end
+			table.insert(out, 1, center(i, j) + Vector3.new(0, y + 0.5, 0))
+			cur = prev[cur]
+		end
+		return out
+	end
 
 	local ctx = {
 		Kit = Kit,
@@ -385,6 +487,16 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 				em.CanQuery = false
 				em:SetAttribute("Sound", "AmbientFan")
 				CollectionService:AddTag(em, Config.Tags.AmbientEmitter)
+			elseif ch == "L" then
+				-- 숨는 곳: 등을 댈 벽(맞은편이 열린 쪽)을 찾는다
+				local back = nil
+				for _, d in dirs do
+					if isWall(i + d.di, j + d.dj) and not isWall(i - d.di, j - d.dj) then
+						back = d.v
+						break
+					end
+				end
+				Hiding.create(props, c + Vector3.new(0, fy, 0), back or Vector3.new(0, 0, -1), layout.HideStyle)
 			elseif ch == "v" then
 				local p = c + Vector3.new(0, fy, 0)
 				local spots = { Vector3.new(-2.2, 0, -2.2), Vector3.new(-2.4, 0, 1.6), Vector3.new(1.8, 0, -2.6) }

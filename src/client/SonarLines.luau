@@ -21,6 +21,7 @@ type Rec = {
 	key: number?,
 	q: number,
 	slot: number,
+	wake: number?, -- 밝기가 일정한 구간에서는 이 시각까지 계산을 건너뛴다
 }
 
 local folder: Folder? = nil
@@ -122,6 +123,7 @@ function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: numb
 			rec.t0 = now
 			rec.peak = math.max(peak, rec.peak * 0.5)
 			rec.q = -1
+			rec.wake = nil
 			if replace then
 				place(rec.part, a, b, cam)
 			end
@@ -160,7 +162,12 @@ function Lines.update(now: number)
 		local age = now - rec.t0
 		if age >= S.Hold then
 			release(i)
+		elseif rec.wake and now < rec.wake then
+			i += 1
 		else
+			-- 플래시가 끝난 뒤 사라지기 시작할 때까지는 밝기가 같다: 그동안은 계산하지 않는다
+			local fadeStart = S.Hold - S.FadeTime
+			rec.wake = if age >= S.FlashTime and age < fadeStart then rec.t0 + fadeStart else nil
 			local l = level(age) * rec.peak
 			local q = math.floor(l * QUANT + 0.5)
 			if q ~= rec.q then
@@ -176,6 +183,17 @@ function Lines.update(now: number)
 		table.clear(moveParts)
 		table.clear(moveCFs)
 	end
+end
+
+-- 테스트: p 에서 r 안에 켜져 있는 선 수
+function Lines.countNear(p: Vector3, r: number): number
+	local n = 0
+	for _, rec in active do
+		if rec.q > 0 and (rec.part.Position - p).Magnitude < r then
+			n += 1
+		end
+	end
+	return n
 end
 
 function Lines.clear()

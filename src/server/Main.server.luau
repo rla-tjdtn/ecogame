@@ -39,7 +39,7 @@ local Sonar = {}
 Sonar.accepted = accepted
 
 SonarFire.OnServerEvent:Connect(function(player: Player)
-	if player:GetAttribute("Status") ~= "Alive" then
+	if player:GetAttribute("Status") ~= "Alive" or player:GetAttribute("Hidden") then
 		return
 	end
 	local char = player.Character

@@ -10,8 +10,8 @@ Config.Sonar = {
 	Cooldown = 1.5, -- 발사 간격(초) — 서버가 같은 값으로 검증한다
 	ServerTolerance = 0.12, -- 네트워크 지연 허용치(초)
 	WaveSpeed = 40, -- 파동 전진 속도(스터드/초): 35스터드 끝까지 약 0.9초
-	Hold = 2.0, -- 선이 나타난 뒤 완전히 사라질 때까지(초)
-	FadeTime = 0.75, -- Hold 끝부분에서 서서히 사라지는 구간(초)
+	Hold = 3.5, -- 선이 나타난 뒤 완전히 사라질 때까지(초)
+	FadeTime = 1.2, -- Hold 끝부분에서 서서히 사라지는 구간(초)
 	FlashTime = 0.15, -- 파동이 지나가는 순간 살짝 더 밝은 구간(초)
 	BaseLevel = 0.8, -- 플래시 이후 선 밝기(0~1)
 	FarLevel = 0.45, -- 반경 끝에 있는 선의 밝기 배율(가까울수록 1)
@@ -75,6 +75,9 @@ Config.Monster = {
 	MinSpawnDistance = 70, -- 플레이어 시작점에서 이만큼 떨어진 곳에 등장
 	AgentRadius = 1.6,
 	AgentHeight = 8,
+	HuntEvery = 25, -- 배회 중 이 시간(초)마다 한 번은 플레이어 근처 지점으로 간다(큰 맵에서 마주치게)
+	HuntRadius = 40, -- 그 지점이 플레이어에서 이 거리(스터드) 안
+	LegTiles = 8, -- 먼 길은 타일 경로를 따라 이만큼(칸)씩 나눠 경로를 계산한다
 }
 
 -- ─────────────────────────────── 라운드 ───────────────────────────────
@@ -86,6 +89,14 @@ Config.Round = {
 
 -- ─────────────────────────────── 스테이지 ───────────────────────────────
 -- Module 은 ServerScriptService.Server.Stages 안의 레이아웃 모듈 이름
+-- 숨는 곳(맵 문자 L: 캐비닛·옷장)
+Config.Hide = {
+	Noise = 8, -- 문을 여닫는 소리 반경(스터드)
+	PromptDistance = 6, -- E 안내가 뜨는 거리
+	SeenWindow = 0.8, -- 쫓던 괴물이 이 시간(초) 안에 플레이어를 봤으면 숨는 모습을 본 것: 와서 끌어낸다
+	Tile = 8, -- 맵 한 칸(스터드), StageBuilder 와 같게
+}
+
 Config.Stages = {
 	{ Id = 1, Name = "STAGE 1 — 지하 시설", Module = "Stage1", Monsters = 1 },
 	{ Id = 2, Name = "STAGE 2 — 물류 창고", Module = "Stage2", Monsters = 2 },
@@ -123,6 +134,7 @@ Config.Tags = {
 	Door = "SonarDoor",
 	Monster = "Monster",
 	AmbientEmitter = "AmbientEmitter",
+	HideSpot = "HideSpot",
 }
 
 return Config

@@ -92,8 +92,8 @@ Config.Sonar = {
 	Cooldown = 1.5, -- 발사 간격(초) — 서버가 같은 값으로 검증한다
 	ServerTolerance = 0.12, -- 네트워크 지연 허용치(초)
 	WaveSpeed = 40, -- 파동 전진 속도(스터드/초): 35스터드 끝까지 약 0.9초
-	Hold = 2.0, -- 선이 나타난 뒤 완전히 사라질 때까지(초)
-	FadeTime = 0.75, -- Hold 끝부분에서 서서히 사라지는 구간(초)
+	Hold = 3.5, -- 선이 나타난 뒤 완전히 사라질 때까지(초)
+	FadeTime = 1.2, -- Hold 끝부분에서 서서히 사라지는 구간(초)
 	FlashTime = 0.15, -- 파동이 지나가는 순간 살짝 더 밝은 구간(초)
 	BaseLevel = 0.8, -- 플래시 이후 선 밝기(0~1)
 	FarLevel = 0.45, -- 반경 끝에 있는 선의 밝기 배율(가까울수록 1)
@@ -157,6 +157,9 @@ Config.Monster = {
 	MinSpawnDistance = 70, -- 플레이어 시작점에서 이만큼 떨어진 곳에 등장
 	AgentRadius = 1.6,
 	AgentHeight = 8,
+	HuntEvery = 25, -- 배회 중 이 시간(초)마다 한 번은 플레이어 근처 지점으로 간다(큰 맵에서 마주치게)
+	HuntRadius = 40, -- 그 지점이 플레이어에서 이 거리(스터드) 안
+	LegTiles = 8, -- 먼 길은 타일 경로를 따라 이만큼(칸)씩 나눠 경로를 계산한다
 }
 
 -- ─────────────────────────────── 라운드 ───────────────────────────────
@@ -168,6 +171,14 @@ Config.Round = {
 
 -- ─────────────────────────────── 스테이지 ───────────────────────────────
 -- Module 은 ServerScriptService.Server.Stages 안의 레이아웃 모듈 이름
+-- 숨는 곳(맵 문자 L: 캐비닛·옷장)
+Config.Hide = {
+	Noise = 8, -- 문을 여닫는 소리 반경(스터드)
+	PromptDistance = 6, -- E 안내가 뜨는 거리
+	SeenWindow = 0.8, -- 쫓던 괴물이 이 시간(초) 안에 플레이어를 봤으면 숨는 모습을 본 것: 와서 끌어낸다
+	Tile = 8, -- 맵 한 칸(스터드), StageBuilder 와 같게
+}
+
 Config.Stages = {
 	{ Id = 1, Name = "STAGE 1 — 지하 시설", Module = "Stage1", Monsters = 1 },
 	{ Id = 2, Name = "STAGE 2 — 물류 창고", Module = "Stage2", Monsters = 2 },
@@ -205,6 +216,7 @@ Config.Tags = {
 	Door = "SonarDoor",
 	Monster = "Monster",
 	AmbientEmitter = "AmbientEmitter",
+	HideSpot = "HideSpot",
 }
 
 return Config
@@ -220,6 +232,8 @@ return Config
 --   Wedge    : 쐐기의 9개 모서리
 --   Cylinder : 양 끝 원 + (속성 SonarRings 개수만큼) 중간 원 / 보는 위치 기준 실루엣 2줄은 viewEdges 에서
 --   Ball     : 보는 위치 기준 실루엣 원(viewEdges)
+--   Line     : 가장 긴 축을 따라 선 하나(속성 SonarShape = "Line"). 괴물처럼 가는 막대를 한 획으로 그릴 때
+--   Disc     : 원통 가운데 원 하나(속성 SonarShape = "Disc"). 얇은 원판(눈, 둥근 머리)을 한 줄 원으로
 --   None     : 선 없음(속성 SonarShape = "None")
 -- MeshPart / Union 처럼 정확한 모서리를 얻기 어려운 것은 상자 프록시를 쓴다(SonarShape 속성으로 바꿀 수 있다).
 --
@@ -422,6 +436,13 @@ function Geo.staticEdges(part: BasePart, out: EdgeList, noNormals: boolean?)
 		Geo.boxEdges(cf, size, out, if type(axis) == "string" then axis else nil, noNormals)
 	elseif shape == "Wedge" then
 		Geo.wedgeEdges(cf, size, out, noNormals)
+	elseif shape == "Line" then
+		local s = size
+		local axis = if s.X >= s.Y and s.X >= s.Z then cf.XVector * (s.X / 2) elseif s.Y >= s.Z then cf.YVector * (s.Y / 2) else cf.ZVector * (s.Z / 2)
+		push(out, cf.Position - axis, cf.Position + axis)
+	elseif shape == "Disc" then
+		local r = math.min(size.Y, size.Z) / 2
+		circle(cf.Position, cf.YVector, cf.ZVector, r, ringSegments(r), out)
 	elseif shape == "Cylinder" then
 		local rings = part:GetAttribute("SonarRings")
 		Geo.cylinderRings(cf, size, out, if type(rings) == "number" then rings else nil)
@@ -638,7 +659,256 @@ return Doors
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="16">
+      <Item class="ModuleScript" referent="16">
+        <Properties>
+          <string name="Name">Hiding</string>
+          <string name="Source"><![CDATA[--!strict
+-- 숨는 곳(맵 문자 L): 챕터마다 모양이 다른 캐비닛·옷장. E(ProximityPrompt)로 들어가고 E 로 나온다.
+-- 숨어 있는 동안: 움직일 수 없고 음파를 쏠 수 없으며, 괴물은 보지도 잡지도 못한다.
+-- 단, 쫓아오던 괴물이 숨는 모습을 봤다면(Config.Hide.SeenWindow 안에 시야에 있었다면) 그 앞으로 와서 끌어낸다(Monster).
+-- 문을 여닫는 소리(Config.Hide.Noise)는 가까운 괴물이 듣는다.
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Kit = require(script.Parent.MapKit)
+local SoundBus = require(script.Parent.SoundBus)
+
+local Hiding = {}
+
+export type Spot = {
+	model: Model,
+	center: Vector3, -- 바닥 높이의 안쪽 가운데
+	facing: Vector3, -- 문이 향하는 방향(방 안쪽)
+	front: Vector3, -- 문 앞(바닥 높이)
+	prompt: ProximityPrompt,
+	occupant: Player?,
+}
+
+local spots: { Spot } = {}
+local occupied: { [Player]: Spot } = {}
+local hideListeners: { (Player, Spot) -> () } = {}
+
+-- 챕터별 모양
+type Style = { w: number, d: number, h: number, doors: number, louvers: boolean, legs: boolean, crown: boolean, tilt: number }
+local STYLES: { [string]: Style } = {
+	locker = { w = 3.6, d = 3.0, h = 7.6, doors = 1, louvers = true, legs = false, crown = false, tilt = 0 }, -- 지하 시설: 철제 사물함
+	tool = { w = 4.6, d = 3.2, h = 7.2, doors = 2, louvers = true, legs = false, crown = false, tilt = 0 }, -- 창고: 공구 캐비닛
+	rusty = { w = 3.6, d = 3.0, h = 7.4, doors = 1, louvers = true, legs = false, crown = false, tilt = 0.035 }, -- 하수도: 찌그러진 정비 사물함
+	wardrobe = { w = 5.6, d = 3.4, h = 8.0, doors = 2, louvers = true, legs = true, crown = true, tilt = 0 }, -- 병원: 병실 옷장
+	closet = { w = 4.8, d = 3.4, h = 8.6, doors = 1, louvers = false, legs = false, crown = true, tilt = 0 }, -- 심층 미로: 낡은 벽장
+}
+Hiding.Styles = STYLES
+
+-- cf: 바닥 높이, 문이 향하는 쪽이 LookVector
+local function buildModel(parent: Instance, cf: CFrame, s: Style): (Model, BasePart)
+	local m = Instance.new("Model")
+	m.Name = "HideSpot"
+	local t = 0.25
+	local y0 = if s.legs then 0.5 else 0
+	local function box(local_: CFrame, size: Vector3, opts: Kit.Opts?): Part
+		return Kit.box(m, cf * CFrame.Angles(0, 0, s.tilt) * local_, size, opts)
+	end
+	local h, w, d = s.h, s.w, s.d
+	-- 몸통: 뒤판, 옆판, 지붕, 바닥판(속은 비어 있다)
+	box(CFrame.new(0, y0 + h / 2, d / 2 - t / 2), Vector3.new(w, h, t))
+	for _, sx in { -1, 1 } do
+		box(CFrame.new(sx * (w / 2 - t / 2), y0 + h / 2, 0), Vector3.new(t, h, d))
+	end
+	box(CFrame.new(0, y0 + h - t / 2, 0), Vector3.new(w, t, d))
+	box(CFrame.new(0, y0 + t / 2, 0), Vector3.new(w, t, d), { collide = false })
+	if s.legs then
+		for _, sx in { -1, 1 } do
+			for _, sz in { -1, 1 } do
+				box(CFrame.new(sx * (w / 2 - 0.3), y0 / 2, sz * (d / 2 - 0.3)), Vector3.new(0.3, y0, 0.3), { blocks = false })
+			end
+		end
+	end
+	if s.crown then
+		box(CFrame.new(0, y0 + h + 0.2, -0.1), Vector3.new(w + 0.4, 0.4, d + 0.2), { blocks = false })
+	end
+	-- 문(앞쪽, -Z): 틀 + 문짝 + 환기 살(숨은 사람이 틈으로 밖을 본다)
+	local front = -d / 2 + t / 2
+	local doorW = (w - t * 2) / s.doors
+	local doorPart: BasePart? = nil
+	for k = 1, s.doors do
+		local cx = -w / 2 + t + doorW * (k - 0.5)
+		local top = y0 + h - t
+		if s.louvers then
+			-- 아래쪽 판 + 위쪽 살(사이가 비어 있다)
+			local solidH = (top - y0) * 0.55
+			local p = box(CFrame.new(cx, y0 + solidH / 2, front), Vector3.new(doorW - 0.06, solidH, t), { name = "HideDoor" })
+			doorPart = doorPart or p
+			local slats = 7
+			local span = top - (y0 + solidH)
+			for q = 1, slats do
+				local sy = y0 + solidH + span * (q - 0.5) / slats
+				box(CFrame.new(cx, sy, front) * CFrame.Angles(math.rad(-25), 0, 0), Vector3.new(doorW - 0.06, span / slats * 0.55, 0.12), { blocks = false })
+			end
+			-- 문 가장자리 세로 틀
+			for _, sx in { -1, 1 } do
+				box(CFrame.new(cx + sx * (doorW / 2 - 0.1), y0 + solidH + span / 2, front), Vector3.new(0.2, span, t), { blocks = false })
+			end
+		else
+			-- 판자 문 + 눈높이 틈 하나
+			local gapY = y0 + 5.6
+			local p = box(CFrame.new(cx, (y0 + gapY - 0.25) / 2, front), Vector3.new(doorW - 0.06, gapY - 0.25 - y0, t), { name = "HideDoor" })
+			doorPart = doorPart or p
+			box(CFrame.new(cx, (gapY + 0.25 + top) / 2, front), Vector3.new(doorW - 0.06, top - gapY - 0.25, t))
+			for q = 1, 3 do
+				box(CFrame.new(cx - doorW / 2 + doorW * q / 4, (y0 + top) / 2, front - 0.15), Vector3.new(0.08, top - y0 - 0.4, 0.08), { blocks = false, collide = false })
+			end
+		end
+		-- 손잡이
+		local hx = if s.doors == 2 then (if k == 1 then cx + doorW / 2 - 0.35 else cx - doorW / 2 + 0.35) else cx + doorW / 2 - 0.4
+		box(CFrame.new(hx, y0 + 3.6, front - 0.25), Vector3.new(0.12, 0.9, 0.18), { blocks = false, collide = false })
+	end
+	m.Parent = parent
+	return m, doorPart :: BasePart
+end
+
+local function rootHeight(char: Model): number
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if hum and root then
+		return hum.HipHeight + root.Size.Y / 2
+	end
+	return 3
+end
+
+local function clear(player: Player)
+	local spot = occupied[player]
+	if spot then
+		spot.occupant = nil
+		occupied[player] = nil
+	end
+	if player:GetAttribute("Hidden") then
+		player:SetAttribute("Hidden", false)
+	end
+end
+
+function Hiding.enter(player: Player, spot: Spot): boolean
+	if player:GetAttribute("Status") ~= "Alive" or spot.occupant or occupied[player] then
+		return false
+	end
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not char or not root then
+		return false
+	end
+	spot.occupant = player
+	occupied[player] = spot
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.Anchored = true
+	local p = spot.center + Vector3.new(0, rootHeight(char), 0) - spot.facing * 0.15
+	char:PivotTo(CFrame.lookAt(p, p + spot.facing))
+	player:SetAttribute("Hidden", true)
+	SoundBus.emit(spot.front + Vector3.new(0, 3, 0), Config.Hide.Noise, player, "Hide")
+	for _, fn in table.clone(hideListeners) do
+		task.spawn(fn, player, spot)
+	end
+	return true
+end
+
+function Hiding.exit(player: Player): boolean
+	local spot = occupied[player]
+	if not spot then
+		return false
+	end
+	clear(player)
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if char and root then
+		local p = spot.front + Vector3.new(0, rootHeight(char), 0)
+		char:PivotTo(CFrame.lookAt(p, p + spot.facing))
+		root.Anchored = false
+	end
+	SoundBus.emit(spot.front + Vector3.new(0, 3, 0), Config.Hide.Noise, player, "Hide")
+	return true
+end
+
+function Hiding.spotOf(player: Player): Spot?
+	return occupied[player]
+end
+
+function Hiding.all(): { Spot }
+	return spots
+end
+
+-- 누가 숨었을 때(괴물이 그 모습을 봤는지 판단)
+function Hiding.onHide(fn: (Player, Spot) -> ())
+	table.insert(hideListeners, fn)
+end
+
+-- pos: 타일 가운데 바닥, back: 벽 쪽 방향(단위 벡터)
+function Hiding.create(parent: Instance, pos: Vector3, back: Vector3, styleName: string?): Spot
+	local s = STYLES[styleName or "locker"] or STYLES.locker
+	local facing = -back
+	local center = pos + back * (Config.Hide.Tile / 2 - s.d / 2 - 0.1)
+	local cf = CFrame.lookAt(center, center + facing) -- (LookVector = -Z = 문 쪽, +Z = 벽 쪽 뒤판)
+	local model, door = buildModel(parent, cf, s)
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "숨기"
+	prompt.ObjectText = ""
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = Config.Hide.PromptDistance
+	prompt.RequiresLineOfSight = false
+	prompt.Style = Enum.ProximityPromptStyle.Custom
+	prompt:SetAttribute("HideSpot", true)
+	prompt.Parent = door
+	CollectionService:AddTag(model, Config.Tags.HideSpot)
+	local spot: Spot = {
+		model = model,
+		center = center,
+		facing = facing,
+		front = center + facing * (s.d / 2 + 2.4),
+		prompt = prompt,
+		occupant = nil,
+	}
+	table.insert(spots, spot)
+	prompt.Triggered:Connect(function(player)
+		if occupied[player] == spot then
+			Hiding.exit(player)
+		elseif not occupied[player] then
+			Hiding.enter(player, spot)
+		end
+	end)
+	model.Destroying:Connect(function()
+		local i = table.find(spots, spot)
+		if i then
+			table.remove(spots, i)
+		end
+		if spot.occupant then
+			clear(spot.occupant)
+		end
+	end)
+	return spot
+end
+
+-- 죽거나 탈출하거나 새 캐릭터가 생기면 숨은 상태를 푼다
+local function watch(p: Player)
+	p:GetAttributeChangedSignal("Status"):Connect(function()
+		if p:GetAttribute("Status") ~= "Alive" then
+			clear(p)
+		end
+	end)
+	p.CharacterAdded:Connect(function()
+		clear(p)
+	end)
+end
+for _, p in Players:GetPlayers() do
+	watch(p)
+end
+Players.PlayerAdded:Connect(watch)
+Players.PlayerRemoving:Connect(clear)
+
+return Hiding
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="17">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -683,7 +953,7 @@ local Sonar = {}
 Sonar.accepted = accepted
 
 SonarFire.OnServerEvent:Connect(function(player: Player)
-	if player:GetAttribute("Status") ~= "Alive" then
+	if player:GetAttribute("Status") ~= "Alive" or player:GetAttribute("Hidden") then
 		return
 	end
 	local char = player.Character
@@ -736,7 +1006,7 @@ task.spawn(Round.loop)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">MapKit</string>
           <string name="Source"><![CDATA[--!strict
@@ -1038,7 +1308,7 @@ return Kit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">Monster</string>
           <string name="Source"><![CDATA[--!strict
@@ -1054,6 +1324,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Kit = require(script.Parent.MapKit)
 local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
+local Hiding = require(script.Parent.Hiding)
 
 local MC = Config.Monster
 
@@ -1062,8 +1333,18 @@ Monster.__index = Monster
 
 export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase"
 
+-- ── 챕터별 머리 도형: 1 삼각형 · 2 사각형 · 3 원 · 4 별 · 5 육각형 (그 이후는 처음부터 반복) ──
+-- cy: 머리 중심 높이, eye = {x, y, 반지름}, mouth = {반폭, 윗입술 y, 깊이}, 좌표는 머리 중심 기준
+local HeadSpec: { { cy: number, eye: { number }, mouth: { number }, verts: { { number } }?, circle: number?, star: { number }?, hex: number? } } = {
+	{ cy = 4.5, eye = { 0.2, 0.0, 0.08 }, mouth = { 0.5, -0.25, 0.35 }, verts = { { -0.85, -0.75 }, { 0.85, -0.75 }, { 0, 0.75 } } },
+	{ cy = 4.4, eye = { 0.28, 0.2, 0.09 }, mouth = { 0.5, -0.1, 0.4 }, verts = { { -0.8, -0.65 }, { 0.8, -0.65 }, { 0.8, 0.65 }, { -0.8, 0.65 } } },
+	{ cy = 4.35, eye = { 0.22, 0.12, 0.09 }, mouth = { 0.45, -0.2, 0.4 }, circle = 0.6 },
+	{ cy = 4.55, eye = { 0.16, 0.12, 0.065 }, mouth = { 0.3, -0.12, 0.25 }, star = { 1.0, 0.48 } },
+	{ cy = 4.35, eye = { 0.26, 0.15, 0.09 }, mouth = { 0.5, -0.12, 0.38 }, hex = 0.72 },
+}
+
 -- ── 모델 ──
-local function buildModel(cf: CFrame): Model
+local function buildModel(cf: CFrame, stage: number): Model
 	local model = Instance.new("Model")
 	model.Name = "Monster"
 	model:SetAttribute(Config.Tags.Dynamic, true)
@@ -1096,28 +1377,121 @@ local function buildModel(cf: CFrame): Model
 	local function add(p: BasePart)
 		table.insert(parts, p)
 	end
-	add(Kit.box(model, cf * CFrame.new(0, -0.6, 0), Vector3.new(1.5, 0.9, 0.9)))
-	add(Kit.box(model, cf * CFrame.new(0, 1.3, -0.35) * CFrame.Angles(math.rad(-18), 0, 0), Vector3.new(1.7, 3.0, 0.95)))
-	add(Kit.box(model, cf * CFrame.new(0, 2.7, -0.75) * CFrame.Angles(math.rad(-25), 0, 0), Vector3.new(2.3, 0.6, 1.0)))
-	add(Kit.cylinder(model, at(Vector3.new(0, 2.9, -0.8)), at(Vector3.new(0, 3.5, -1.3)), 0.22))
-	add(Kit.ball(model, at(Vector3.new(0, 3.8, -1.55)), 0.62))
-	add(Kit.box(model, cf * CFrame.new(0, 3.55, -2.0) * CFrame.Angles(math.rad(20), 0, 0), Vector3.new(0.7, 0.35, 0.7)))
-	for _, s in { -1, 1 } do
-		local sh = Vector3.new(1.15 * s, 2.75, -0.8)
-		local el = Vector3.new(1.45 * s, 0.4, -1.3)
-		local wr = Vector3.new(1.35 * s, -2.1, -1.5)
-		add(Kit.cylinder(model, at(sh), at(el), 0.2))
-		add(Kit.cylinder(model, at(el), at(wr), 0.16))
-		for k = -1, 1 do
-			local tip = wr + Vector3.new(0.18 * k, -1.1, -0.15 + 0.1 * k)
-			add(Kit.cylinder(model, at(wr), at(tip), 0.06))
+	-- 레퍼런스(손그림): 작은 머리 + 짧은 목 + 좁고 긴 몸통 + 바깥으로 벌어진 긴 팔(발톱 5개) + 길고 가는 다리. 바닥 y = -5, 앞 = -Z
+	local function seg(a: Vector3, b: Vector3, r: number)
+		-- 음파에는 한 획으로: 막대는 가운데 선 하나(Line), 얇은 원판은 원 하나(Disc)
+		local shape = if (b - a).Magnitude > r * 4 then "Line" else "Disc"
+		add(Kit.cylinder(model, at(a), at(b), r, { shape = shape }))
+	end
+	-- 손으로 그린 듯 흔들리는 선(결정적 난수라 매번 같은 모양)
+	local seed = 0
+	local function rnd(): number
+		seed += 1
+		local x = math.sin(seed * 12.9898) * 43758.5453
+		return x - math.floor(x) - 0.5
+	end
+	local function ink(a: Vector3, b: Vector3, r: number)
+		local d = b - a
+		local len = d.Magnitude
+		local dir = d.Unit
+		local k = math.min(1, len / 2) -- 짧은 선일수록 덜 삐져나오게
+		a = a - dir * (0.05 + 0.08 * (rnd() + 0.5)) * k
+		b = b + dir * (0.05 + 0.08 * (rnd() + 0.5)) * k
+		local n = math.max(2, math.floor(len / 1.6))
+		local prev = a
+		for i = 1, n do
+			local p = a:Lerp(b, i / n)
+			if i < n then
+				p += Vector3.new(rnd() * 0.07, rnd() * 0.04, rnd() * 0.07)
+			end
+			seg(prev, p, r)
+			prev = p
 		end
-		local hip = Vector3.new(0.5 * s, -0.9, 0)
-		local knee = Vector3.new(0.62 * s, -3.0, -0.45)
-		local ankle = Vector3.new(0.55 * s, -4.75, 0.15)
-		add(Kit.cylinder(model, at(hip), at(knee), 0.25))
-		add(Kit.cylinder(model, at(knee), at(ankle), 0.19))
-		add(Kit.box(model, cf * CFrame.new(0.55 * s, -4.88, -0.25), Vector3.new(0.5, 0.25, 1.1)))
+	end
+	local V3 = Vector3.new
+	-- 몸통: 사다리꼴 네 선 + 어깨에서 가슴으로 겹치는 두 선
+	ink(V3(-0.9, 2.6, -0.35), V3(-0.65, 0.5, 0), 0.03)
+	ink(V3(0.9, 2.6, -0.35), V3(0.65, 0.5, 0), 0.03)
+	ink(V3(-0.9, 2.6, -0.35), V3(0.9, 2.6, -0.35), 0.03)
+	ink(V3(-0.65, 0.5, 0), V3(0.65, 0.5, 0), 0.03)
+	ink(V3(-0.9, 2.5, -0.35), V3(-0.15, 1.5, -0.1), 0.025)
+	ink(V3(0.9, 2.5, -0.35), V3(0.15, 1.5, -0.1), 0.025)
+	-- 짧은 목
+	ink(V3(-0.2, 3.75, -0.65), V3(-0.3, 2.6, -0.4), 0.03)
+	ink(V3(0.2, 3.75, -0.65), V3(0.3, 2.6, -0.4), 0.03)
+	-- 머리(챕터별 도형): 눈 = 작은 동그라미 + 점, 입 = 가로로 넓고 세로 이빨선
+	local spec = HeadSpec[((stage - 1) % #HeadSpec) + 1]
+	local cy, zf = spec.cy, -1.0
+	local function P(x: number, y: number, z: number): Vector3
+		return Vector3.new(x, cy + y, z)
+	end
+	local verts: { { number } } = spec.verts or {}
+	if spec.star then
+		for i = 0, 9 do
+			local r = if i % 2 == 0 then spec.star[1] else spec.star[2]
+			local ang = math.pi / 2 + i * math.pi / 5
+			table.insert(verts, { r * math.cos(ang), r * math.sin(ang) })
+		end
+	elseif spec.hex then
+		for i = 0, 5 do
+			local ang = i * math.pi / 3
+			table.insert(verts, { spec.hex * math.cos(ang), spec.hex * math.sin(ang) })
+		end
+	end
+	if spec.circle then
+		seg(P(0, 0, zf), P(0, 0, zf + 0.06), spec.circle)
+	else
+		for i, a in verts do
+			local b = verts[i % #verts + 1]
+			ink(P(a[1], a[2], zf), P(b[1], b[2], zf), 0.03)
+		end
+	end
+	local ex, ey, er = spec.eye[1], spec.eye[2], spec.eye[3]
+	for _, s in { -1, 1 } do
+		seg(P(s * ex, ey, zf - 0.03), P(s * ex, ey, zf - 0.06), er)
+		seg(P(s * ex, ey, zf - 0.06), P(s * ex, ey, zf - 0.09), 0.025)
+	end
+	local mw, my, mh = spec.mouth[1], spec.mouth[2], spec.mouth[3]
+	local function arcY(x: number): number
+		return my - mh * (1 - (x / mw) ^ 2) * 0.35 - mh * 0.65
+	end
+	local zm = zf - 0.04
+	seg(P(-mw, my, zm), P(mw, my, zm), 0.025)
+	seg(P(-mw, my, zm), P(-mw * 0.9, arcY(-mw * 0.9), zm), 0.025)
+	seg(P(mw, my, zm), P(mw * 0.9, arcY(mw * 0.9), zm), 0.025)
+	for i = 0, 5 do
+		local x0 = -mw * 0.9 + 1.8 * mw * i / 6
+		local x1 = -mw * 0.9 + 1.8 * mw * (i + 1) / 6
+		seg(P(x0, arcY(x0), zm), P(x1, arcY(x1), zm), 0.025)
+	end
+	for i = 1, 8 do
+		local x = -mw * 0.9 + 1.8 * mw * i / 9
+		seg(P(x, my, zm), P(x, arcY(x), zm), 0.018)
+	end
+	for _, s in { -1, 1 } do
+		-- 긴 팔: 한 줄, 어깨 → 팔꿈치 → 손목, V자로 벌어짐
+		local sh = V3(0.9 * s, 2.55, -0.35)
+		local el = V3(1.55 * s, 0.15, -0.85)
+		local wr = V3(2.1 * s, -2.1, -1.0)
+		ink(sh, el, 0.03)
+		ink(el, wr, 0.03)
+		-- 부채꼴로 퍼지는 긴 발톱 5개
+		for k = -2, 2 do
+			local mid = wr + V3(k * 0.16 + 0.05 * s, -0.8, -0.12)
+			local tip = wr + V3(k * 0.3 + 0.12 * s, -1.55, -0.35 + 0.05 * k)
+			seg(wr + V3(k * 0.07, 0, 0), mid, 0.018)
+			seg(mid, tip, 0.014)
+		end
+		-- 길고 곧은 다리: 한 줄 + 무릎 꺾임, 작은 발
+		for _, e in { 0.4 } do
+			local x0, xk, xa = e * s, (e + 0.06) * s, (e + 0.08) * s
+			ink(V3(x0, 0.5, 0), V3(xk, -2.3, -0.2), 0.03)
+			ink(V3(xk, -2.3, -0.2), V3(xa, -4.75, 0.1), 0.03)
+		end
+		local xc = 0.48 * s
+		ink(V3(xc, -4.75, 0.1), V3(xc, -4.97, -0.8), 0.03)
+		ink(V3(xc, -4.97, 0.35), V3(xc, -4.97, -0.8), 0.03)
+		ink(V3(xc, -4.75, 0.1), V3(xc, -4.97, 0.35), 0.03)
 	end
 	for _, p in parts do
 		p.Name = "Body"
@@ -1172,10 +1546,14 @@ export type Monster = typeof(setmetatable({} :: {
 	geometry: Instance,
 	startAt: number,
 	stateChanged: number,
+	route: ((Vector3, Vector3, boolean?) -> { Vector3 }?)?,
+	legGoal: Vector3?,
+	pullSpot: Vector3?, -- 쫓던 플레이어가 숨는 것을 봤다: 그 숨는 곳 앞
+	lastHunt: number,
 }, Monster))
 
-function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> ()): Monster
-	local model = buildModel(CFrame.new(spawnPos + Vector3.new(0, 2.2, 0)))
+function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> (), stage: number?): Monster
+	local model = buildModel(CFrame.new(spawnPos + Vector3.new(0, 2.2, 0)), stage or 1)
 	model.Parent = parent
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
 	pcall(function()
@@ -1218,6 +1596,10 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 		geometry = geometry,
 		startAt = os.clock() + MC.StartDelay,
 		stateChanged = os.clock(),
+		route = nil,
+		legGoal = nil,
+		pullSpot = nil,
+		lastHunt = os.clock(),
 	}, Monster)
 	return self
 end
@@ -1247,6 +1629,9 @@ function Monster.setState(self: Monster, s: State)
 	self.hum.WalkSpeed = speed
 end
 
+-- (테스트용) 경로 계산 횟수·시간, tick 횟수
+Monster.stats = { pathCalls = 0, pathWall = 0, ticks = 0 }
+
 local function feet(p: Vector3): Vector3
 	return p - Vector3.new(0, 4.5, 0)
 end
@@ -1260,28 +1645,60 @@ function Monster.pathTo(self: Monster, rawGoal: Vector3): boolean
 	if down then
 		goal = down.Position + Vector3.new(0, 0.5, 0)
 	end
-	local ok = pcall(function()
-		self.path:ComputeAsync(feet(self.root.Position), goal)
-	end)
-	if not self.alive then
-		return false
+	self.legGoal = nil
+	local from = feet(self.root.Position)
+	local function compute(to: Vector3): boolean
+		local c0 = os.clock()
+		local ok = pcall(function()
+			self.path:ComputeAsync(from, to)
+		end)
+		Monster.stats.pathCalls += 1
+		Monster.stats.pathWall += os.clock() - c0
+		return ok and self.alive and self.path.Status == Enum.PathStatus.Success
 	end
-	if ok and self.path.Status == Enum.PathStatus.Success then
+	local function take(final: boolean): boolean
 		self.waypoints = self.path:GetWaypoints()
 		self.wp = math.min(2, #self.waypoints)
 		self.goal = goal
+		self.legGoal = if final then nil else goal
 		return true
+	end
+	if compute(goal) then
+		return take(true)
+	end
+	if not self.alive then
+		return false
+	end
+	-- 멀리 돌아가는 길: 타일 경로를 따라 몇 칸 앞까지만 계산하고, 도착하면 다시 계산한다(follow)
+	local route = self.route and self.route(from, goal, true)
+	if route and #route > 1 then
+		for _, ahead in { MC.LegTiles, math.ceil(MC.LegTiles / 2), 2 } do
+			local idx = math.min(#route, ahead + 1)
+			if compute(route[idx]) then
+				return take(idx == #route)
+			end
+		end
 	end
 	self.waypoints = {}
 	self.wp = 1
 	return false
 end
 
+-- 구간 끝에 왔다: 최종 목표가 남아 있으면 다음 구간을 계산한다. 최종 목표에 도착했으면 true
+function Monster.nextLeg(self: Monster): boolean
+	local g = self.legGoal
+	if g and (feet(self.root.Position) - g).Magnitude > 4 and self:pathTo(g) then
+		return false
+	end
+	self.legGoal = nil
+	return true
+end
+
 -- 경로를 따라 한 걸음. 끝에 도착하면 true
 function Monster.follow(self: Monster): boolean
 	local wps = self.waypoints
 	if #wps == 0 or self.wp > #wps then
-		return true
+		return self:nextLeg()
 	end
 	local wp = wps[self.wp]
 	local pos = self.root.Position
@@ -1289,7 +1706,7 @@ function Monster.follow(self: Monster): boolean
 	if flat.Magnitude < 2.2 and math.abs(feet(pos).Y - wp.Position.Y) < 4 then
 		self.wp += 1
 		if self.wp > #wps then
-			return true
+			return self:nextLeg()
 		end
 		wp = wps[self.wp]
 	end
@@ -1322,7 +1739,7 @@ end
 local function alivePlayers(): { { player: Player, root: BasePart, char: Model } }
 	local out = {}
 	for _, p in Players:GetPlayers() do
-		if p:GetAttribute("Status") == "Alive" then
+		if p:GetAttribute("Status") == "Alive" and not p:GetAttribute("Hidden") then
 			local char = p.Character
 			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if char and root then
@@ -1340,7 +1757,18 @@ function Monster.startChase(self: Monster, p: Player, pos: Vector3)
 	self.target = p
 	self.lastSeen = os.clock()
 	self.lastKnown = pos
+	self.pullSpot = nil
 	self:setState("Chase")
+end
+
+-- 누가 숨었다: 쫓던 대상이고 방금까지 보고 있었다면 숨는 곳을 기억한다
+function Monster.onHide(self: Monster, p: Player, front: Vector3)
+	if self.state == "Chase" and self.target == p and os.clock() - self.lastSeen <= Config.Hide.SeenWindow then
+		self:note("saw " .. p.Name .. " hide")
+		self.pullSpot = front
+		self.lastKnown = front
+		self.waypoints = {}
+	end
 end
 
 function Monster.investigate(self: Monster, pos: Vector3)
@@ -1461,6 +1889,7 @@ function Monster.tick(self: Monster)
 		local char = t and t.Character
 		local troot = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if not t or t:GetAttribute("Status") ~= "Alive" or not troot then
+			self.pullSpot = nil
 			self.target = nil
 			self.searchCenter = self.lastKnown or self.root.Position
 			self.searchUntil = now + MC.SearchTime
@@ -1470,7 +1899,35 @@ function Monster.tick(self: Monster)
 		end
 		local tp = troot.Position
 		local d = (tp - self.root.Position).Magnitude
-		local los = d < 40 and self:lineOfSight(tp)
+		local hidden = t:GetAttribute("Hidden") == true
+		if hidden and self.pullSpot then
+			-- 숨는 걸 봤다: 그 앞으로 가서 끌어낸다
+			local front = self.pullSpot
+			local flat = Vector3.new(front.X - self.root.Position.X, 0, front.Z - self.root.Position.Z).Magnitude
+			if flat < 4.5 then
+				self:note("pulled out " .. t.Name)
+				self.pullSpot = nil
+				Hiding.exit(t)
+				self.onCatch(t, self)
+				self.target = nil
+				self.searchCenter = front
+				self.searchUntil = now + MC.SearchTime
+				self:setState("Search")
+				self.waypoints = {}
+				return
+			end
+			if #self.waypoints == 0 or self:follow() then
+				if not self:pathTo(front) then
+					self.hum:MoveTo(front)
+				end
+			end
+			self:checkStuck(true)
+			return
+		end
+		if not hidden then
+			self.pullSpot = nil
+		end
+		local los = not hidden and d < 40 and self:lineOfSight(tp)
 		if los then
 			self.lastSeen = now
 			self.lastKnown = tp
@@ -1570,6 +2027,27 @@ function Monster.tick(self: Monster)
 	else -- Wander
 		if #self.waypoints == 0 or self:follow() then
 			local n = self:randomNode(self.root.Position)
+			-- 넓은 맵에서 영영 마주치지 않는 일이 없게: 가끔 플레이어(숨지 않은) 근처로 배회한다
+			if now - self.lastHunt >= MC.HuntEvery then
+				self.lastHunt = now
+				local ps = alivePlayers()
+				if #ps > 0 then
+					local pick = ps[math.random(1, #ps)]
+					local tp = pick.root.Position
+					local near = {}
+					for _, c in self.nodes do
+						local dd = (c - tp).Magnitude
+						if dd > 12 and dd <= MC.HuntRadius then
+							table.insert(near, c)
+						end
+					end
+					local best = if #near > 0 then near[math.random(1, #near)] else nil
+					if best then
+						self:note("hunt near " .. pick.player.Name)
+						n = best
+					end
+				end
+			end
 			if not self:pathTo(n) then
 				self.waypoints = {}
 			end
@@ -1604,6 +2082,7 @@ function Monster.run(self: Monster)
 	task.spawn(function()
 		while self.alive and self.model.Parent do
 			local ok, err = pcall(self.tick, self)
+			Monster.stats.ticks += 1
 			if not ok then
 				warn("[Monster] " .. tostring(err))
 				self.waypoints = {}
@@ -1622,7 +2101,7 @@ return Monster
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">Props</string>
           <string name="Source"><![CDATA[--!strict
@@ -1869,7 +2348,7 @@ return Props
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[--!strict
@@ -1885,6 +2364,7 @@ local Builder = require(script.Parent.StageBuilder)
 local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
 local Monster = require(script.Parent.Monster)
+local Hiding = require(script.Parent.Hiding)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
@@ -1893,6 +2373,7 @@ local Round = {}
 Round.stageIndex = 1
 Round.state = "Waiting"
 Round.roundId = 0
+Round.lastBuildMs = 0
 Round.info = nil :: Builder.StageInfo?
 Round.monsters = {} :: { any }
 Round.autoLoop = true -- 테스트가 끌 수 있다
@@ -1954,8 +2435,11 @@ function Round.buildStage(i: number)
 	Doors.clear()
 	local layout = stageModule(i)
 	assert(layout, "stage module missing: " .. tostring(i))
+	local b0 = os.clock()
 	local info = Builder.build(layout, workspace, "Stage")
+	Round.lastBuildMs = (os.clock() - b0) * 1000
 	local folder = info.folder
+	folder:SetAttribute("Rows", table.concat(layout.Rows, "/")) -- 클라이언트 지도(Q)용 격자(행을 / 로 구분)
 	local count = 0
 	for _, d in folder:GetDescendants() do
 		if d:IsA("BasePart") then
@@ -2076,7 +2560,8 @@ function Round.spawnMonsters(count: number)
 		local pick = candidates[math.min(#candidates, 1 + (k - 1) * math.max(1, math.floor(#candidates / (count + 1))))]
 		local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
 			Round.kill(player, "monster")
-		end)
+		end, Round.stageIndex)
+		m.route = info.route
 		table.insert(Round.monsters, m)
 		m:run()
 	end
@@ -2219,6 +2704,13 @@ SoundBus.listen(function(pos, radius, source, kind)
 	end
 end)
 
+-- 숨는 순간: 쫓던 괴물이 그 모습을 봤는지
+Hiding.onHide(function(p, spot)
+	for _, m in Round.monsters do
+		m:onHide(p, spot.front)
+	end
+end)
+
 Players.PlayerAdded:Connect(function(p)
 	setStatus(p, "Waiting")
 	if Round.state == "Playing" then
@@ -2249,7 +2741,7 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="22">
         <Properties>
           <string name="Name">SoundBus</string>
           <string name="Source"><![CDATA[--!strict
@@ -2346,7 +2838,7 @@ return SoundBus
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="22">
+      <Item class="ModuleScript" referent="23">
         <Properties>
           <string name="Name">StageBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -2365,6 +2857,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Kit = require(script.Parent.MapKit)
 local Doors = require(script.Parent.Doors)
+local Hiding = require(script.Parent.Hiding)
 
 local Builder = {}
 
@@ -2382,6 +2875,7 @@ export type Layout = {
 	Walkable: { [string]: boolean }?, -- Props 타일 중 괴물 배회 지점으로 쓸 수 있는 것
 	PitTiles: { [string]: boolean }?, -- Props 타일 중 아래층 높이인 것
 	PipeChance: number?,
+	HideStyle: string?, -- 숨는 곳(L) 모양: locker / tool / rusty / wardrobe / closet (Hiding.Styles)
 	Seed: number?,
 }
 
@@ -2392,6 +2886,9 @@ export type StageInfo = {
 	exitSize: Vector3,
 	nodes: { Vector3 },
 	bounds: { min: Vector3, max: Vector3 },
+	-- 타일 격자 위 최단 경로(타일 가운데 바닥 높이 좌표들). PathfindingService 는 시작·목표 주변만 탐색하므로
+	-- 큰 맵에서 멀리 돌아가야 하는 길은 이 경로를 짧은 구간으로 나눠 계산한다. monster = true 면 좁은 다리(n) 제외
+	route: (from: Vector3, to: Vector3, monster: boolean?) -> { Vector3 }?,
 }
 
 local PIT = { p = true, b = true, s = true, n = true }
@@ -2515,7 +3012,104 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 		exitSize = Vector3.new(6, 8, 6),
 		nodes = {},
 		bounds = { min = Vector3.new(0, BOTTOM, 0), max = Vector3.new(nx * T, H + 2, nz * T) },
+		route = nil,
 	}
+
+	-- ── 타일 경로(tools/check-layout.js 와 같은 규칙: 구덩이 = 아래층, 다리 = 위층, 계단 = 둘 다) ──
+	local passable: { [string]: boolean } = { ["."] = true, S = true, E = true, D = true, A = true, f = true, P = true, s = true }
+	for k in pitSet do
+		passable[k] = true
+	end
+	for k, v in layout.Walkable or {} do
+		passable[k] = v
+	end
+	local function levels(c: string): { number }
+		if pitSet[c] then
+			if bridgeChar(c) then
+				return { 0 }
+			elseif c == "s" then
+				return { 0, 1 }
+			end
+			return { 1 }
+		end
+		return { 0 }
+	end
+	local function hasLevel(c: string, l: number): boolean
+		for _, x in levels(c) do
+			if x == l then
+				return true
+			end
+		end
+		return false
+	end
+	info.route = function(from: Vector3, to: Vector3, monster: boolean?): { Vector3 }?
+		local function tileOf(p: Vector3): (number, number, number)
+			local i, j = math.floor(p.X / T) + 1, math.floor(p.Z / T) + 1
+			local c = at(i, j)
+			local l = if p.Y < PIT_Y / 2 then 1 else 0
+			if not hasLevel(c, l) then
+				l = levels(c)[1]
+			end
+			return i, j, l
+		end
+		local si, sj, sl = tileOf(from)
+		local gi, gj, gl = tileOf(to)
+		if not passable[at(si, sj)] or not passable[at(gi, gj)] then
+			return nil
+		end
+		local function k(i: number, j: number, l: number): number
+			return (l * nz + (j - 1)) * (nx + 2) + i
+		end
+		local prev: { [number]: number } = { [k(si, sj, sl)] = -1 }
+		local q = { { si, sj, sl } }
+		local head = 1
+		local found = false
+		while head <= #q do
+			local cur = q[head]
+			head += 1
+			local i, j, l = cur[1], cur[2], cur[3]
+			if i == gi and j == gj and l == gl then
+				found = true
+				break
+			end
+			local here = k(i, j, l)
+			if at(i, j) == "s" then
+				local other = k(i, j, 1 - l)
+				if prev[other] == nil then
+					prev[other] = here
+					table.insert(q, { i, j, 1 - l })
+				end
+			end
+			for _, d in dirs do
+				local ni, nj = i + d.di, j + d.dj
+				local c = at(ni, nj)
+				if passable[c] and not (monster and c == "n") and hasLevel(c, l) then
+					local nk = k(ni, nj, l)
+					if prev[nk] == nil then
+						prev[nk] = here
+						table.insert(q, { ni, nj, l })
+					end
+				end
+			end
+		end
+		if not found then
+			return nil
+		end
+		local out = {}
+		local cur = k(gi, gj, gl)
+		while cur ~= -1 do
+			local l = cur // ((nx + 2) * nz)
+			local rest = cur % ((nx + 2) * nz)
+			local j, i = rest // (nx + 2) + 1, rest % (nx + 2)
+			local y = if l == 1 then PIT_Y else 0
+			if at(i, j) == "s" then
+				y = PIT_Y / 2
+			end
+			table.insert(out, 1, center(i, j) + Vector3.new(0, y + 0.5, 0))
+			cur = prev[cur]
+		end
+		return out
+	end
 
 	local ctx = {
 		Kit = Kit,
@@ -2736,6 +3330,16 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 				em.CanQuery = false
 				em:SetAttribute("Sound", "AmbientFan")
 				CollectionService:AddTag(em, Config.Tags.AmbientEmitter)
+			elseif ch == "L" then
+				-- 숨는 곳: 등을 댈 벽(맞은편이 열린 쪽)을 찾는다
+				local back = nil
+				for _, d in dirs do
+					if isWall(i + d.di, j + d.dj) and not isWall(i - d.di, j - d.dj) then
+						back = d.v
+						break
+					end
+				end
+				Hiding.create(props, c + Vector3.new(0, fy, 0), back or Vector3.new(0, 0, -1), layout.HideStyle)
 			elseif ch == "v" then
 				local p = c + Vector3.new(0, fy, 0)
 				local spots = { Vector3.new(-2.2, 0, -2.2), Vector3.new(-2.4, 0, 1.6), Vector3.new(1.8, 0, -2.6) }
@@ -2874,78 +3478,63 @@ return Builder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="23">
+      <Item class="Folder" referent="24">
         <Properties>
           <string name="Name">Stages</string>
         </Properties>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="25">
           <Properties>
             <string name="Name">Stage1</string>
             <string name="Source"><![CDATA[--!strict
--- STAGE 1 — 지하 시설
--- 콘크리트 벽, 벽 배관, 기둥, 아치 리브, 문, 구덩이 위 철제 다리와 계단, 기계 설비.
--- 시작(S, 왼쪽 위) → 출구(E, 오른쪽 아래). 여러 갈래, 막다른 길, 순환 통로, 구덩이 아래 우회로가 있다.
+-- STAGE 1 — 지하 시설 (47x41칸, tools/gen-stages.js 로 생성)
+-- 왼쪽 위는 원래 시작 구역(자동 테스트가 쓰는 칸) 그대로. 그 밖으로 기둥 홀, 기계실, 창고방, 구덩이 위 다리와 계단이 있는 방들,
+-- 아치·문이 달린 구불구불한 정비 통로와 막다른 길. 출구까지 최단 약 150칸(걸어서 약 2분).
 return {
 	Seed = 11,
 	PipeChance = 0.55,
+	HideStyle = "locker", -- 숨는 곳(L): 철제 사물함
 	Rows = {
-		"####################",
-		"#S..#.......#...f..#",
-		"#S..D..O.O..A..cc..#",
-		"#...#.......#......#",
-		"##.###A######.####D#",
-		"#...#....#....#....#",
-		"#.c.#.##.#.##.#.m..#",
-		"#...A.#..A..#.A....#",
-		"###.###.#####.###.##",
-		"#.......#pppppppp..#",
-		"#.#####..bbbbbbbb..#",
-		"#.#...#.#ppppppps..#",
-		"#.#.m.#..spppppp#..#",
-		"#.#...D.#########D##",
-		"#.##.##.#....#.....#",
-		"#.......A.cc.A..O..#",
-		"#####.###.v..#.....#",
-		"#.....#.##D####.####",
-		"#.c.....#.......A.E#",
-		"####################",
-	},
-}
-]]></string>
-          </Properties>
-        </Item>
-        <Item class="ModuleScript" referent="25">
-          <Properties>
-            <string name="Name">Stage2</string>
-            <string name="Source"><![CDATA[--!strict
--- STAGE 2 — 물류 창고
--- 대형 선반(H 가로 / h 세로)이 줄지어 좁은 통로를 만들고, 컨테이너(K, 2단 Q)와 상자 더미가 넓은 창고를 나눈다.
-local Props = require(script.Parent.Parent.Props)
-return {
-	Seed = 23,
-	PipeChance = 0.3,
-	Props = { H = Props.RackX, h = Props.RackZ, K = Props.Container, Q = Props.ContainerStack },
-	Rows = {
-		"######################",
-		"#SS.#.....HHHH....cc.#",
-		"#...D................#",
-		"#SS.#..HHHH...KK.HHH.#",
-		"##.##............HHH.#",
-		"#.......HHHH..Q......#",
-		"#.cc.#...........KK..#",
-		"#######D######.#######",
-		"#.....h..h..h......m.#",
-		"#.K...h..h..h..KK....#",
-		"#.K...h..h..h......c.#",
-		"#.....h..h..h...QQ...#",
-		"###A##########.####D##",
-		"#......c.......#.....#",
-		"#.HHHH....KK...A..K..#",
-		"#...........Q..#.....#",
-		"#.HHHH..cc.....###.###",
-		"#..............#....E#",
-		"#..KK......HHH.D....##",
-		"######################",
+		"###############################################",
+		"#S..#.......#...f..##..L#.....###cc.....A.#####",
+		"#S..D..O.O..A..cc..##..v#.###A###.O...O.#.#####",
+		"#...#.......#......##m.m#.#m............#.....#",
+		"##.###A######.####D##...#.#.....#.O.O.O.#.###.#",
+		"#...#....#....#....##...#.#mL.fv#.....cc#...#.#",
+		"#.c.#.##.#.##.#.m..###D##f###################.#",
+		"#...A.#..A..#.A....##...D.A..v#####.......fc#.#",
+		"###.###.#####.###.###.#####m.m#####.O.O.O...#.#",
+		"#.......#pppppppp..##.#####...#.cc#.........#.#",
+		"#.#####..bbbbbbbb..##A#########...#.OfO...OL#.#",
+		"#.#...#.#ppppppps..##...#..v.fD..f.......f.f#.#",
+		"#.#.m.#..spppppp#..####.#L....#...#.OfO.O.O.#.#",
+		"#.#...D.#########D###.#.#mmm..#.Lc#...f.f..c#.#",
+		"#.##.##.#....#........#.#######D#####.###A###.#",
+		"#.......A.cc.A..O..##.....................###.#",
+		"#####.###.v..#.....#######.####.#########.###A#",
+		"#.....#.##D####.#####.......###.#.v.mL###.....#",
+		"#.c.....#.......A..##.......###.#.....A.#####.#",
+		"#############.#######pspbpsp###.#v...v#......f#",
+		"##########E##.#######pppbppp###.#m....#.#######",
+		"#...........#.....###ppsbppp#...#f....D.#######",
+		"#####A#####.#####.###.......#.###.##D##########",
+		"#####....L#.###...###.......#.A...#c..cc#######",
+		"#####c....#.###.#########D###.##.##.O.f.#######",
+		"#####c.ccc#.###.........#.........#.....#cc...#",
+		"###########A###A###.###A#.O.O.O.f.#.O.O.#...O.#",
+		"#.........#.#...f...cc#.#.........#.c.........#",
+		"#.#######.#.#...O...O.#.#.O.O...O.#A#####.O.O.#",
+		"#.#cL..c#.#.#.........#f#c.......c#....##c..cc#",
+		"#A#.O.O.#.#.#...O.O...#.##############D####A###",
+		"#.#.....#...#.........#...A...D...#.....f.....#",
+		"#.A.O...#####...O.O.O.#.#########.#pspbppspppp#",
+		"#.#c..cc#####c......c.D.#c.....c#.#pppbppppppp#",
+		"#.#####################.#.f.f.O.#.#ppsbppppppp#",
+		"#..A....###########.f.#.#.......#.#...........#",
+		"#######.###########.#f#f#.O.O.O...#...........#",
+		"#.....#.............#.#.#cc..L..#.#...........#",
+		"#.###.###############.###########.####D########",
+		"#...#......A...................f.......########",
+		"###############################################",
 	},
 }
 ]]></string>
@@ -2953,39 +3542,59 @@ return {
         </Item>
         <Item class="ModuleScript" referent="26">
           <Properties>
-            <string name="Name">Stage3</string>
+            <string name="Name">Stage2</string>
             <string name="Source"><![CDATA[--!strict
--- STAGE 3 — 하수도
--- 가운데를 가로지르는 지하 수로(w, 아래층 + 물소리) 위로 철제 다리(b)와 좁은 다리(n), 수로로 내려가는 계단(s).
--- 머리 위 대형 배관(P), 아치 터널(A), 여러 갈래 터널.
+-- STAGE 2 — 물류 창고 (45x41칸, tools/gen-stages.js 로 생성)
+-- 대형 선반(H 가로 / h 세로) 줄이 늘어선 큰 창고 4곳, 컨테이너(K, 2단 Q) 야적장, 사무실·재고실,
+-- 그 사이를 잇는 좁은 하역 통로. 출구까지 최단 약 150칸(걸어서 약 2분).
 local Props = require(script.Parent.Parent.Props)
 return {
-	Seed = 37,
-	PipeChance = 0.75,
-	Props = { w = Props.Water, P = Props.BigPipe },
-	PitTiles = { w = true },
-	Walkable = { w = true, P = true },
+	Seed = 23,
+	PipeChance = 0.3,
+	HideStyle = "tool", -- 숨는 곳(L): 공구 캐비닛
+	Props = { H = Props.RackX, h = Props.RackZ, K = Props.Container, Q = Props.ContainerStack },
 	Rows = {
-		"######################",
-		"#SS..#....PPPP...#...#",
-		"#....A...........#.m.#",
-		"#SS..#..##.###.###...#",
-		"###.##..#...#........#",
-		"#.......#.v.#.##.##..#",
-		"#.###A###...A..#.....#",
-		"#...........#..#..v..#",
-		"#....................#",
-		"#wwswwbwwswwnwwwbwwww#",
-		"#wwwwwbwwwwwnswwbwsww#",
-		"#...P.........P......#",
-		"#...P..######.P.##A###",
-		"#.##.####.....#......#",
-		"#...#...#..##.#.v.##.#",
-		"#.v.#.m.A..A..#..#...#",
-		"#...#...#..####..#.#.#",
-		"#.#####.#..........#.#",
-		"#.........PPPP..#..#E#",
-		"######################",
+		"#############################################",
+		"#SS...#####.c..c..#E#c.m..#...............#.#",
+		"#.....#####...K...D.#.....#.HH...HHHHHHHH.#.#",
+		"#SS...#.###......c#.#.....#...............#.#",
+		"#.....#.###.......#.#.....D.HHHHH...HHHHH...#",
+		"#.....D.###...L...#.D.c..m#...............#.#",
+		"#######.###################.HHHHHHH.HHHHH.#.#",
+		"#####.......#...........#.#...............#.#",
+		"#####.#D#####.HHHH...HH...#.HHHH.HHHHHHHH.A.#",
+		"#####.#....c#...........#.#...............#.#",
+		"#####.#L....D.H...HHHHH.#.#.H..HHHHHHHHHH.#.#",
+		"#####.#.....#...........#.#...............#.#",
+		"#####.#...c.#.HHHHHHH...#.#################.#",
+		"#####.#....c#...........#.....#.Kc#.......#.#",
+		"#####.#########A#############.#..c#.#######.#",
+		"#####.....#cLc..#####.L.....A.D...#.........#",
+		"#####...#.A.....#####......K###############.#",
+		"#####..m#.#..c..A.c.........###.KK.QQ.....D.#",
+		"#####..m#.#######...#..c.c..###...........#.#",
+		"#.cL#...#.#.....#...#..c.L..###...........#.#",
+		"#...###.#.#.###.###############...........#.#",
+		"#K.c###.....#.....#..c..#.m...#........KQQ#.#",
+		"##D##########D#####.....D.....#.....c...K.A.#",
+		"#...D.............#.m...#....L#...........###",
+		"#Lc.#.HHHHHH.HHHH.###A#####A###.......KK..###",
+		"#c..#.............D.........###...QQ......###",
+		"#####.HHHHHH..HHH.###.###########A###A#######",
+		"#####.............###.#...........#...###m..#",
+		"#####.HHHHHH..HHH.###.#.HHHH..HHH.#.#####..c#",
+		"###.D.............###.#...........#.#####L..#",
+		"###.#.HHHH..HHHHH.###.#.HHHHHH.HH.#.######D##",
+		"#...#.............###.#...........#.#.......#",
+		"#.####A#######D######.#...HHHHHHH.#.#...KKK.#",
+		"#.c.#.......#...#...#.#...........#.#.......#",
+		"#...#.#####.#...#.#.#.#.HH..HHHHH.#.#...KK..#",
+		"#.c.D.#K.c#.#m..#.#.#.#...........#.#.......#",
+		"#.###.#..K#.###.#.#.#.#.HHHH..HHH.#.D.......#",
+		"#.....#L..#.....#.#.#.#...........#.#.c..c..#",
+		"#.#####...#.#####.#.#.###D#########.#.KK....#",
+		"#.....#...D.......#.................#.......#",
+		"#############################################",
 	},
 }
 ]]></string>
@@ -2993,37 +3602,61 @@ return {
         </Item>
         <Item class="ModuleScript" referent="27">
           <Properties>
-            <string name="Name">Stage4</string>
+            <string name="Name">Stage3</string>
             <string name="Source"><![CDATA[--!strict
--- STAGE 4 — 폐병원
--- 긴 복도와 문이 달린 병실(R 침대), 진료실(T 책상, k 캐비닛), 수술실(X), 아래층 병동으로 내려가는 계단.
+-- STAGE 3 — 하수도 (43x41칸, tools/gen-stages.js 로 생성)
+-- 길고 구불구불한 아치 터널망, 펌프실·분기실(머리 위 대형 배관 P), 수로(w, 아래층 + 물소리)가 흐르는 방 2곳에
+-- 철제 다리(b)/좁은 다리(n)와 수로로 내려가는 계단(s). 출구까지 최단 약 160칸(걸어서 약 2분).
 local Props = require(script.Parent.Parent.Props)
 return {
-	Seed = 41,
-	PipeChance = 0.25,
-	Props = { R = Props.Bed, T = Props.Desk, X = Props.Surgery, k = Props.Cabinet },
-	Walkable = { R = true, k = true },
+	Seed = 37,
+	PipeChance = 0.75,
+	HideStyle = "rusty", -- 숨는 곳(L): 찌그러진 정비 사물함
+	Props = { w = Props.Water, P = Props.BigPipe },
+	PitTiles = { w = true },
+	Walkable = { w = true, P = true },
 	Rows = {
-		"######################",
-		"#R.R#R.R#T.k#X.X#R.R.#",
-		"#...#...#...#...#....#",
-		"#...#...#T..#...#R.R.#",
-		"##D###D###D###D###D###",
-		"#S...................#",
-		"#S......O.....O......#",
-		"##D#####D###.##D###D##",
-		"#...#.....#...#..#...#",
-		"#R..#.T.T.#.T.#..#R.R#",
-		"#...D.....#...D..D...#",
-		"#k..#.T.T.#.k.#..#...#",
-		"######D####D#####.####",
-		"#....................#",
-		"#..O.....O.....O.....#",
-		"###D####.#####.###D###",
-		"#pps#pppp#.....#.....#",
-		"#ppp#pXpp#.R.R.#.T.T##",
-		"#pppppppsD.....D....E#",
-		"######################",
+		"###########################################",
+		"#SS...###..m..#.....#.........A.#.........#",
+		"#.....###...m.#.###.###.#######.#.#######.#",
+		"#SS...###L....#.###.....#.v...#...#.....#.#",
+		"#.....#.A.....#A#########....v#########.#.#",
+		"#.....#.#.....#.#.......#v....#......A..#A#",
+		"###D###.#######.#.#####.###.#####.#######.#",
+		"#.....#.#..A..#.#.#...#.....L.v.#.A...#...#",
+		"#.#####.#.###.#.#.###A#.#.......#.###.#.###",
+		"#.....#...#...#.......#.#v......#.#...#.###",
+		"#.###.#####.###########.#v......#.#.###.###",
+		"#.#.#.#...#A#m..#.......#..vv...#.#.....###",
+		"#.#.#.A.v.#.#v..#.#.##A########A###########",
+		"#...#.#.v.A.#...#.#.#v..m.#...............#",
+		"#####.#...#.##A##.#.#.....#...............#",
+		"#.....#...#.#.....#A#v...m#wwwwwwwwswbwwww#",
+		"#.###.#####.#.###.#.#.....#wwwwwwwwwwbwwww#",
+		"#...#.....#.#.#.#.#.#...m.#wwwwwwwwwsbwsww#",
+		"#.#.#######.#.#.#.#.#######...............#",
+		"#.#.#...L.#.#.A.#.#...#####...............#",
+		"###.#.....#.#A###.###.######A##A###########",
+		"#...#..v..#.#...#.###.#.................A.#",
+		"#.#.#m....#.#m..#.###.#.#################A#",
+		"#.#.#.....A.#..L#.###...#######...........#",
+		"#.#.#.#####.#...#.#############.##.####.###",
+		"#.#.#..A..#.#...#...#.A.....A...#..L..#.###",
+		"#.#.#.###.#.#####.#.###.######.##...v...E##",
+		"#.#...#...#.#...#.#...#.....#...#.....#####",
+		"#.#########A#.###.###.#A#A###.m.###########",
+		"#.#.........#.......#.#.#..v#...#...A...L.#",
+		"#.#.#################.###...#..m###.#...v.#",
+		"#...###.............#.A.#...#...#.#.#.....#",
+		"#.###...............###.#########.#.#....v#",
+		"#.###.#.............#.....D.m..L#...#.....#",
+		"#.###A#wswwwwwbwwwww#.###D#.....#.#########",
+		"#.###.#wwwwwwwbwwwww#.#...#.....#...#...#.#",
+		"#.###.#wwswwwwbwswww#.#...#.....###.#.#.#.#",
+		"#.#...#.............#.#m.L#.....#...#.#.A.#",
+		"#.#.#.#############A#.#..m#####.#.###.#####",
+		"#...#.......A.........#...#...........#####",
+		"###########################################",
 	},
 }
 ]]></string>
@@ -3031,11 +3664,72 @@ return {
         </Item>
         <Item class="ModuleScript" referent="28">
           <Properties>
+            <string name="Name">Stage4</string>
+            <string name="Source"><![CDATA[--!strict
+-- STAGE 4 — 폐병원 (45x41칸, tools/gen-stages.js 로 생성)
+-- 긴 복도 4줄에 문 달린 병실(R 침대), 진료실(T 책상, k 캐비닛), 수술실(X), 기둥 로비, 아래층 병동(계단),
+-- 그 사이 뒷복도. 출구까지 최단 약 160칸(걸어서 약 2분).
+local Props = require(script.Parent.Parent.Props)
+return {
+	Seed = 41,
+	PipeChance = 0.25,
+	HideStyle = "wardrobe", -- 숨는 곳(L): 병실 옷장
+	Props = { R = Props.Bed, T = Props.Desk, X = Props.Surgery, k = Props.Cabinet },
+	Walkable = { R = true, k = true },
+	Rows = {
+		"#############################################",
+		"#SS...#########k..#.D.....L.#.D.#.....#######",
+		"#.....#########.T.#.#.......#.#.D....L#######",
+		"#SS...###k.k###...#.#R.R.R..D.#.#..R.R#..kk.#",
+		"#.....#.D..L#####D###########D#.#D#####.T...#",
+		"#.....D.#.kk#.............#k..D.#.k.D.D....L#",
+		"####D########.O.O.O...O.O.#.T.#.#.T.#.####D##",
+		"###R.R.R#...#.............#...#.#...#...D...#",
+		"###.....#.Tk#.O.O.O.O.O...#kT.#.#####D###.Tk#",
+		"###.L...D...#.............#...#.#.......#..k#",
+		"#########D####D##############D#.#.......#.T.#",
+		"#...........................A.#.#...........#",
+		"####################D##D#####.D.#psppppp#####",
+		"####......#.....#RLR.R#...###.#.#ppppppp#####",
+		"####D####.D.....#.....#.TL###.#.#pppsppp#####",
+		"#....L###.#R.R.R#.....D...###...#.......#####",
+		"#.....###D#######.....###D#########D#########",
+		"#R.R..D.....#L..#R...R#.#...k.#.....#.......#",
+		"##.####.....#.T.###D###.D.T.T.#####.#.......#",
+		"##....#R.R......###.....#k....#..D..D..R.R.R#",
+		"#####.#####E#.T.###D######D#####D#########D##",
+		"#.....#######..k#...........................#",
+		"#D#######################D##############D##D#",
+		"#..L..D..k.k#####R.R.R###.D.........#R.R.R#.#",
+		"#.....#k....#####.....###.#########.#.....#.#",
+		"#R.R.R#k.X.X#...#.....###.#R.R.R#.#.#.....#.#",
+		"#######.....#.T.#D###D###.#.....#.#.#.....#.#",
+		"###kk.D.k.k.#k..#.#R...R#.#.....#...#R.R.R#.#",
+		"###...###D####D##.#.....#.D.....###########.#",
+		"###k..###.........#.....###R...R###RLR..D.#D#",
+		"####.#########.#######.######D#####.....#.#.#",
+		"#.........................###.....D.....#.#.#",
+		"####D#####D######.###########kT...#.....#.#.#",
+		"###...........###.....D.k.L.#....k#R.R..#...#",
+		"###.O.O...O.O.###k....#.T.T.#.T..L#####D#D###",
+		"###...........###..X.X#.....#kk..k#R.R..#.kk#",
+		"#.D...O.O.O.O.###.....#k..Tk#######.....#.T.#",
+		"#.#...........D.#.k.k.#L...k#####.D.....#...#",
+		"#.##D##########.#D###############.####D##D###",
+		"#.............................D...........###",
+		"#############################################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="29">
+          <Properties>
             <string name="Name">Stage5</string>
             <string name="Source"><![CDATA[--!strict
--- STAGE 5 — 심층 미로
--- 거대한 지하 구조물: 큰 구덩이 여러 개를 잇는 다리(b)와 괴물이 건널 수 없는 좁은 다리(n), 계단(s)으로 오르내리는 복층,
--- 대형 기둥(B), 수직 배관, 긴 복도. 괴물 4마리가 여러 방향에서 접근한다.
+-- STAGE 5 — 심층 미로 (47x43칸, tools/gen-stages.js 로 생성)
+-- 막다른 길이 많은 미로 통로, 큰 구덩이 3곳을 건너는 다리(b)와 괴물이 건널 수 없는 좁은 다리(n), 계단(s)으로 오르내리는 아래층,
+-- 대형 기둥(B) 열주실, 독방. 괴물 4마리가 여러 방향에서 접근한다. 출구까지 최단 약 150칸(걸어서 약 2분).
 local Props = require(script.Parent.Parent.Props)
 
 local function bigPillar(ctx, i, j)
@@ -3055,36 +3749,60 @@ end
 return {
 	Seed = 53,
 	PipeChance = 0.5,
+	HideStyle = "closet", -- 숨는 곳(L): 낡은 벽장
 	Props = { B = bigPillar, P = Props.BigPipe },
 	Walkable = { P = true },
 	Rows = {
-		"########################",
-		"#SS..#........#........#",
-		"#....D..B..B..A..v..B..#",
-		"#SS..#........#........#",
-		"###.#####.##.###.####.##",
-		"#.......#...........#..#",
-		"#.B.....A..ppsppppp.A..#",
-		"#.......#..nnnnnnnn.#..#",
-		"####.####..psppppsp.#..#",
-		"#......................#",
-		"####.###.####.#####.####",
-		"#..........#...........#",
-		"#.pppppspppppp.#.......#",
-		"#.bbbbbbbbbbbb.D.......#",
-		"#.spppppppppps.#..B....#",
-		"##############.#####.###",
-		"#.v....A....#.PPPP.m...#",
-		"#.B....#....D.....###.##",
-		"#......#....#......A..E#",
-		"########################",
+		"###############################################",
+		"#SS...#...D.L.###.............................#",
+		"#.....###A#.m.###############.###.............#",
+		"#SS...#...#.....#...........#.###ppsppbppppppp#",
+		"#.....#L..#####.#.B.B...B.B.#.###pppppbppppppp#",
+		"#.....#m..#.#...#...........#...#ppppsbppspppp#",
+		"###.#######.#.###...B.B.B...###.#.............#",
+		"#...#...#.......#...........#...#.............#",
+		"#.#.#...#.##############.####.###########D#####",
+		"#A#.#.m.#.###...###..v#..##...#########.......#",
+		"#.#####A#.###L.m#.A..L#.###.#.#########.#.###.#",
+		"#.#..L#.#.###...A.#...#.....#...#######.#...#.#",
+		"#.#..m#.#.#######.#########.###.#######.###.###",
+		"#.#...#.........A.....A...#.###...........#...#",
+		"#.###.###.###############.#.#######.#####A###.#",
+		"#.#...............#.......#.#...............#.#",
+		"#.#pspppbppspppppp#.#######.................#.#",
+		"#.#pppppbppppppppp#...#.#...#...............#.#",
+		"#.#ppsppbppppppppp###.#.#.###ppppsppbppspppp#.#",
+		"#.#...............###.#...###pppppppbppppppp#.#",
+		"#.#...............###.#.#####ppppppsbppppppp#.#",
+		"#.#...............###.#A#...#...............#.#",
+		"#.###########D#######A#.#A#.############A####.#",
+		"#.#######.............#.#.#.......#...#...###.#",
+		"#.#######.#############.#######.#A#.#.#.#.###.#",
+		"#.....A...#########...#.........#...#...#...#.#",
+		"#.#################.#.#######.#############.#.#",
+		"#.#############.....#.......#.#.......#...A.#.#",
+		"#.#############.#########.#.#.#.B...B.#.####E.#",
+		"#.............#.#.mL#.....#.#.#.......#.#...#.#",
+		"#############.#.#...#.#######.#.B.B.B.#.A.mL#.#",
+		"#.............#.....#.........#.......###.....#",
+		"#.###################.#########.B.B.B.#######.#",
+		"#.#...............###.#.A..A..#.......###...#.#",
+		"#.#########.#####.###.#######A#####A#####.#.#A#",
+		"#.#.........#.#...###...A.........#.#.....#.#.#",
+		"#.#.#########.#A#################.#.#A#####.#.#",
+		"#.#.#..L#.....#...A.............#...#.#####.#.#",
+		"#A#.#...#A###.#.###############.#####.#####.#.#",
+		"#...#m....#...#.....#.....A.A.#.#####.#####...#",
+		"#########.#####.#..m#.###.#####.#####.#########",
+		"#.........A.....#L..#...#.............#########",
+		"###############################################",
 	},
 }
 ]]></string>
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="29">
+      <Item class="Script" referent="30">
         <Properties>
           <string name="Name">TestHarness</string>
           <token name="RunContext">0</token>
@@ -3095,6 +3813,7 @@ return {
 --   multi : 여러 클라이언트 — 동시 음파, 서로의 음파 수신, 프레임 시간
 
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 if not RunService:IsStudio() then
 	return
 end
@@ -3114,6 +3833,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Round = require(script.Parent.Round)
 local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
+local Hiding = require(script.Parent.Hiding)
 
 local R = { test = args.Test, finished = false, checks = {}, log = {}, errors = {}, info = {} }
 local t0 = os.clock()
@@ -3202,6 +3922,41 @@ local function tile(i, j, y)
 	return Vector3.new((i - 1) * 8 + 4, y or 3, (j - 1) * 8 + 4)
 end
 
+-- 시작 → 출구를 실제로 걸을 수 있는가. 괴물과 같은 방식: 바로 계산이 안 되면 타일 경로를 LegTiles 칸씩 나눠 계산
+local function routeWalkable(agent, monster: boolean): (string, number)
+	local path = PathfindingService:CreatePath({ AgentRadius = agent.r, AgentHeight = agent.h, AgentCanJump = false })
+	local from = Round.info.spawns[1].Position - Vector3.new(0, 2.5, 0)
+	local to = Round.info.exitCFrame.Position - Vector3.new(0, 3.5, 0)
+	local function compute(a, b)
+		local ok = pcall(function()
+			path:ComputeAsync(a, b)
+		end)
+		return ok and path.Status == Enum.PathStatus.Success
+	end
+	if compute(from, to) then
+		return "Success", 1
+	end
+	local r = Round.info.route(from, to, monster)
+	if not r then
+		return "NoRoute", 0
+	end
+	local pos, idx, legs = from, 1, 0
+	while idx < #r do
+		local step = Config.Monster.LegTiles
+		local moved = false
+		for _, n in { math.min(#r, idx + step), math.min(#r, idx + math.ceil(step / 2)), idx + 1 } do
+			if compute(pos, r[n]) then
+				pos, idx, legs, moved = r[n], n, legs + 1, true
+				break
+			end
+		end
+		if not moved then
+			return string.format("LegFail@c%d,r%d", math.floor(r[idx].X / 8), math.floor(r[idx].Z / 8)), legs
+		end
+	end
+	return "Success", legs
+end
+
 local function readyPlayers(n)
 	return waitFor(function()
 		local ps = Players:GetPlayers()
@@ -3224,6 +3979,123 @@ end
 
 local function stageFolder()
 	return workspace:FindFirstChild("Stage")
+end
+
+-- ─────────────────────────────── 괴물 모습·등장 ───────────────────────────────
+local function monsterTests(p)
+	local m = Round.monsters[1]
+	if not m then
+		check("monster exists for look tests", false)
+		return
+	end
+	-- 막대는 한 획(Line), 얇은 원판은 원 하나(Disc): 음파에 여러 겹 선으로 보이지 않게
+	local cyl, ok = 0, 0
+	for _, d in m.model:GetDescendants() do
+		if d:IsA("Part") and d.Shape == Enum.PartType.Cylinder then
+			cyl += 1
+			local sh = d:GetAttribute("SonarShape")
+			if sh == "Line" or sh == "Disc" then
+				ok += 1
+			end
+		end
+	end
+	check("monster strokes draw as single lines (Line/Disc)", cyl > 10 and ok == cyl, ok .. "/" .. cyl)
+	-- 음파가 닿으면 괴물 모습이 선으로 나타난다
+	m.startAt = 1e9
+	local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if root then
+		place(p, tile(3, 10, 3), tile(7, 10, 3))
+		task.wait(0.3)
+		local mpos = tile(6, 10, 5.2)
+		m.model:PivotTo(CFrame.lookAt(mpos, tile(3, 10, 5.2)))
+		m.waypoints = {}
+		task.wait(0.3)
+		ask(p, "resetCooldown")
+		ask(p, "fire")
+		task.wait(1.0)
+		local n = ask(p, "linesNear", { mpos, 4.5 }) or 0
+		check("monster appears in the sonar as lines", n >= 15, n)
+	end
+	-- 배회하다가 가끔 플레이어 근처로 온다
+	m.model:PivotTo(CFrame.new(Round.info.exitCFrame.Position + Vector3.new(0, 1.2, 0)))
+	m.waypoints = {}
+	m.legGoal = nil
+	m.target = nil
+	m:setState("Wander")
+	m.lastHunt = -1e9
+	m.startAt = 0
+	m.goal = nil
+	waitFor(function()
+		return m.lastHunt > 0
+	end, 4)
+	task.wait(2) -- (먼 길은 경로 계산이 걸린다)
+	local goal = m.goal
+	local pr = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local gd = if goal and pr then (goal - pr.Position).Magnitude else -1
+	check("wandering monster drifts toward a player now and then", goal ~= nil and gd >= 0 and gd <= Config.Monster.HuntRadius + 8, string.format("%.0f studs", gd))
+	m.startAt = 1e9
+	m.waypoints = {}
+end
+
+-- ─────────────────────────────── 숨는 곳 ───────────────────────────────
+-- 들어가기(E) → 음파 못 쏨 → 바로 앞 괴물도 못 찾음 → 나오기(E) → 쫓던 괴물이 숨는 걸 보면 끌어냄(사망)
+local function hideTests(p)
+	local spots = Hiding.all()
+	check("hide spots built (cabinets/wardrobes)", #spots >= 5, #spots)
+	local spot = spots[1]
+	local m = Round.monsters[1]
+	if not spot or not m then
+		return
+	end
+	m.startAt = 1e9
+	place(p, spot.front + Vector3.new(0, 3, 0), spot.center + Vector3.new(0, 3, 0))
+	task.wait(0.5)
+	local ui0 = ask(p, "stats")
+	check("hide prompt shown near the cabinet", ui0 and ui0.ui.prompt == "E   숨기", ui0 and tostring(ui0.ui.prompt))
+	local ok = Hiding.enter(p, spot)
+	local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local inside = root and (Vector3.new(root.Position.X, 0, root.Position.Z) - Vector3.new(spot.center.X, 0, spot.center.Z)).Magnitude
+	check("E: hide inside (anchored, inside the cabinet)", ok and p:GetAttribute("Hidden") == true and root ~= nil and root.Anchored and inside ~= nil and inside < 1.5, string.format("ok=%s inside=%.2f", tostring(ok), inside or -1))
+	local ui1 = nil
+	waitFor(function()
+		ui1 = ask(p, "stats")
+		return ui1 and ui1.ui.prompt == "E   나가기"
+	end, 3)
+	check("prompt says get out while hidden", ui1 and ui1.ui.prompt == "E   나가기", ui1 and tostring(ui1.ui.prompt))
+	local Main = _G.SonarMaze
+	local before = Main.Sonar.accepted[p] or 0
+	ask(p, "resetCooldown")
+	local fired = ask(p, "fire")
+	ask(p, "rawFire")
+	task.wait(0.6)
+	check("no sonar while hidden", not fired and (Main.Sonar.accepted[p] or 0) == before, tostring(fired))
+	local mpos = spot.front + spot.facing * 2 + Vector3.new(0, 5.2, 0)
+	m.model:PivotTo(CFrame.lookAt(mpos, spot.center + Vector3.new(0, 5.2, 0)))
+	m.waypoints = {}
+	m.legGoal = nil
+	m.target = nil
+	m.pullSpot = nil
+	m:setState("Wander")
+	m.startAt = 0
+	task.wait(3)
+	check("monster right outside does not find a hidden player", p:GetAttribute("Status") == "Alive" and m.state ~= "Chase", m.state)
+	m.startAt = 1e9
+	Hiding.exit(p)
+	task.wait(0.2)
+	check("E: get out in front of the cabinet", p:GetAttribute("Hidden") == false and root ~= nil and not root.Anchored and (root.Position - spot.front).Magnitude < 4.5, root and string.format("%.1f", (root.Position - spot.front).Magnitude))
+	-- 쫓기다가 보는 앞에서 숨기
+	local cpos = spot.front + spot.facing * 10 + Vector3.new(0, 5.2, 0)
+	m.model:PivotTo(CFrame.lookAt(cpos, spot.front + Vector3.new(0, 5.2, 0)))
+	m.waypoints = {}
+	m.legGoal = nil
+	m.startAt = 0
+	m:startChase(p, root and root.Position or spot.front)
+	task.wait(0.2)
+	Hiding.enter(p, spot)
+	local dead = waitFor(function()
+		return p:GetAttribute("Status") == "Dead"
+	end, 10)
+	check("monster that saw you hide pulls you out", dead ~= nil, m.state .. " " .. table.concat(m.log, " | "):sub(-160))
 end
 
 -- ─────────────────────────────── core ───────────────────────────────
@@ -3266,7 +4138,7 @@ local function core()
 	check("client lighting is dark too", st and st.lighting.brightness == 0, st and st.lighting.brightness)
 	task.wait(3)
 	local idle = ask(p, "stats")
-	check("nothing visible before a pulse", idle and idle.lines.lit == 0, idle and idle.lines.lit)
+	check("nothing visible before a pulse", idle and idle.lines.lit == 0, idle and (idle.lines.lit .. " lit, pulses started " .. tostring(idle.pulsesStarted)))
 
 	-- 계단 경사로 방향(쐐기 방향 확인)
 	local stairs = stage:FindFirstChild("Props") and stage.Props:FindFirstChild("Stairs")
@@ -3287,13 +4159,8 @@ local function core()
 
 	-- 걸을 수 있는 미로: 시작 → 출구 경로
 	for _, agent in { { name = "player", r = 1.2, h = 5.5 }, { name = "monster", r = Config.Monster.AgentRadius, h = Config.Monster.AgentHeight } } do
-		local path = PathfindingService:CreatePath({ AgentRadius = agent.r, AgentHeight = agent.h, AgentCanJump = false })
-		local from = Round.info.spawns[1].Position - Vector3.new(0, 2.5, 0)
-		local to = Round.info.exitCFrame.Position - Vector3.new(0, 3.5, 0)
-		pcall(function()
-			path:ComputeAsync(from, to)
-		end)
-		check("path start -> exit exists (" .. agent.name .. " size)", path.Status == Enum.PathStatus.Success, path.Status.Name .. " wps=" .. #path:GetWaypoints())
+		local status, legs = routeWalkable(agent, agent.name == "monster")
+		check("path start -> exit exists (" .. agent.name .. " size)", status == "Success", status .. " legs=" .. legs)
 	end
 
 	-- 2~4. 음파: 가까운 곳부터, 유지, 소멸
@@ -3340,9 +4207,27 @@ local function core()
 	task.wait(0.6) -- t≈1.8
 	local mid = ask(p, "stats")
 	check("outline still visible ~1.8s after the pulse", mid and mid.lines.lit > 0, mid and mid.lines.lit)
-	task.wait(1.6) -- t≈3.4 (가장 먼 선은 0.9초에 나타나 2초 뒤 사라짐)
+	task.wait(Config.Sonar.Hold - 0.4) -- t≈Hold+1.4 (가장 먼 선은 0.9초에 나타나 Hold초 뒤 사라짐)
+	-- (Studio 창이 뒤에 있으면 화면 갱신이 느려져 선이 늦게 꺼질 수 있다: 최대 4초 더 기다린다)
 	local after = ask(p, "stats")
-	check("outline gone again (~2s after reveal)", after and after.lines.lit == 0 and after.lines.active == 0, after and (after.lines.lit .. "/" .. after.lines.active))
+	waitFor(function()
+		after = ask(p, "stats")
+		return after and after.lines.lit == 0 and after.lines.active == 0
+	end, 4)
+	check("outline gone again (~Hold s after reveal)", after and after.lines.lit == 0 and after.lines.active == 0, after and (after.lines.lit .. "/" .. after.lines.active))
+	-- 방 안쪽 모서리까지 바닥 선이 끊기지 않고 닿는다(시작 방 오른쪽 위 모서리: 북쪽 벽과 동쪽 벽이 만나는 곳)
+	local corner = Vector3.new(32, 0, 8)
+	local ends = ask(p, "floorEndsNear", { corner, 0.3 }) or 0
+	check("floor lines reach the inner corner (no gap)", ends >= 2, ends)
+	-- 지도(Q): 내 음파가 닿은 곳은 선이 사라진 뒤에도 지도에 남는다
+	local mp = ask(p, "map")
+	check("map records where my sonar reached", mp and mp.explored > 5 and mp.lines > 5, mp and (mp.explored .. " tiles, " .. mp.lines .. " lines"))
+	local opened = ask(p, "toggleMap")
+	task.wait(0.3)
+	local mp2 = ask(p, "map")
+	check("Q opens the map with my position", opened and opened.open and mp2 and mp2.meShown, mp2 and tostring(mp2.meShown))
+	local closed = ask(p, "toggleMap")
+	check("Q closes the map", closed and not closed.open)
 
 	-- 5. 벽·닫힌 문 너머는 보이지 않는다
 	local pillar = tile(8, 3, 0)
@@ -3420,11 +4305,11 @@ local function core()
 	ask(p, "rawFire")
 	task.wait(0.15)
 	ask(p, "rawFire")
-	task.wait(0.4)
+	task.wait(1.0) -- (서버에 도착할 여유. 첫 발사 후 1.3초: 아직 간격 안)
 	local mid1 = Main.Sonar.accepted[p] or 0
-	task.wait(1.4)
+	task.wait(0.5)
 	ask(p, "rawFire")
-	task.wait(0.4)
+	task.wait(1.0)
 	local mid2 = Main.Sonar.accepted[p] or 0
 	check("server enforces the 1.5s pulse interval", mid1 - before == 1 and mid2 - mid1 == 1, string.format("burst accepted %d, after 1.8s %d", mid1 - before, mid2 - mid1))
 
@@ -3438,11 +4323,11 @@ local function core()
 	end
 	burst()
 	local s1 = ask(p, "stats")
-	task.wait(3)
+	task.wait(Config.Sonar.Hold + 1)
 	local s1b = ask(p, "stats")
 	burst()
 	local s2 = ask(p, "stats")
-	task.wait(3)
+	task.wait(Config.Sonar.Hold + 1)
 	local s3 = ask(p, "stats")
 	log(string.format("burst lines: active %d created %d / after %d / burst2 active %d created %d / after %d", s1.lines.active, s1.lines.created, s1b.lines.active, s2.lines.active, s2.lines.created, s3.lines.active))
 	check("repeated pulses reuse lines (no pile-up)", s2.lines.created <= s1.lines.created * 1.15 + 20 and s2.lines.active < Config.Sonar.PoolSize, string.format("created %d -> %d, active %d", s1.lines.created, s2.lines.created, s2.lines.active))
@@ -3507,6 +4392,11 @@ local function core()
 	m:setState("Wander")
 	m.startAt = 0
 	task.wait(0.5)
+	-- (큰 맵에서는 경로 계산이 길어 순간이동 전에 시작한 계산이 끝나며 움직일 수 있다: 한 번 더 제자리에 세운다)
+	m.model:PivotTo(CFrame.new(startNode))
+	m.waypoints = {}
+	m.legGoal = nil
+	m.hum:MoveTo(startNode)
 	SoundBus.emit(soundAt, Config.Noise.Sonar, nil, "Sonar")
 	local heard = waitFor(function()
 		return m.state == "Alert" or m.state == "Investigate"
@@ -3543,6 +4433,36 @@ local function core()
 	local mp = m.root.Position
 	local far = mp + Vector3.new(30, 0, 0)
 	check("monster does not hear walking 30 studs away", not SoundBus.canHear(far, mp, Config.Noise.Walk))
+
+	-- 큰 맵: 멀리 돌아가야 하는 곳도 타일 경로를 구간으로 나눠 실제로 찾아간다
+	do
+		local goal = Round.info.exitCFrame.Position - Vector3.new(0, 3.5, 0)
+		local startN, startLen = nil, 0
+		for _, n in Round.info.nodes do
+			local r = Round.info.route(n - Vector3.new(0, 3, 0), goal, true)
+			if r and #r >= 30 and #r <= 60 and (n - goal).Magnitude < #r * 8 * 0.6 then
+				startN, startLen = n, #r
+				break
+			end
+		end
+		if startN then
+			m.model:PivotTo(CFrame.new(startN + Vector3.new(0, 2.2, 0)))
+			m.waypoints = {}
+			m.legGoal = nil
+			m:setState("Investigate")
+			m.goal = goal
+			m.searchCenter = goal
+			task.wait(12)
+			local r = Round.info.route(m.root.Position - Vector3.new(0, 4.5, 0), goal, true)
+			local left = if r then #r else startLen
+			check("monster follows a long winding route (route legs)", left <= startLen - 8, string.format("route %d -> %d tiles, state %s", startLen, left, m.state))
+		else
+			check("monster follows a long winding route (route legs)", false, "no suitable start node")
+		end
+		m.waypoints = {}
+		m.legGoal = nil
+		m:setState("Wander")
+	end
 
 	-- 13. 출구 → 탈출 → STAGE CLEAR
 	m.startAt = 1e9
@@ -3594,6 +4514,10 @@ local function core()
 	check("respawned after restart", back ~= nil)
 	local fs = ask(p, "stats")
 	R.info.frame = fs and { avg = fs.avgFrame, worst = fs.worstFrame }
+	if back then
+		monsterTests(p)
+		hideTests(p)
+	end
 end
 
 -- ─────────────────────────────── multi ───────────────────────────────
@@ -3621,9 +4545,10 @@ local function multi()
 		end
 		task.wait(1.7)
 	end
-	task.wait(3)
+	task.wait(Config.Sonar.Hold + 1)
 	local worst, sumAvg = 0, 0
 	local luaAvg, luaWorst = 0, 0
+	local at60 = 0
 	for _, p in ps do
 		local s = ask(p, "stats")
 		local got = s.pulsesStarted - base[p]
@@ -3633,10 +4558,13 @@ local function multi()
 		sumAvg += s.avgFrame
 		luaAvg += s.lua.avg
 		luaWorst = math.max(luaWorst, s.lua.worst)
+		-- 60fps 기준 추정: 파동 전파는 경과 시간만큼 일하므로 프레임 시간 비율로 줄이고, 선 갱신은 프레임마다 그대로
+		at60 += s.prof.pulsesMs * math.min(1, (1 / 60) / math.max(s.avgFrame, 1e-3)) + s.prof.linesMs
 		R.info[p.Name] = { avgFrame = s.avgFrame, worstFrame = s.worstFrame, created = s.lines.created }
 	end
 	-- (Studio 테스트 창은 모두 비활성 창이라 15fps 로 묶인다: 화면 프레임 대신 음파 스크립트 비용을 본다)
-	check("sonar script cost with " .. #ps .. " players pulsing together < 4ms/frame", luaAvg / #ps < 0.004, string.format("lua avg %.2fms worst %.2fms (window frame avg %.1fms)", luaAvg / #ps * 1000, luaWorst * 1000, sumAvg / #ps * 1000))
+	-- (Studio 비활성 창은 약 15fps: 한 프레임에 60fps 네 프레임 분량의 파동을 처리하므로 60fps 기준으로 환산해 본다)
+	check("sonar script cost with " .. #ps .. " players pulsing together < 4ms/frame at 60fps", at60 / #ps < 4, string.format("~%.2fms at 60fps (measured %.2fms avg, worst %.2fms, at %.1fms frames)", at60 / #ps, luaAvg / #ps * 1000, luaWorst * 1000, sumAvg / #ps * 1000))
 	-- 한 명이 죽으면 관전, 나머지는 계속
 	local victim = ps[1]
 	Round.kill(victim, "test")
@@ -3685,6 +4613,85 @@ local function perf()
 	check("sonar script cost per frame (avg) < 4ms", busy.lua.avg < 0.004, string.format("%.2fms avg, %.2fms worst", busy.lua.avg * 1000, busy.lua.worst * 1000))
 end
 
+-- ─────────────────────────────── load ───────────────────────────────
+-- 스테이지마다: 서버 빌드 시간, 클라이언트 음파 월드 빌드 시간, 괴물이 움직이는 20초 동안 서버 프레임·경로 계산·클라이언트 음파 비용
+local Monster = require(script.Parent.Monster)
+local function load()
+	local ps = readyPlayers(1)
+	if not ps then
+		check("ready", false)
+		return
+	end
+	local p = ps[1]
+	local all = {}
+	for i = 1, #Config.Stages do
+		Round.startStage(i)
+		local t0 = os.clock()
+		readyPlayers(1)
+		local built = waitFor(function()
+			local st = ask(p, "stats")
+			return st and st.buildId == stageFolder():GetAttribute("BuildId") and st.build.seconds > 0 and st
+		end, 30)
+		local readyIn = os.clock() - t0
+		-- 몬스터가 움직이는 동안(플레이어는 시작 방, 음파를 주기적으로)
+		local hb = {}
+		local conn = RunService.Heartbeat:Connect(function(dt)
+			table.insert(hb, dt)
+		end)
+		local s0 = { calls = Monster.stats.pathCalls, wall = Monster.stats.pathWall, ticks = Monster.stats.ticks }
+		ask(p, "resetPerf")
+		local mpos0 = {}
+		for k, m in Round.monsters do
+			mpos0[k] = m.root.Position
+			m.startAt = 0 -- (테스트는 괴물을 멈춰 두므로 여기서는 실제처럼 움직이게)
+			m.lastHunt = os.clock() - Config.Monster.HuntEvery + 5
+		end
+		for _ = 1, 10 do
+			ask(p, "resetCooldown")
+			ask(p, "fire")
+			task.wait(2)
+		end
+		conn:Disconnect()
+		local st = ask(p, "stats")
+		local sum, worst = 0, 0
+		for _, d in hb do
+			sum += d
+			worst = math.max(worst, d)
+		end
+		local calls = Monster.stats.pathCalls - s0.calls
+		local moved, states = {}, {}
+		for k, m in Round.monsters do
+			table.insert(moved, math.floor((m.root.Position - (mpos0[k] or m.root.Position)).Magnitude))
+			table.insert(states, m.state .. (if m.startAt > os.clock() then "(waiting)" else ""))
+		end
+		local r = {
+			stage = i,
+			serverBuildMs = math.floor(Round.lastBuildMs),
+			readySec = math.floor(readyIn * 10) / 10,
+			clientBuildSec = built and math.floor(built.build.seconds * 100) / 100,
+			clientBuildCpuSec = built and math.floor(built.build.cpu * 100) / 100,
+			segs = built and built.build.segs,
+			serverFrameMs = math.floor(sum / math.max(1, #hb) * 10000) / 10,
+			serverWorstMs = math.floor(worst * 10000) / 10,
+			pathCallsPerSec = math.floor(calls / 20 * 10) / 10,
+			pathAvgMs = if calls > 0 then math.floor((Monster.stats.pathWall - s0.wall) / calls * 10000) / 10 else 0,
+			clientLuaMs = st and math.floor(st.lua.avg * 100000) / 100,
+			clientLuaWorstMs = st and math.floor(st.lua.worst * 100000) / 100,
+			pulsesMs = st and math.floor(st.prof.pulsesMs * 100) / 100,
+			linesMs = st and math.floor(st.prof.linesMs * 100) / 100,
+			alive = p:GetAttribute("Status"),
+			ticksPerSec = math.floor((Monster.stats.ticks - s0.ticks) / 20),
+			monsterMoved = table.concat(moved, ","),
+			monsterStates = table.concat(states, ","),
+			monsterLog = Round.monsters[1] and table.concat(Round.monsters[1].log, " | "):sub(-300) or "",
+		}
+		table.insert(all, r)
+		log(HttpService:JSONEncode(r))
+		check(string.format("stage %d: client sonar world ready", i), built ~= nil, r.clientBuildSec)
+	end
+	R.info.load = all
+end
+
 -- ─────────────────────────────── stages ───────────────────────────────
 -- 스테이지 1~5 를 차례로 지어: 오류 없이 지어지는가, 시작→출구 경로, 괴물 수, 음파 선이 나오는가
 local function stages()
@@ -3702,12 +4709,9 @@ local function stages()
 		if ok then
 			local st = ask(p, "stats")
 			local paths = {}
-			for _, agent in { { r = 1.2, h = 5.5 }, { r = Config.Monster.AgentRadius, h = Config.Monster.AgentHeight } } do
-				local path = PathfindingService:CreatePath({ AgentRadius = agent.r, AgentHeight = agent.h, AgentCanJump = false })
-				pcall(function()
-					path:ComputeAsync(Round.info.spawns[1].Position - Vector3.new(0, 2.5, 0), Round.info.exitCFrame.Position - Vector3.new(0, 3.5, 0))
-				end)
-				table.insert(paths, path.Status.Name)
+			for _, agent in { { r = 1.2, h = 5.5, monster = false }, { r = Config.Monster.AgentRadius, h = Config.Monster.AgentHeight, monster = true } } do
+				local status = routeWalkable(agent, agent.monster)
+				table.insert(paths, status)
 			end
 			check(string.format("stage %d: start -> exit walkable (player, monster)", i), paths[1] == "Success" and paths[2] == "Success", table.concat(paths, ","))
 			check(string.format("stage %d: %d monster(s)", i, Config.Stages[i].Monsters), #Round.monsters == Config.Stages[i].Monsters, #Round.monsters)
@@ -3722,9 +4726,95 @@ local function stages()
 	end
 end
 
+-- ─────────────────────────────── probe ───────────────────────────────
+-- 한 스테이지(args.Stage)에서 시작 → 모든 바닥 칸으로 경로를 계산해, 길이 끊기는 경계(갈 수 있는 칸 ↔ 못 가는 칸)를 보고한다.
+local function probe()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local si = tonumber(args.Stage) or 1
+	Round.startStage(si)
+	readyPlayers(1)
+	for _, m in Round.monsters do
+		m.alive = false
+	end
+	local from = Round.info.spawns[1].Position - Vector3.new(0, 2.5, 0)
+	do
+		local ex = Round.info.exitCFrame
+		local parts = {}
+		for _, part in workspace:GetPartBoundsInBox(CFrame.new(ex.Position - ex.LookVector * 4.8), Vector3.new(7.8, 9, 3.6)) do
+			if part.CanCollide then
+				table.insert(parts, string.format("%s %s @%s", part.Name, tostring(part.Size), tostring(part.Position - ex.Position)))
+			end
+		end
+		local down = workspace:Raycast(ex.Position, Vector3.new(0, -10, 0))
+		R.info.exitTile = { pos = tostring(ex.Position), look = tostring(ex.LookVector), floor = down and (down.Instance.Name .. " y=" .. down.Position.Y) or "none", parts = parts }
+	end
+	local function key(pos)
+		return math.floor(pos.X / 8) + 1, math.floor(pos.Z / 8) + 1
+	end
+	for _, agent in { { name = "player", r = 1.2, h = 5.5 }, { name = "monster", r = Config.Monster.AgentRadius, h = Config.Monster.AgentHeight } } do
+		local path = PathfindingService:CreatePath({ AgentRadius = agent.r, AgentHeight = agent.h, AgentCanJump = false })
+		local okSet, bad = {}, {}
+		for _, n in (if args.Quick then {} else Round.info.nodes) do
+			local i, j = key(n)
+			pcall(function()
+				path:ComputeAsync(from, n - Vector3.new(0, 3, 0))
+			end)
+			if path.Status == Enum.PathStatus.Success then
+				okSet[i .. "," .. j] = true
+			else
+				table.insert(bad, { i, j })
+			end
+		end
+		local edge = {}
+		for _, b in bad do
+			for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+				if okSet[(b[1] + d[1]) .. "," .. (b[2] + d[2])] then
+					table.insert(edge, string.format("c%d r%d <- c%d r%d", b[1] - 1, b[2] - 1, b[1] + d[1] - 1, b[2] + d[2] - 1))
+					break
+				end
+			end
+		end
+		-- 출구 칸 안쪽 몇 곳
+		local ex = Round.info.exitCFrame
+		local exitTries = {}
+		for _, off in { 0, 1.5, 3, 4.5 } do
+			local goal = ex.Position - Vector3.new(0, 3.5, 0) - ex.LookVector * off
+			pcall(function()
+				path:ComputeAsync(from, goal)
+			end)
+			table.insert(exitTries, string.format("%.1f:%s", off, path.Status.Name))
+		end
+		-- 바로 앞 칸에서 출구 안으로 / 시작에서 바로 앞 칸까지
+		local front = ex.Position - Vector3.new(0, 3.5, 0) - ex.LookVector * 8.8
+		pcall(function()
+			path:ComputeAsync(front, ex.Position - Vector3.new(0, 3.5, 0))
+		end)
+		table.insert(exitTries, "front->in:" .. path.Status.Name)
+		pcall(function()
+			path:ComputeAsync(from, front)
+		end)
+		table.insert(exitTries, "start->front:" .. path.Status.Name)
+		local t0 = os.clock()
+		local okc, errc = pcall(function()
+			path:ComputeAsync(from, ex.Position - Vector3.new(0, 3.5, 0))
+		end)
+		table.insert(exitTries, string.format("t%.0f:%s err=%s", os.clock() - t0, path.Status.Name, tostring(okc and "" or errc)))
+		R.info[agent.name] = { bad = #bad, total = #Round.info.nodes, edge = edge, exit = table.concat(exitTries, " ") }
+		check(agent.name .. " reaches every floor tile", #bad == 0, #bad .. "/" .. #Round.info.nodes)
+	end
+end
+
 task.spawn(function()
 	local ok, err = pcall(function()
-		if args.Test == "multi" then
+		if args.Test == "load" then
+			load()
+		elseif args.Test == "probe" then
+			probe()
+		elseif args.Test == "multi" then
 			multi()
 		elseif args.Test == "perf" then
 			perf()
@@ -3747,13 +4837,13 @@ end)
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="30">
+  <Item class="SoundService" referent="31">
     <Properties>
       <string name="Name">SoundService</string>
       <token name="AmbientReverb">11</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="31">
+  <Item class="StarterPlayer" referent="32">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -3765,11 +4855,11 @@ end)
       <float name="CharacterWalkSpeed">10</float>
       <bool name="EnableMouseLockOption">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="32">
+    <Item class="StarterPlayerScripts" referent="33">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="ModuleScript" referent="33">
+      <Item class="ModuleScript" referent="34">
         <Properties>
           <string name="Name">Audio</string>
           <string name="Source"><![CDATA[--!strict
@@ -4025,7 +5115,7 @@ return Audio
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="34">
+      <Item class="LocalScript" referent="35">
         <Properties>
           <string name="Name">Main</string>
           <string name="Source"><![CDATA[--!strict
@@ -4045,6 +5135,8 @@ local Pulses = require(script.Parent:WaitForChild("SonarPulses"))
 local Movement = require(script.Parent:WaitForChild("Movement"))
 local Audio = require(script.Parent:WaitForChild("Audio"))
 local UI = require(script.Parent:WaitForChild("UI"))
+local MapView = require(script.Parent:WaitForChild("MapView"))
+Pulses.onReach = MapView.onReach
 
 local player = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -4057,6 +5149,7 @@ local spectateIndex = 1
 local building = false
 local frameTimes: { number } = {}
 local luaTimes: { number } = {}
+local prof = { pulses = 0, lines = 0, frames = 0 } -- (테스트용) 프레임당 음파 연산 시간 나눠 보기
 
 -- ── 스테이지 로드 → 음파 월드 ──
 local function tryBuild()
@@ -4088,6 +5181,7 @@ local function tryBuild()
 		Pulses.clear()
 		Lines.clear()
 		World.build(stage)
+		MapView.load(stage)
 		building = false
 		if stage:GetAttribute("BuildId") ~= World.buildId then
 			tryBuild()
@@ -4112,7 +5206,7 @@ local function alive(): boolean
 end
 
 local function fire(): boolean
-	if not alive() or not World.ready then
+	if not alive() or not World.ready or player:GetAttribute("Hidden") then
 		return false
 	end
 	local now = os.clock()
@@ -4177,16 +5271,25 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	end
 end)
 
--- ── 상호작용 안내(문) ──
+-- ── 상호작용 안내(문, 숨는 곳) ──
+local function promptText(prompt: ProximityPrompt): string
+	if prompt:GetAttribute("HideSpot") and player:GetAttribute("Hidden") then
+		return "E   나가기"
+	end
+	return "E   " .. prompt.ActionText
+end
 ProximityPromptService.PromptShown:Connect(function(prompt)
 	if prompt.Style == Enum.ProximityPromptStyle.Custom then
-		UI.setPrompt("E   " .. prompt.ActionText)
-		local conn
-		conn = prompt:GetPropertyChangedSignal("ActionText"):Connect(function()
-			UI.setPrompt("E   " .. prompt.ActionText)
+		UI.setPrompt(promptText(prompt))
+		local conn = prompt:GetPropertyChangedSignal("ActionText"):Connect(function()
+			UI.setPrompt(promptText(prompt))
+		end)
+		local conn2 = player:GetAttributeChangedSignal("Hidden"):Connect(function()
+			UI.setPrompt(promptText(prompt))
 		end)
 		prompt.PromptHidden:Once(function()
 			conn:Disconnect()
+			conn2:Disconnect()
 			UI.setPrompt(nil)
 		end)
 	end
@@ -4261,7 +5364,11 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 	Movement.update(dt)
 	Pulses.update(now)
+	local tl = os.clock()
 	Lines.update(now)
+	prof.pulses += tl - now
+	prof.lines += os.clock() - tl
+	prof.frames += 1
 	table.insert(luaTimes, os.clock() - now)
 	if #luaTimes > 240 then
 		table.remove(luaTimes, 1)
@@ -4305,6 +5412,8 @@ task.spawn(function()
 			return {
 				ready = World.ready,
 				buildId = World.buildId,
+				build = { seconds = World.buildSeconds, cpu = World.buildCpu, segs = World.segCount },
+				prof = { pulsesMs = if prof.frames > 0 then prof.pulses / prof.frames * 1000 else 0, linesMs = if prof.frames > 0 then prof.lines / prof.frames * 1000 else 0 },
 				segs = World.segCount,
 				culled = World.culled,
 				unattached = World.unattached,
@@ -4350,6 +5459,7 @@ task.spawn(function()
 		elseif cmd == "resetPerf" then
 			table.clear(frameTimes)
 			table.clear(luaTimes)
+			prof.pulses, prof.lines, prof.frames = 0, 0, 0
 			return true
 		elseif cmd == "resetCooldown" then
 			lastFire = -math.huge
@@ -4357,6 +5467,26 @@ task.spawn(function()
 		elseif cmd == "pulseAt" then
 			-- 시각 효과만(서버에 알리지 않음): 지정 지점에서 음파
 			return Pulses.start(arg :: Vector3, player.Character, true)
+		elseif cmd == "floorEndsNear" then
+			-- 바닥 높이 수평 선분 중 끝점이 p 에서 r 안에 있는 것의 수(모서리까지 선이 닿는가)
+			local t = arg :: { any }
+			local p, r = t[1] :: Vector3, t[2] :: number
+			local n = 0
+			for i = 1, World.segCount do
+				local sa, sb = World.SA[i], World.SB[i]
+				if math.abs(sa.Y - sb.Y) < 0.05 and math.abs(sa.Y - p.Y) < 0.3 and ((sa - p).Magnitude < r or (sb - p).Magnitude < r) then
+					n += 1
+				end
+			end
+			return n
+		elseif cmd == "linesNear" then
+			local t = arg :: { any }
+			return Lines.countNear(t[1], t[2])
+		elseif cmd == "map" then
+			return MapView.state()
+		elseif cmd == "toggleMap" then
+			MapView.toggle()
+			return MapView.state()
 		elseif cmd == "trace" then
 			local p = Pulses.last
 			if not p or not p.trace then
@@ -4393,7 +5523,217 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="35">
+      <Item class="ModuleScript" referent="36">
+        <Properties>
+          <string name="Name">MapView</string>
+          <string name="Source"><![CDATA[--!strict
+-- 지도(Q): 내 음파가 닿은 곳만 그려지고, 그 스테이지가 끝날 때까지 남는다(게임 화면의 선은 그대로 사라진다).
+-- 검은 바탕에 벽 윤곽을 흰 선으로, 내 위치는 빨간 칸. 출구는 음파가 닿았을 때만 표시.
+-- 다른 사람의 음파는 지도에 남지 않는다(Pulses 의 own 음파만 onReach 로 들어온다).
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local World = require(script.Parent:WaitForChild("SonarWorld"))
+
+local Map = {}
+
+local player = Players.LocalPlayer
+local T = 8 -- 맵 한 칸(스터드), StageBuilder 와 같다
+local LINE = 2 -- 선 굵기(픽셀)
+
+local rows: { string } = {}
+local W, H = 0, 0
+local explored: { [number]: boolean } = {}
+local drawn: { [number]: boolean } = {}
+local lineCount = 0
+local exploredCount = 0
+local isOpen = false
+
+-- ── 화면 ──
+local gui = Instance.new("ScreenGui")
+gui.Name = "SonarMap"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 20
+gui.Enabled = false
+
+local back = Instance.new("Frame")
+back.Name = "Back"
+back.Size = UDim2.fromScale(1, 1)
+back.BackgroundColor3 = Color3.new(0, 0, 0)
+back.BackgroundTransparency = 0.04
+back.BorderSizePixel = 0
+back.Parent = gui
+
+local canvas = Instance.new("Frame")
+canvas.Name = "Canvas"
+canvas.AnchorPoint = Vector2.new(0.5, 0.5)
+canvas.Position = UDim2.fromScale(0.5, 0.52)
+canvas.Size = UDim2.fromScale(0.9, 0.86)
+canvas.BackgroundTransparency = 1
+canvas.Parent = back
+local aspect = Instance.new("UIAspectRatioConstraint")
+aspect.AspectRatio = 1
+aspect.Parent = canvas
+
+local lines = Instance.new("Folder")
+lines.Name = "Lines"
+lines.Parent = canvas
+
+local function square(color: Color3, px: number, z: number): Frame
+	local f = Instance.new("Frame")
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.Size = UDim2.fromOffset(px, px)
+	f.BackgroundColor3 = color
+	f.BorderSizePixel = 0
+	f.ZIndex = z
+	f.Visible = false
+	f.Parent = canvas
+	return f
+end
+local me = square(Color3.fromRGB(226, 75, 74), 10, 3)
+local exitMark = square(Color3.new(1, 1, 1), 8, 2)
+
+local title = Instance.new("TextLabel")
+title.BackgroundTransparency = 1
+title.Position = UDim2.new(0, 24, 0, 16)
+title.Size = UDim2.new(0.6, 0, 0, 24)
+title.Font = Enum.Font.GothamMedium
+title.TextSize = 16
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.TextColor3 = Color3.fromRGB(150, 150, 150)
+title.Text = "지도  ·  음파가 닿은 곳만 기록됩니다  ·  Q 닫기"
+title.Parent = back
+
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- ── 격자 ──
+local function at(i: number, j: number): string
+	if j < 1 or j > H or i < 1 or i > W then
+		return "#"
+	end
+	return rows[j]:sub(i, i)
+end
+local function isWall(i: number, j: number): boolean
+	return at(i, j) == "#"
+end
+
+-- 격자 꼭짓점 (x1,y1)-(x2,y2) 사이 선(가로 또는 세로 한 칸)
+local function line(x1: number, y1: number, x2: number, y2: number)
+	local key = ((y1 * 1024 + x1) * 2) + (if y1 == y2 then 0 else 1)
+	if drawn[key] then
+		return
+	end
+	drawn[key] = true
+	lineCount += 1
+	local f = Instance.new("Frame")
+	f.BackgroundColor3 = Color3.new(1, 1, 1)
+	f.BorderSizePixel = 0
+	if y1 == y2 then
+		f.Position = UDim2.new(x1 / W, -LINE / 2, y1 / H, -LINE / 2)
+		f.Size = UDim2.new((x2 - x1) / W, LINE, 0, LINE)
+	else
+		f.Position = UDim2.new(x1 / W, -LINE / 2, y1 / H, -LINE / 2)
+		f.Size = UDim2.new(0, LINE, (y2 - y1) / H, LINE)
+	end
+	f.Parent = lines
+end
+
+local function markTile(i: number, j: number)
+	local k = j * 1024 + i
+	if explored[k] or isWall(i, j) or i < 1 or j < 1 or i > W or j > H then
+		return
+	end
+	explored[k] = true
+	exploredCount += 1
+	if isWall(i, j - 1) then
+		line(i - 1, j - 1, i, j - 1)
+	end
+	if isWall(i, j + 1) then
+		line(i - 1, j, i, j)
+	end
+	if isWall(i - 1, j) then
+		line(i - 1, j - 1, i - 1, j)
+	end
+	if isWall(i + 1, j) then
+		line(i, j - 1, i, j)
+	end
+	if at(i, j) == "E" then
+		exitMark.Position = UDim2.fromScale((i - 0.5) / W, (j - 0.5) / H)
+		exitMark.Visible = true
+	end
+end
+
+-- 새 스테이지: 기록을 지운다
+function Map.load(stage: Instance)
+	local s = stage:GetAttribute("Rows")
+	rows = if type(s) == "string" then string.split(s, "/") else {}
+	H = #rows
+	W = if H > 0 then #rows[1] else 0
+	table.clear(explored)
+	table.clear(drawn)
+	lines:ClearAllChildren()
+	lineCount = 0
+	exploredCount = 0
+	exitMark.Visible = false
+	aspect.AspectRatio = if H > 0 then W / H else 1
+end
+
+-- 내 음파가 끝났다: 닿은 복셀의 칸을 기록
+function Map.onReach(dist: { [number]: number }, radius: number)
+	if W == 0 then
+		return
+	end
+	for idx, d in dist do
+		if d <= radius then
+			local c = World.cellCenter(idx)
+			markTile(math.floor(c.X / T) + 1, math.floor(c.Z / T) + 1)
+		end
+	end
+end
+
+function Map.setOpen(v: boolean)
+	isOpen = v
+	gui.Enabled = v
+end
+
+function Map.toggle()
+	Map.setOpen(not isOpen)
+end
+
+function Map.state()
+	return { open = isOpen, explored = exploredCount, lines = lineCount, exitShown = exitMark.Visible, meShown = me.Visible }
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.Q then
+		Map.toggle()
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	if not isOpen or W == 0 then
+		return
+	end
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if root then
+		me.Position = UDim2.fromScale(root.Position.X / (W * T), root.Position.Z / (H * T))
+		me.Visible = true
+	else
+		me.Visible = false
+	end
+end)
+
+return Map
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="37">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
@@ -4494,7 +5834,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="36">
+      <Item class="LocalScript" referent="38">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -4502,7 +5842,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="37">
+      <Item class="ModuleScript" referent="39">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -4528,6 +5868,7 @@ type Rec = {
 	key: number?,
 	q: number,
 	slot: number,
+	wake: number?, -- 밝기가 일정한 구간에서는 이 시각까지 계산을 건너뛴다
 }
 
 local folder: Folder? = nil
@@ -4629,6 +5970,7 @@ function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: numb
 			rec.t0 = now
 			rec.peak = math.max(peak, rec.peak * 0.5)
 			rec.q = -1
+			rec.wake = nil
 			if replace then
 				place(rec.part, a, b, cam)
 			end
@@ -4667,7 +6009,12 @@ function Lines.update(now: number)
 		local age = now - rec.t0
 		if age >= S.Hold then
 			release(i)
+		elseif rec.wake and now < rec.wake then
+			i += 1
 		else
+			-- 플래시가 끝난 뒤 사라지기 시작할 때까지는 밝기가 같다: 그동안은 계산하지 않는다
+			local fadeStart = S.Hold - S.FadeTime
+			rec.wake = if age >= S.FlashTime and age < fadeStart then rec.t0 + fadeStart else nil
 			local l = level(age) * rec.peak
 			local q = math.floor(l * QUANT + 0.5)
 			if q ~= rec.q then
@@ -4683,6 +6030,17 @@ function Lines.update(now: number)
 		table.clear(moveParts)
 		table.clear(moveCFs)
 	end
+end
+
+-- 테스트: p 에서 r 안에 켜져 있는 선 수
+function Lines.countNear(p: Vector3, r: number): number
+	local n = 0
+	for _, rec in active do
+		if rec.q > 0 and (rec.part.Position - p).Magnitude < r then
+			n += 1
+		end
+	end
+	return n
 end
 
 function Lines.clear()
@@ -4721,7 +6079,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="38">
+      <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -4758,6 +6116,7 @@ type Pulse = {
 	cam: Vector3,
 	revealed: number,
 	trace: { { number } }?,
+	own: boolean,
 }
 
 local pulses: { Pulse } = {}
@@ -4979,6 +6338,7 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 		cam = Pulses.camera(),
 		revealed = 0,
 		trace = if traced then {} else nil,
+		own = traced == true,
 	}
 	gatherDynamic(p, exclude)
 	p.dist[start] = startD
@@ -5111,11 +6471,18 @@ function Pulses.update(now: number)
 		end
 		if p.nextBucket > R + 1 and (p.hn == 0 or p.hk[1] > R) then
 			table.remove(pulses, i)
+			-- 내 음파가 닿은 곳(지도에 남긴다)
+			if p.own and Pulses.onReach then
+				Pulses.onReach(p.dist, R)
+			end
 		else
 			i += 1
 		end
 	end
 end
+
+-- 내 음파가 끝났을 때 (복셀 → 거리, 반경)을 받는다(MapView)
+Pulses.onReach = nil :: ((dist: { [number]: number }, radius: number) -> ())?
 
 function Pulses.active(): number
 	return #pulses
@@ -5129,7 +6496,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="39">
+      <Item class="ModuleScript" referent="41">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -5157,6 +6524,8 @@ World.SA = {} :: { Vector3 }
 World.SB = {} :: { Vector3 }
 World.SM = {} :: { Vector3 }
 World.segCount = 0
+World.buildSeconds = 0
+World.buildCpu = 0
 World.culled = 0
 World.unattached = 0
 World.cellSegs = {} :: { [number]: { number } }
@@ -5279,13 +6648,17 @@ local function rasterCells(cf: CFrame, size: Vector3): { number }
 	local y1 = math.min(World.ny - 1, math.floor((p.Y + ay - o.Y) / cs))
 	local z0 = math.max(0, math.floor((p.Z - az - o.Z) / cs))
 	local z1 = math.min(World.nz - 1, math.floor((p.Z + az - o.Z) / cs))
+	local Xx, Xy, Xz, Yx, Yy, Yz, Zx, Zy, Zz = X.X, X.Y, X.Z, Y.X, Y.Y, Y.Z, Z.X, Z.Y, Z.Z
+	local px, py, pz, ox, oy, oz = p.X, p.Y, p.Z, o.X, o.Y, o.Z
+	local nx, ny = World.nx, World.ny
 	for z = z0, z1 do
+		local dz = oz + (z + 0.5) * cs - pz
 		for y = y0, y1 do
+			local dy = oy + (y + 0.5) * cs - py
 			for x = x0, x1 do
-				local c = o + Vector3.new((x + 0.5) * cs, (y + 0.5) * cs, (z + 0.5) * cs)
-				local d = c - p
-				if math.abs(d:Dot(X)) < hx and math.abs(d:Dot(Y)) < hy and math.abs(d:Dot(Z)) < hz then
-					table.insert(out, World.index(x, y, z))
+				local dx = ox + (x + 0.5) * cs - px
+				if math.abs(dx * Xx + dy * Xy + dz * Xz) < hx and math.abs(dx * Yx + dy * Yy + dz * Yz) < hy and math.abs(dx * Zx + dy * Zy + dz * Zz) < hz then
+					table.insert(out, x + nx * (y + ny * z) + 1)
 				end
 			end
 		end
@@ -5296,30 +6669,26 @@ end
 -- mid 근처에서 음파를 받을 수 있는 빈 복셀들
 function World.attachCells(mid: Vector3): { number }
 	local out = {}
-	local x, y, z = World.cellOf(mid)
-	if not x then
+	-- (매우 자주 불린다: Vector3 를 만들지 않고 숫자로만 계산)
+	local o, cs = World.origin, World.cs
+	local ox, oy, oz = o.X, o.Y, o.Z
+	local mx, my, mz = mid.X, mid.Y, mid.Z
+	local nx, ny, nz = World.nx, World.ny, World.nz
+	local x, y, z = math.floor((mx - ox) / cs), math.floor((my - oy) / cs), math.floor((mz - oz) / cs)
+	if x < 0 or y < 0 or z < 0 or x >= nx or y >= ny or z >= nz then
 		return out
 	end
+	local occ = World.occ
 	local lim = S.AttachDistance * S.AttachDistance
-	for dz = -1, 1 do
-		local zz = (z :: number) + dz
-		if zz >= 0 and zz < World.nz then
-			for dy = -1, 1 do
-				local yy = (y :: number) + dy
-				if yy >= 0 and yy < World.ny then
-					for dx = -1, 1 do
-						local xx = (x :: number) + dx
-						if xx >= 0 and xx < World.nx then
-							local idx = World.index(xx, yy, zz)
-							if World.free(idx) then
-								local c = World.cellCenter(idx)
-								local dd = c - mid
-								if dd:Dot(dd) <= lim then
-									table.insert(out, idx)
-								end
-							end
-						end
-					end
+	for zz = math.max(0, z - 1), math.min(nz - 1, z + 1) do
+		local cz = oz + (zz + 0.5) * cs - mz
+		for yy = math.max(0, y - 1), math.min(ny - 1, y + 1) do
+			local cy = oy + (yy + 0.5) * cs - my
+			local base = nx * (yy + ny * zz)
+			for xx = math.max(0, x - 1), math.min(nx - 1, x + 1) do
+				local cx = ox + (xx + 0.5) * cs - mx
+				if cx * cx + cy * cy + cz * cz <= lim and buffer.readu8(occ, xx + base) == 0 then
+					table.insert(out, xx + base + 1)
 				end
 			end
 		end
@@ -5397,8 +6766,11 @@ function World.build(stage: Folder)
 	World.ready = false
 	World.stage = stage
 	local t0 = os.clock()
+	local wall0 = t0
+	local cpu = 0
 	local function yieldSometimes()
 		if os.clock() - t0 > 0.012 then
+			cpu += os.clock() - t0
 			task.wait()
 			t0 = os.clock()
 		end
@@ -5447,9 +6819,19 @@ function World.build(stage: Folder)
 
 	-- 공간 해시(점 포함 판정용, 8스터드 버킷)
 	local HB = 8
-	local hbuckets: { [number]: { BasePart } } = {}
+	-- 파트마다 위치·축·크기·모양을 숫자로 한 번만 읽어 둔다(속성 읽기는 느리다)
+	type Info = { px: number, py: number, pz: number, xx: number, xy: number, xz: number, yx: number, yy: number, yz: number, zx: number, zy: number, zz: number, hx: number, hy: number, hz: number, shape: string }
+	local hbuckets: { [number]: { Info } } = {}
 	for _, p in statics do
 		local cf, sz = p.CFrame, p.Size / 2
+		local info: Info = {
+			px = cf.Position.X, py = cf.Position.Y, pz = cf.Position.Z,
+			xx = cf.XVector.X, xy = cf.XVector.Y, xz = cf.XVector.Z,
+			yx = cf.YVector.X, yy = cf.YVector.Y, yz = cf.YVector.Z,
+			zx = cf.ZVector.X, zy = cf.ZVector.Y, zz = cf.ZVector.Z,
+			hx = sz.X, hy = sz.Y, hz = sz.Z,
+			shape = Geo.shapeOf(p),
+		}
 		local X, Y, Z = cf.XVector, cf.YVector, cf.ZVector
 		local half = Vector3.new(
 			math.abs(X.X) * sz.X + math.abs(Y.X) * sz.Y + math.abs(Z.X) * sz.Z,
@@ -5467,20 +6849,39 @@ function World.build(stage: Folder)
 						l = {}
 						hbuckets[k] = l
 					end
-					table.insert(l, p)
+					table.insert(l, info)
 				end
 			end
 		end
 		yieldSometimes()
 	end
+	-- 점이 어떤 정적 파트 안에 있는가(Geo.pointInside 와 같은 판정, 숫자만 사용)
 	local function inside(pt: Vector3): boolean
-		local l = hbuckets[vkey(math.floor(pt.X / HB), math.floor(pt.Y / HB), math.floor(pt.Z / HB))]
+		local x, y, z = pt.X, pt.Y, pt.Z
+		local l = hbuckets[vkey(math.floor(x / HB), math.floor(y / HB), math.floor(z / HB))]
 		if not l then
 			return false
 		end
-		for _, p in l do
-			if Geo.pointInside(p, pt) then
-				return true
+		for _, i in l do
+			local dx, dy, dz = x - i.px, y - i.py, z - i.pz
+			local lx = dx * i.xx + dy * i.xy + dz * i.xz
+			local ly = dx * i.yx + dy * i.yy + dz * i.yz
+			local lz = dx * i.zx + dy * i.zy + dz * i.zz
+			local sh = i.shape
+			if sh == "Cylinder" then
+				local r = math.min(i.hy, i.hz)
+				if math.abs(lx) <= i.hx and ly * ly + lz * lz <= r * r then
+					return true
+				end
+			elseif sh == "Ball" then
+				local r = math.min(i.hx, i.hy, i.hz)
+				if lx * lx + ly * ly + lz * lz <= r * r then
+					return true
+				end
+			elseif math.abs(lx) <= i.hx and math.abs(ly) <= i.hy and math.abs(lz) <= i.hz then
+				if sh ~= "Wedge" or (ly + i.hy) * i.hz <= (lz + i.hz) * i.hy then
+					return true
+				end
 			end
 		end
 		return false
@@ -5527,33 +6928,71 @@ function World.build(stage: Folder)
 				local d = b - a
 				local len = d.Magnitude
 				if len > 0.03 then
-					local k = math.max(1, math.ceil(len / segLen))
-					for s = 0, k - 1 do
-						local pa = a + d * (s / k)
-						local pb = a + d * ((s + 1) / k)
-						local m = (pa + pb) / 2
-						local keep = true
-						if n1 and n2 then
-							local u1 = (n1 :: Vector3) * EPS
-							local u2 = (n2 :: Vector3) * EPS
-							local diag = inside(m + u1 + u2)
-							if not diag then
-								-- 한쪽 면이 모서리 너머로 같은 평면으로 이어지면 이음매
-								if inside(m + u2 - u1) or inside(m + u1 - u2) then
-									keep = false
+					-- 모서리 위 한 점이 보이는가(이음매·묻힌 모서리가 아닌가)
+					local function keepAt(t: number): boolean
+						if not (n1 and n2) then
+							return true
+						end
+						local m = a + d * t
+						local u1 = (n1 :: Vector3) * EPS
+						local u2 = (n2 :: Vector3) * EPS
+						if not inside(m + u1 + u2) then
+							-- 한쪽 면이 모서리 너머로 같은 평면으로 이어지면 이음매
+							return not (inside(m + u2 - u1) or inside(m + u1 - u2))
+						end
+						return not (inside(m + u1 - u2) and inside(m - u1 + u2)) -- 묻힌 모서리
+					end
+					-- 조각(SegmentLength) 가운데마다 판정하고, 이웃 조각과 결과가 다르면 그 사이 경계를 이분 탐색으로 정확히 잡는다
+					-- (가운데 한 점으로만 자르면 벽 모서리에 걸친 조각이 통째로 빠져 선이 모서리 앞에서 끊긴다)
+					local samples = math.max(1, math.ceil(len / segLen))
+					local runs: { { number } } = {}
+					local prevT = 0.5 / samples
+					local prevKeep = keepAt(prevT)
+					local runStart: number? = if prevKeep then 0 else nil
+					for s = 1, samples - 1 do
+						local t = (s + 0.5) / samples
+						local k = keepAt(t)
+						if k ~= prevKeep then
+							local lo, hi = prevT, t
+							for _ = 1, 7 do
+								local mid = (lo + hi) / 2
+								if keepAt(mid) == prevKeep then
+									lo = mid
+								else
+									hi = mid
 								end
-							elseif inside(m + u1 - u2) and inside(m - u1 + u2) then
-								keep = false -- 묻힌 모서리
+							end
+							local cut = (lo + hi) / 2
+							if prevKeep then
+								table.insert(runs, { runStart :: number, cut })
+								runStart = nil
+							else
+								runStart = cut
+							end
+							prevKeep = k
+						end
+						prevT = t
+					end
+					if prevKeep and runStart then
+						table.insert(runs, { runStart, 1 })
+					end
+					for _, run in runs do
+						local t0, t1 = run[1], run[2]
+						local rl = (t1 - t0) * len
+						if rl > 0.05 then
+							local k = math.max(1, math.ceil(rl / segLen))
+							for s = 0, k - 1 do
+								local pa = a + d * (t0 + (t1 - t0) * s / k)
+								local pb = a + d * (t0 + (t1 - t0) * (s + 1) / k)
+								n += 1
+								SA[n] = pa
+								SB[n] = pb
+								SM[n] = (pa + pb) / 2
 							end
 						end
-						if keep then
-							n += 1
-							SA[n] = pa
-							SB[n] = pb
-							SM[n] = m
-						else
-							World.culled += 1
-						end
+					end
+					if #runs == 0 then
+						World.culled += 1
 					end
 				end
 			end
@@ -5594,6 +7033,9 @@ function World.build(stage: Folder)
 	end
 
 	World.buildId = (stage:GetAttribute("BuildId") :: number?) or 0
+	cpu += os.clock() - t0
+	World.buildSeconds = os.clock() - wall0
+	World.buildCpu = cpu
 	World.ready = true
 end
 
@@ -5601,7 +7043,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="40">
+      <Item class="ModuleScript" referent="42">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -5789,6 +7231,7 @@ function UI.state()
 		overlayShown = ovTitle.TextTransparency < 0.5,
 		stage = stageLabel.Text,
 		spectate = if spectate.Visible then spectate.Text else nil,
+		prompt = if prompt.Visible then prompt.Text else nil,
 	}
 end
 
@@ -5798,7 +7241,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="41">
+  <Item class="Workspace" referent="43">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

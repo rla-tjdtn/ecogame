@@ -23,6 +23,8 @@ World.SA = {} :: { Vector3 }
 World.SB = {} :: { Vector3 }
 World.SM = {} :: { Vector3 }
 World.segCount = 0
+World.buildSeconds = 0
+World.buildCpu = 0
 World.culled = 0
 World.unattached = 0
 World.cellSegs = {} :: { [number]: { number } }
@@ -145,13 +147,17 @@ local function rasterCells(cf: CFrame, size: Vector3): { number }
 	local y1 = math.min(World.ny - 1, math.floor((p.Y + ay - o.Y) / cs))
 	local z0 = math.max(0, math.floor((p.Z - az - o.Z) / cs))
 	local z1 = math.min(World.nz - 1, math.floor((p.Z + az - o.Z) / cs))
+	local Xx, Xy, Xz, Yx, Yy, Yz, Zx, Zy, Zz = X.X, X.Y, X.Z, Y.X, Y.Y, Y.Z, Z.X, Z.Y, Z.Z
+	local px, py, pz, ox, oy, oz = p.X, p.Y, p.Z, o.X, o.Y, o.Z
+	local nx, ny = World.nx, World.ny
 	for z = z0, z1 do
+		local dz = oz + (z + 0.5) * cs - pz
 		for y = y0, y1 do
+			local dy = oy + (y + 0.5) * cs - py
 			for x = x0, x1 do
-				local c = o + Vector3.new((x + 0.5) * cs, (y + 0.5) * cs, (z + 0.5) * cs)
-				local d = c - p
-				if math.abs(d:Dot(X)) < hx and math.abs(d:Dot(Y)) < hy and math.abs(d:Dot(Z)) < hz then
-					table.insert(out, World.index(x, y, z))
+				local dx = ox + (x + 0.5) * cs - px
+				if math.abs(dx * Xx + dy * Xy + dz * Xz) < hx and math.abs(dx * Yx + dy * Yy + dz * Yz) < hy and math.abs(dx * Zx + dy * Zy + dz * Zz) < hz then
+					table.insert(out, x + nx * (y + ny * z) + 1)
 				end
 			end
 		end
@@ -162,30 +168,26 @@ end
 -- mid 근처에서 음파를 받을 수 있는 빈 복셀들
 function World.attachCells(mid: Vector3): { number }
 	local out = {}
-	local x, y, z = World.cellOf(mid)
-	if not x then
+	-- (매우 자주 불린다: Vector3 를 만들지 않고 숫자로만 계산)
+	local o, cs = World.origin, World.cs
+	local ox, oy, oz = o.X, o.Y, o.Z
+	local mx, my, mz = mid.X, mid.Y, mid.Z
+	local nx, ny, nz = World.nx, World.ny, World.nz
+	local x, y, z = math.floor((mx - ox) / cs), math.floor((my - oy) / cs), math.floor((mz - oz) / cs)
+	if x < 0 or y < 0 or z < 0 or x >= nx or y >= ny or z >= nz then
 		return out
 	end
+	local occ = World.occ
 	local lim = S.AttachDistance * S.AttachDistance
-	for dz = -1, 1 do
-		local zz = (z :: number) + dz
-		if zz >= 0 and zz < World.nz then
-			for dy = -1, 1 do
-				local yy = (y :: number) + dy
-				if yy >= 0 and yy < World.ny then
-					for dx = -1, 1 do
-						local xx = (x :: number) + dx
-						if xx >= 0 and xx < World.nx then
-							local idx = World.index(xx, yy, zz)
-							if World.free(idx) then
-								local c = World.cellCenter(idx)
-								local dd = c - mid
-								if dd:Dot(dd) <= lim then
-									table.insert(out, idx)
-								end
-							end
-						end
-					end
+	for zz = math.max(0, z - 1), math.min(nz - 1, z + 1) do
+		local cz = oz + (zz + 0.5) * cs - mz
+		for yy = math.max(0, y - 1), math.min(ny - 1, y + 1) do
+			local cy = oy + (yy + 0.5) * cs - my
+			local base = nx * (yy + ny * zz)
+			for xx = math.max(0, x - 1), math.min(nx - 1, x + 1) do
+				local cx = ox + (xx + 0.5) * cs - mx
+				if cx * cx + cy * cy + cz * cz <= lim and buffer.readu8(occ, xx + base) == 0 then
+					table.insert(out, xx + base + 1)
 				end
 			end
 		end
@@ -263,8 +265,11 @@ function World.build(stage: Folder)
 	World.ready = false
 	World.stage = stage
 	local t0 = os.clock()
+	local wall0 = t0
+	local cpu = 0
 	local function yieldSometimes()
 		if os.clock() - t0 > 0.012 then
+			cpu += os.clock() - t0
 			task.wait()
 			t0 = os.clock()
 		end
@@ -313,9 +318,19 @@ function World.build(stage: Folder)
 
 	-- 공간 해시(점 포함 판정용, 8스터드 버킷)
 	local HB = 8
-	local hbuckets: { [number]: { BasePart } } = {}
+	-- 파트마다 위치·축·크기·모양을 숫자로 한 번만 읽어 둔다(속성 읽기는 느리다)
+	type Info = { px: number, py: number, pz: number, xx: number, xy: number, xz: number, yx: number, yy: number, yz: number, zx: number, zy: number, zz: number, hx: number, hy: number, hz: number, shape: string }
+	local hbuckets: { [number]: { Info } } = {}
 	for _, p in statics do
 		local cf, sz = p.CFrame, p.Size / 2
+		local info: Info = {
+			px = cf.Position.X, py = cf.Position.Y, pz = cf.Position.Z,
+			xx = cf.XVector.X, xy = cf.XVector.Y, xz = cf.XVector.Z,
+			yx = cf.YVector.X, yy = cf.YVector.Y, yz = cf.YVector.Z,
+			zx = cf.ZVector.X, zy = cf.ZVector.Y, zz = cf.ZVector.Z,
+			hx = sz.X, hy = sz.Y, hz = sz.Z,
+			shape = Geo.shapeOf(p),
+		}
 		local X, Y, Z = cf.XVector, cf.YVector, cf.ZVector
 		local half = Vector3.new(
 			math.abs(X.X) * sz.X + math.abs(Y.X) * sz.Y + math.abs(Z.X) * sz.Z,
@@ -333,20 +348,39 @@ function World.build(stage: Folder)
 						l = {}
 						hbuckets[k] = l
 					end
-					table.insert(l, p)
+					table.insert(l, info)
 				end
 			end
 		end
 		yieldSometimes()
 	end
+	-- 점이 어떤 정적 파트 안에 있는가(Geo.pointInside 와 같은 판정, 숫자만 사용)
 	local function inside(pt: Vector3): boolean
-		local l = hbuckets[vkey(math.floor(pt.X / HB), math.floor(pt.Y / HB), math.floor(pt.Z / HB))]
+		local x, y, z = pt.X, pt.Y, pt.Z
+		local l = hbuckets[vkey(math.floor(x / HB), math.floor(y / HB), math.floor(z / HB))]
 		if not l then
 			return false
 		end
-		for _, p in l do
-			if Geo.pointInside(p, pt) then
-				return true
+		for _, i in l do
+			local dx, dy, dz = x - i.px, y - i.py, z - i.pz
+			local lx = dx * i.xx + dy * i.xy + dz * i.xz
+			local ly = dx * i.yx + dy * i.yy + dz * i.yz
+			local lz = dx * i.zx + dy * i.zy + dz * i.zz
+			local sh = i.shape
+			if sh == "Cylinder" then
+				local r = math.min(i.hy, i.hz)
+				if math.abs(lx) <= i.hx and ly * ly + lz * lz <= r * r then
+					return true
+				end
+			elseif sh == "Ball" then
+				local r = math.min(i.hx, i.hy, i.hz)
+				if lx * lx + ly * ly + lz * lz <= r * r then
+					return true
+				end
+			elseif math.abs(lx) <= i.hx and math.abs(ly) <= i.hy and math.abs(lz) <= i.hz then
+				if sh ~= "Wedge" or (ly + i.hy) * i.hz <= (lz + i.hz) * i.hy then
+					return true
+				end
 			end
 		end
 		return false
@@ -393,33 +427,71 @@ function World.build(stage: Folder)
 				local d = b - a
 				local len = d.Magnitude
 				if len > 0.03 then
-					local k = math.max(1, math.ceil(len / segLen))
-					for s = 0, k - 1 do
-						local pa = a + d * (s / k)
-						local pb = a + d * ((s + 1) / k)
-						local m = (pa + pb) / 2
-						local keep = true
-						if n1 and n2 then
-							local u1 = (n1 :: Vector3) * EPS
-							local u2 = (n2 :: Vector3) * EPS
-							local diag = inside(m + u1 + u2)
-							if not diag then
-								-- 한쪽 면이 모서리 너머로 같은 평면으로 이어지면 이음매
-								if inside(m + u2 - u1) or inside(m + u1 - u2) then
-									keep = false
+					-- 모서리 위 한 점이 보이는가(이음매·묻힌 모서리가 아닌가)
+					local function keepAt(t: number): boolean
+						if not (n1 and n2) then
+							return true
+						end
+						local m = a + d * t
+						local u1 = (n1 :: Vector3) * EPS
+						local u2 = (n2 :: Vector3) * EPS
+						if not inside(m + u1 + u2) then
+							-- 한쪽 면이 모서리 너머로 같은 평면으로 이어지면 이음매
+							return not (inside(m + u2 - u1) or inside(m + u1 - u2))
+						end
+						return not (inside(m + u1 - u2) and inside(m - u1 + u2)) -- 묻힌 모서리
+					end
+					-- 조각(SegmentLength) 가운데마다 판정하고, 이웃 조각과 결과가 다르면 그 사이 경계를 이분 탐색으로 정확히 잡는다
+					-- (가운데 한 점으로만 자르면 벽 모서리에 걸친 조각이 통째로 빠져 선이 모서리 앞에서 끊긴다)
+					local samples = math.max(1, math.ceil(len / segLen))
+					local runs: { { number } } = {}
+					local prevT = 0.5 / samples
+					local prevKeep = keepAt(prevT)
+					local runStart: number? = if prevKeep then 0 else nil
+					for s = 1, samples - 1 do
+						local t = (s + 0.5) / samples
+						local k = keepAt(t)
+						if k ~= prevKeep then
+							local lo, hi = prevT, t
+							for _ = 1, 7 do
+								local mid = (lo + hi) / 2
+								if keepAt(mid) == prevKeep then
+									lo = mid
+								else
+									hi = mid
 								end
-							elseif inside(m + u1 - u2) and inside(m - u1 + u2) then
-								keep = false -- 묻힌 모서리
+							end
+							local cut = (lo + hi) / 2
+							if prevKeep then
+								table.insert(runs, { runStart :: number, cut })
+								runStart = nil
+							else
+								runStart = cut
+							end
+							prevKeep = k
+						end
+						prevT = t
+					end
+					if prevKeep and runStart then
+						table.insert(runs, { runStart, 1 })
+					end
+					for _, run in runs do
+						local t0, t1 = run[1], run[2]
+						local rl = (t1 - t0) * len
+						if rl > 0.05 then
+							local k = math.max(1, math.ceil(rl / segLen))
+							for s = 0, k - 1 do
+								local pa = a + d * (t0 + (t1 - t0) * s / k)
+								local pb = a + d * (t0 + (t1 - t0) * (s + 1) / k)
+								n += 1
+								SA[n] = pa
+								SB[n] = pb
+								SM[n] = (pa + pb) / 2
 							end
 						end
-						if keep then
-							n += 1
-							SA[n] = pa
-							SB[n] = pb
-							SM[n] = m
-						else
-							World.culled += 1
-						end
+					end
+					if #runs == 0 then
+						World.culled += 1
 					end
 				end
 			end
@@ -460,6 +532,9 @@ function World.build(stage: Folder)
 	end
 
 	World.buildId = (stage:GetAttribute("BuildId") :: number?) or 0
+	cpu += os.clock() - t0
+	World.buildSeconds = os.clock() - wall0
+	World.buildCpu = cpu
 	World.ready = true
 end
 

@@ -32,6 +32,7 @@ type Pulse = {
 	cam: Vector3,
 	revealed: number,
 	trace: { { number } }?,
+	own: boolean,
 }
 
 local pulses: { Pulse } = {}
@@ -253,6 +254,7 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 		cam = Pulses.camera(),
 		revealed = 0,
 		trace = if traced then {} else nil,
+		own = traced == true,
 	}
 	gatherDynamic(p, exclude)
 	p.dist[start] = startD
@@ -385,11 +387,18 @@ function Pulses.update(now: number)
 		end
 		if p.nextBucket > R + 1 and (p.hn == 0 or p.hk[1] > R) then
 			table.remove(pulses, i)
+			-- 내 음파가 닿은 곳(지도에 남긴다)
+			if p.own and Pulses.onReach then
+				Pulses.onReach(p.dist, R)
+			end
 		else
 			i += 1
 		end
 	end
 end
+
+-- 내 음파가 끝났을 때 (복셀 → 거리, 반경)을 받는다(MapView)
+Pulses.onReach = nil :: ((dist: { [number]: number }, radius: number) -> ())?
 
 function Pulses.active(): number
 	return #pulses

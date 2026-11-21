@@ -11,6 +11,7 @@ local Builder = require(script.Parent.StageBuilder)
 local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
 local Monster = require(script.Parent.Monster)
+local Hiding = require(script.Parent.Hiding)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
@@ -19,6 +20,7 @@ local Round = {}
 Round.stageIndex = 1
 Round.state = "Waiting"
 Round.roundId = 0
+Round.lastBuildMs = 0
 Round.info = nil :: Builder.StageInfo?
 Round.monsters = {} :: { any }
 Round.autoLoop = true -- 테스트가 끌 수 있다
@@ -80,8 +82,11 @@ function Round.buildStage(i: number)
 	Doors.clear()
 	local layout = stageModule(i)
 	assert(layout, "stage module missing: " .. tostring(i))
+	local b0 = os.clock()
 	local info = Builder.build(layout, workspace, "Stage")
+	Round.lastBuildMs = (os.clock() - b0) * 1000
 	local folder = info.folder
+	folder:SetAttribute("Rows", table.concat(layout.Rows, "/")) -- 클라이언트 지도(Q)용 격자(행을 / 로 구분)
 	local count = 0
 	for _, d in folder:GetDescendants() do
 		if d:IsA("BasePart") then
@@ -202,7 +207,8 @@ function Round.spawnMonsters(count: number)
 		local pick = candidates[math.min(#candidates, 1 + (k - 1) * math.max(1, math.floor(#candidates / (count + 1))))]
 		local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
 			Round.kill(player, "monster")
-		end)
+		end, Round.stageIndex)
+		m.route = info.route
 		table.insert(Round.monsters, m)
 		m:run()
 	end
@@ -342,6 +348,13 @@ end)
 SoundBus.listen(function(pos, radius, source, kind)
 	for _, m in Round.monsters do
 		m:hear(pos, radius, source, kind)
+	end
+end)
+
+-- 숨는 순간: 쫓던 괴물이 그 모습을 봤는지
+Hiding.onHide(function(p, spot)
+	for _, m in Round.monsters do
+		m:onHide(p, spot.front)
 	end
 end)
 

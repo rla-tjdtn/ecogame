@@ -25,7 +25,7 @@ if (!fs.existsSync(pluginDst) || fs.readFileSync(pluginDst, "utf8") !== fs.readF
 }
 
 const players = Number(process.env.PLAYERS || 1);
-const job = { id: String(Date.now()), players, args: { Test: name, Seconds: Number(process.env.WATCH_SECONDS || 150), Players: players } };
+const job = { id: String(Date.now()), players, args: { Test: name, Seconds: Number(process.env.WATCH_SECONDS || 150), Players: players, Stage: Number(process.env.STAGE || 0), Quick: !!process.env.QUICK } };
 let handed = false;
 const server = http.createServer((req, res) => {
 	let body = "";

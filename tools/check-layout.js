@@ -11,7 +11,7 @@ for (const file of fs.readdirSync(dir).filter((f) => /^Stage\d+\.luau$/.test(f))
 	const rows = [...src.matchAll(/^\s*"([^"]+)",\s*$/gm)].map((m) => m[1]);
 	const pitExtra = ((src.match(/PitTiles = \{([^}]*)\}/) || ["", ""])[1].match(/(\w) = true/g) || []).map((x) => x[0]);
 	const pits = new Set(["p", "b", "s", "n", ...pitExtra]);
-	const blocked = new Set(["#", "K", "Q", "m", "O", "B", "T", "X"]); // (선반 H/h 는 양옆 통로로 지나간다)
+	const blocked = new Set(["#", "K", "Q", "m", "O", "B", "T", "X", "L"]); // (선반 H/h 는 양옆 통로로 지나간다)
 	const H = rows.length, W = rows[0].length;
 	const bad = [];
 	rows.forEach((r, j) => r.length !== W && bad.push(`row${j} length ${r.length}`));

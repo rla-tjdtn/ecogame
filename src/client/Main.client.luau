@@ -15,6 +15,8 @@ local Pulses = require(script.Parent:WaitForChild("SonarPulses"))
 local Movement = require(script.Parent:WaitForChild("Movement"))
 local Audio = require(script.Parent:WaitForChild("Audio"))
 local UI = require(script.Parent:WaitForChild("UI"))
+local MapView = require(script.Parent:WaitForChild("MapView"))
+Pulses.onReach = MapView.onReach
 
 local player = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -27,6 +29,7 @@ local spectateIndex = 1
 local building = false
 local frameTimes: { number } = {}
 local luaTimes: { number } = {}
+local prof = { pulses = 0, lines = 0, frames = 0 } -- (테스트용) 프레임당 음파 연산 시간 나눠 보기
 
 -- ── 스테이지 로드 → 음파 월드 ──
 local function tryBuild()
@@ -58,6 +61,7 @@ local function tryBuild()
 		Pulses.clear()
 		Lines.clear()
 		World.build(stage)
+		MapView.load(stage)
 		building = false
 		if stage:GetAttribute("BuildId") ~= World.buildId then
 			tryBuild()
@@ -82,7 +86,7 @@ local function alive(): boolean
 end
 
 local function fire(): boolean
-	if not alive() or not World.ready then
+	if not alive() or not World.ready or player:GetAttribute("Hidden") then
 		return false
 	end
 	local now = os.clock()
@@ -147,16 +151,25 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	end
 end)
 
--- ── 상호작용 안내(문) ──
+-- ── 상호작용 안내(문, 숨는 곳) ──
+local function promptText(prompt: ProximityPrompt): string
+	if prompt:GetAttribute("HideSpot") and player:GetAttribute("Hidden") then
+		return "E   나가기"
+	end
+	return "E   " .. prompt.ActionText
+end
 ProximityPromptService.PromptShown:Connect(function(prompt)
 	if prompt.Style == Enum.ProximityPromptStyle.Custom then
-		UI.setPrompt("E   " .. prompt.ActionText)
-		local conn
-		conn = prompt:GetPropertyChangedSignal("ActionText"):Connect(function()
-			UI.setPrompt("E   " .. prompt.ActionText)
+		UI.setPrompt(promptText(prompt))
+		local conn = prompt:GetPropertyChangedSignal("ActionText"):Connect(function()
+			UI.setPrompt(promptText(prompt))
+		end)
+		local conn2 = player:GetAttributeChangedSignal("Hidden"):Connect(function()
+			UI.setPrompt(promptText(prompt))
 		end)
 		prompt.PromptHidden:Once(function()
 			conn:Disconnect()
+			conn2:Disconnect()
 			UI.setPrompt(nil)
 		end)
 	end
@@ -231,7 +244,11 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 	Movement.update(dt)
 	Pulses.update(now)
+	local tl = os.clock()
 	Lines.update(now)
+	prof.pulses += tl - now
+	prof.lines += os.clock() - tl
+	prof.frames += 1
 	table.insert(luaTimes, os.clock() - now)
 	if #luaTimes > 240 then
 		table.remove(luaTimes, 1)
@@ -275,6 +292,8 @@ task.spawn(function()
 			return {
 				ready = World.ready,
 				buildId = World.buildId,
+				build = { seconds = World.buildSeconds, cpu = World.buildCpu, segs = World.segCount },
+				prof = { pulsesMs = if prof.frames > 0 then prof.pulses / prof.frames * 1000 else 0, linesMs = if prof.frames > 0 then prof.lines / prof.frames * 1000 else 0 },
 				segs = World.segCount,
 				culled = World.culled,
 				unattached = World.unattached,
@@ -320,6 +339,7 @@ task.spawn(function()
 		elseif cmd == "resetPerf" then
 			table.clear(frameTimes)
 			table.clear(luaTimes)
+			prof.pulses, prof.lines, prof.frames = 0, 0, 0
 			return true
 		elseif cmd == "resetCooldown" then
 			lastFire = -math.huge
@@ -327,6 +347,26 @@ task.spawn(function()
 		elseif cmd == "pulseAt" then
 			-- 시각 효과만(서버에 알리지 않음): 지정 지점에서 음파
 			return Pulses.start(arg :: Vector3, player.Character, true)
+		elseif cmd == "floorEndsNear" then
+			-- 바닥 높이 수평 선분 중 끝점이 p 에서 r 안에 있는 것의 수(모서리까지 선이 닿는가)
+			local t = arg :: { any }
+			local p, r = t[1] :: Vector3, t[2] :: number
+			local n = 0
+			for i = 1, World.segCount do
+				local sa, sb = World.SA[i], World.SB[i]
+				if math.abs(sa.Y - sb.Y) < 0.05 and math.abs(sa.Y - p.Y) < 0.3 and ((sa - p).Magnitude < r or (sb - p).Magnitude < r) then
+					n += 1
+				end
+			end
+			return n
+		elseif cmd == "linesNear" then
+			local t = arg :: { any }
+			return Lines.countNear(t[1], t[2])
+		elseif cmd == "map" then
+			return MapView.state()
+		elseif cmd == "toggleMap" then
+			MapView.toggle()
+			return MapView.state()
 		elseif cmd == "trace" then
 			local p = Pulses.last
 			if not p or not p.trace then

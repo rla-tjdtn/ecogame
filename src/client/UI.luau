@@ -183,6 +183,7 @@ function UI.state()
 		overlayShown = ovTitle.TextTransparency < 0.5,
 		stage = stageLabel.Text,
 		spectate = if spectate.Visible then spectate.Text else nil,
+		prompt = if prompt.Visible then prompt.Text else nil,
 	}
 end
 

@@ -4,6 +4,8 @@
 --   Wedge    : 쐐기의 9개 모서리
 --   Cylinder : 양 끝 원 + (속성 SonarRings 개수만큼) 중간 원 / 보는 위치 기준 실루엣 2줄은 viewEdges 에서
 --   Ball     : 보는 위치 기준 실루엣 원(viewEdges)
+--   Line     : 가장 긴 축을 따라 선 하나(속성 SonarShape = "Line"). 괴물처럼 가는 막대를 한 획으로 그릴 때
+--   Disc     : 원통 가운데 원 하나(속성 SonarShape = "Disc"). 얇은 원판(눈, 둥근 머리)을 한 줄 원으로
 --   None     : 선 없음(속성 SonarShape = "None")
 -- MeshPart / Union 처럼 정확한 모서리를 얻기 어려운 것은 상자 프록시를 쓴다(SonarShape 속성으로 바꿀 수 있다).
 --
@@ -206,6 +208,13 @@ function Geo.staticEdges(part: BasePart, out: EdgeList, noNormals: boolean?)
 		Geo.boxEdges(cf, size, out, if type(axis) == "string" then axis else nil, noNormals)
 	elseif shape == "Wedge" then
 		Geo.wedgeEdges(cf, size, out, noNormals)
+	elseif shape == "Line" then
+		local s = size
+		local axis = if s.X >= s.Y and s.X >= s.Z then cf.XVector * (s.X / 2) elseif s.Y >= s.Z then cf.YVector * (s.Y / 2) else cf.ZVector * (s.Z / 2)
+		push(out, cf.Position - axis, cf.Position + axis)
+	elseif shape == "Disc" then
+		local r = math.min(size.Y, size.Z) / 2
+		circle(cf.Position, cf.YVector, cf.ZVector, r, ringSegments(r), out)
 	elseif shape == "Cylinder" then
 		local rings = part:GetAttribute("SonarRings")
 		Geo.cylinderRings(cf, size, out, if type(rings) == "number" then rings else nil)
