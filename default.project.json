@@ -24,7 +24,7 @@
         "CameraMinZoomDistance": 0.5,
         "CharacterWalkSpeed": 10,
         "CharacterUseJumpPower": true,
-        "CharacterJumpPower": 0,
+        "CharacterJumpPower": 40,
         "EnableMouseLockOption": false,
         "AutoJumpEnabled": false
       },

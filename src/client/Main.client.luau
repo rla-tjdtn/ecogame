@@ -401,6 +401,41 @@ task.spawn(function()
 				cam.CFrame = CFrame.lookAt(cam.CFrame.Position, arg :: Vector3)
 			end
 			return if cmd == "lookTarget" then SearchLook.target() else SearchLook.use()
+		elseif cmd == "soundCheck" then
+			-- 실제 녹음 소리(괴성 후보 전부 + 괴물 발소리)가 이 게임에서 불러와지는가
+			local ids = {}
+			for _, r in (Config :: any).RealScreams do
+				table.insert(ids, "rbxassetid://" .. r.Id)
+			end
+			table.insert(ids, (Config.Sounds :: any).MonsterStep.Id)
+			local sounds = {}
+			for _, id in ids do
+				local snd = Instance.new("Sound")
+				snd.SoundId = id
+				snd.Volume = 0
+				snd.Parent = workspace
+				table.insert(sounds, snd)
+			end
+			local bad = {}
+			pcall(function()
+				game:GetService("ContentProvider"):PreloadAsync(sounds, function(contentId, status)
+					if status ~= Enum.AssetFetchStatus.Success then
+						table.insert(bad, contentId .. "=" .. status.Name)
+					end
+				end)
+			end)
+			local lengths = {}
+			for _, snd in sounds do
+				table.insert(lengths, math.floor(snd.TimeLength * 10) / 10)
+				snd:Destroy()
+			end
+			return { total = #ids, bad = bad, lengths = lengths }
+		elseif cmd == "jump" then
+			local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if h then
+				h.Jump = true
+			end
+			return h ~= nil
 		elseif cmd == "cursor" then
 			return UserInputService.MouseIconEnabled
 		elseif cmd == "jumpscare" then

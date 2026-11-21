@@ -38,6 +38,7 @@ Config.Move = {
 	BobWalk = 0.045, -- 헤드밥 세기(스터드)
 	BobRun = 0.09,
 	BobCrouch = 0.02,
+	JumpPower = 40, -- 점프(약 4스터드 높이: 상자 위로는 오르지만 벽은 천장까지라 미로를 넘을 수 없다)
 }
 
 -- ─────────────────────────── 소리(괴물이 듣는 범위) ───────────────────────────
@@ -47,6 +48,7 @@ Config.Noise = {
 	Run = 25,
 	Sonar = 45,
 	Door = 16,
+	Land = 12, -- 점프 후 착지 소리(걷기보다 조금 크다)
 	-- 서버가 실제 이동 속도로 발소리 종류를 판정하는 기준(스터드/초)
 	RunSpeedAbove = 13.5,
 	WalkSpeedAbove = 7,
@@ -124,23 +126,19 @@ Config.Stages = {
 -- 기본값은 Roblox 클라이언트에 기본 포함된 rbxasset:// 파일만 쓴다(외부 에셋 ID 없음).
 -- 더 어울리는 소리가 있으면 Id 를 "rbxassetid://숫자" 로 바꾸면 된다. Id = "" 이면 그 소리는 재생하지 않는다.
 Config.Sounds = {
-	-- 사람 발소리: 실제 녹음된 발걸음 파일(2.5초 안에 4걸음: 0.03·0.62·1.22·1.82초 지점)에서 걸음 하나씩만 골라 쓰고(Steps = {시작초, 재생길이초}),
-	-- 몸무게가 실린 낮은 "툭"(FootThump)을 Thump 배율만큼 겹친다. 매 걸음 다른 걸음을 골라 같은 소리가 반복되지 않는다.
-	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.5, Pitch = 1.0, Range = 40, Steps = { { 0.03, 0.2 }, { 0.62, 0.22 }, { 1.22, 0.13 }, { 1.82, 0.13 } }, Thump = 0.22 },
-	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.85, Pitch = 1.12, Range = 70, Steps = { { 0.03, 0.2 }, { 0.62, 0.22 }, { 1.22, 0.13 }, { 1.82, 0.13 } }, Thump = 0.4 },
-	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.18, Pitch = 0.9, Range = 18, Steps = { { 1.22, 0.13 }, { 1.82, 0.13 } }, Thump = 0.05 },
-	FootThump = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 1.0, Pitch = 1.25, Range = 70, Cut = 0.1 },
+	-- 사람 발소리: 실제 녹음된 발걸음 파일(2.5초 안에 4걸음) 중 가장 또렷한 한 걸음(1.22초 지점)만 짧게(Steps = {시작초, 재생길이초}).
+	-- 걸음마다 똑같은 소리 하나 — 다른 소리를 섞거나 피치를 바꾸지 않는다(깔끔하게).
+	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.55, Pitch = 1.0, Range = 40, Steps = { { 1.22, 0.13 } } },
+	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.85, Pitch = 1.0, Range = 70, Steps = { { 1.22, 0.13 } } },
+	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.2, Pitch = 1.0, Range = 18, Steps = { { 1.22, 0.13 } } },
 	Sonar = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.3, Pitch = 0.35, Range = 90 }, -- (크면 머리가 아프다: 0.9 → 0.3)
 	SonarEcho = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.12, Pitch = 0.28, Range = 90 },
 	Door = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.8, Pitch = 0.55, Range = 60 },
 	-- 괴물 발소리: 사람과 완전히 다르게 — 깊고 무거운 "쿵"(울림) + 낮게 늘인 발톱 "타닥"(Claw). 걸음 간격도 사람보다 느리고 불규칙하다
-	MonsterStep = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.5, Pitch = 0.7, Range = 95, Cut = 0.24, Claw = "MonsterClaw", Fx = { Reverb = 1.2 } },
+	-- 괴물 발소리: 실제 녹음된 무거운 생물 발걸음(Pro Sound Effects). 쫓아올 때만 들린다
+	MonsterStep = { Id = "rbxassetid://9114166413", Volume = 0.45, Pitch = 0.9, Range = 95, Cut = 0.6 },
 	MonsterClaw = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.35, Pitch = 0.55, Range = 95, Steps = { { 0.03, 0.34 }, { 0.62, 0.34 } } },
-	-- 괴물 소리는 전부 괴성(비명): 사람 목소리 파일을 낮고 길게 + 왜곡 + 울림. Fx = 왜곡 정도 / 울림(초)
-	MonsterIdle = { Id = "rbxasset://sounds/ouch.ogg", Volume = 0.22, Pitch = 0.6, Range = 70, Fx = { Distortion = 0.5, Reverb = 2.5 } },
-	MonsterAlert = { Id = "rbxasset://sounds/ouch.ogg", Volume = 0.45, Pitch = 0.55, Range = 90, Fx = { Distortion = 0.6, Reverb = 2.5 } },
-	MonsterChase = { Id = "rbxasset://sounds/ouch.ogg", Volume = 0.5, Pitch = 0.45, Range = 110, Fx = { Distortion = 0.7, Reverb = 3 } },
-	MonsterScream2 = { Id = "rbxasset://sounds/oof.ogg", Volume = 0.4, Pitch = 0.5, Range = 110, Fx = { Distortion = 0.7, Reverb = 3 } }, -- 괴성에 겹치는 두 번째 목소리
+	-- MonsterIdle / MonsterAlert / MonsterChase / MonsterScream2 / MonsterWaveThud(괴성)는 아래 Config.ScreamStyles 에서 고른 시안이 채운다.
 	AmbientHum = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.18, Pitch = 0.22, Range = 0 }, -- 환풍기·배관 진동(루프)
 	AmbientFan = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.5, Pitch = 0.4, Range = 45 }, -- 맵 안 환풍기 위치(루프)
 	AmbientDrip = { Id = "", Volume = 0.25, Pitch = 2.2, Range = 60 }, -- 물방울(찰팍) 소리 제거
@@ -149,28 +147,346 @@ Config.Sounds = {
 	AmbientWater = { Id = "", Volume = 0.35, Pitch = 0.6, Range = 50 }, -- 하수도 물소리(찰팍거림) 제거
 }
 
--- 괴성: 짧은 목소리 파일을 시간차로 여러 번 겹쳐 길게 지른다. s = Sounds 이름, t = 시작 지연(초), p = 피치 배율, v = 볼륨 배율
-Config.Screams = {
-	Idle = { -- 배회 중 먼 괴성 (약 2초)
-		{ s = "MonsterIdle", t = 0, p = 1, v = 1 },
-		{ s = "MonsterScream2", t = 0.3, p = 0.85, v = 0.6 },
-		{ s = "MonsterIdle", t = 0.75, p = 0.8, v = 0.6 },
+-- ── 괴성 시안(음파 공격 느낌) ──
+-- Config.ScreamStyle 숫자 하나로 고른다(아래 1~6). 시안마다 Sounds(소리 정의)와 Screams(시간차 겹침 표)가 있다.
+-- Fx = { { "효과클래스", { 속성 = 값 } }, ... } — Roblox SoundEffect 속성 이름 그대로(Audio.luau 가 pcall 로 안전하게 적용).
+-- 목소리 파일(ouch/oof)은 원래 아주 크고 바람 파일(action_falling)은 아주 작아서 Volume 이 다르다.
+-- Screams 표: s = 소리 이름, t = 시작 지연(초), p = 피치 배율, v = 볼륨 배율.
+Config.ScreamStyle = 13 -- 선택: 귀신 곡소리. 1~6 괴성 시안, 7~12 사이렌 변형(10 = 끊기는 사이렌), 13~15 귀신 곡소리(끊기는 박자·음 높이 일정). 괴물 괴성은 추격 때만(발소리는 평소에도 난다)
+
+local OUCH, OOF, WIND, LAND = "rbxasset://sounds/ouch.ogg", "rbxasset://sounds/oof.ogg", "rbxasset://sounds/action_falling.ogg", "rbxasset://sounds/action_jump_land.mp3"
+local function snd(id: string, vol: number, pitch: number, range: number, cut: number?, fx: { { any } }?): { [string]: any }
+	return { Id = id, Volume = vol, Pitch = pitch, Range = range, Cut = cut, Fx = fx }
+end
+local function L(s: string, t: number, p: number, v: number, sweep: { { number } }?, dur: number?, gate: { number }?): { [string]: any }
+	return { s = s, t = t, p = p, v = v, sweep = sweep, dur = dur, gate = gate } -- gate = { 켜짐초, 꺼짐초 }: 끊기는 박자 -- sweep = { {정규화 시간 0~1, 피치 배율}, ... }, dur = 길이(초)
+end
+local function EQ(lo: number, mid: number, hi: number): { any }
+	return { "EqualizerSoundEffect", { LowGain = lo, MidGain = mid, HighGain = hi } }
+end
+local function TREM(freq: number, depth: number): { any }
+	return { "TremoloSoundEffect", { Frequency = freq, Depth = depth } }
+end
+local function DIST(level: number): { any }
+	return { "DistortionSoundEffect", { Level = level } }
+end
+local function REV(decay: number, wet: number): { any }
+	return { "ReverbSoundEffect", { DecayTime = decay, WetLevel = wet } }
+end
+
+local FX_SCREECH = { TREM(25, 0.6), DIST(0.25), EQ(-20, 0, 4) }
+local FX_PULSE = { TREM(7, 0.85), EQ(6, -12, -40), REV(2.5, -4) }
+local FX_SIREN = { TREM(14, 0.9), DIST(0.3), REV(3, -2) }
+local FX_ECHO = { { "EchoSoundEffect", { Delay = 0.28, Feedback = 0.55, DryLevel = 0, WetLevel = -3 } }, { "ChorusSoundEffect", { Depth = 0.5, Mix = 0.5, Rate = 2 } } }
+local FX_FLANGE = { { "FlangeSoundEffect", { Depth = 1, Mix = 0.8, Rate = 1.2 } }, EQ(-40, -4, 6) }
+local FX_ROAR = { DIST(0.8), REV(3, -2) }
+
+Config.ScreamStyles = {
+	-- 1. 초음파 비명: 높은 음이 떨리며 점점 날카롭게 치솟는다(고주파 찢는 소리)
+	{
+		Name = "초음파 비명 (치솟는 고주파)",
+		Sounds = {
+			MonsterIdle = snd(OUCH, 0.2, 1.3, 70, nil, FX_SCREECH),
+			MonsterAlert = snd(OUCH, 0.35, 1.45, 90, nil, FX_SCREECH),
+			MonsterChase = snd(OUCH, 0.4, 1.5, 110, nil, FX_SCREECH),
+			MonsterScream2 = snd(OOF, 0.2, 1.3, 110, nil, FX_SCREECH),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 0.9, 1), L("MonsterIdle", 0.12, 1.1, 1), L("MonsterIdle", 0.24, 1.3, 0.8) },
+			Alert = { L("MonsterAlert", 0, 0.75, 1), L("MonsterAlert", 0.1, 0.9, 1), L("MonsterAlert", 0.2, 1.05, 1), L("MonsterAlert", 0.3, 1.2, 1), L("MonsterAlert", 0.4, 1.35, 0.9) },
+			Chase = {
+				L("MonsterChase", 0, 0.6, 1), L("MonsterChase", 0.1, 0.72, 1), L("MonsterChase", 0.2, 0.84, 1), L("MonsterChase", 0.3, 0.96, 1),
+				L("MonsterChase", 0.4, 1.08, 1), L("MonsterChase", 0.5, 1.2, 1), L("MonsterChase", 0.6, 1.32, 0.9), L("MonsterChase", 0.7, 1.44, 0.8),
+				L("MonsterScream2", 0.5, 1.0, 0.8), L("MonsterScream2", 0.8, 1.3, 0.7),
+			},
+		},
 	},
-	Alert = { -- 경계 (약 2.5초)
-		{ s = "MonsterAlert", t = 0, p = 1, v = 1 },
-		{ s = "MonsterScream2", t = 0.25, p = 0.9, v = 0.8 },
-		{ s = "MonsterAlert", t = 0.6, p = 0.85, v = 0.9 },
-		{ s = "MonsterScream2", t = 1.0, p = 0.8, v = 0.6 },
+	-- 2. 저주파 맥동파: 바닥을 울리는 낮은 "우우웅" 이 맥박처럼 일렁이고 쿵, 쿵 충격파가 번진다
+	{
+		Name = "저주파 맥동파 (우우웅 + 쿵쿵)",
+		Sounds = {
+			MonsterIdle = snd(WIND, 3, 0.35, 70, 1.2, FX_PULSE),
+			MonsterAlert = snd(WIND, 4.5, 0.33, 90, 1.8, FX_PULSE),
+			MonsterChase = snd(WIND, 6, 0.3, 110, 2.6, FX_PULSE),
+			MonsterScream2 = snd(LAND, 1.5, 0.4, 110, 0.35, { REV(2, -2) }),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1) },
+			Alert = { L("MonsterAlert", 0, 1, 1), L("MonsterScream2", 0, 1, 1), L("MonsterScream2", 0.5, 1, 0.8) },
+			Chase = { L("MonsterChase", 0, 1, 1), L("MonsterScream2", 0, 1, 1), L("MonsterScream2", 0.45, 1, 0.9), L("MonsterScream2", 0.9, 1, 0.8), L("MonsterScream2", 1.35, 1, 0.7), L("MonsterScream2", 1.8, 1, 0.6) },
+		},
 	},
-	Chase = { -- 추격 시작 (약 3초 이상, 점점 낮아지며 길게)
-		{ s = "MonsterChase", t = 0, p = 1, v = 1 },
-		{ s = "MonsterScream2", t = 0.25, p = 0.85, v = 0.9 },
-		{ s = "MonsterChase", t = 0.6, p = 0.85, v = 1 },
-		{ s = "MonsterScream2", t = 1.0, p = 0.7, v = 0.8 },
-		{ s = "MonsterChase", t = 1.4, p = 0.65, v = 0.7 },
-		{ s = "MonsterScream2", t = 1.9, p = 0.55, v = 0.5 },
+	-- 3. 떨리는 사이렌: 비명이 빠르게 떨려 경보 사이렌처럼 일렁이며 점점 낮아진다
+	{
+		Name = "떨리는 사이렌 비명",
+		Sounds = {
+			MonsterIdle = snd(OUCH, 0.2, 0.7, 70, nil, FX_SIREN),
+			MonsterAlert = snd(OUCH, 0.35, 0.6, 90, nil, FX_SIREN),
+			MonsterChase = snd(OUCH, 0.4, 0.5, 110, nil, FX_SIREN),
+			MonsterScream2 = snd(OOF, 0.2, 0.55, 110, nil, FX_SIREN),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1), L("MonsterIdle", 0.4, 0.9, 0.7) },
+			Alert = { L("MonsterAlert", 0, 1, 1), L("MonsterAlert", 0.3, 0.9, 0.9), L("MonsterAlert", 0.7, 0.8, 0.8) },
+			Chase = { L("MonsterChase", 0, 1, 1), L("MonsterScream2", 0.15, 1, 0.9), L("MonsterChase", 0.4, 0.9, 1), L("MonsterScream2", 0.7, 0.85, 0.8), L("MonsterChase", 1.0, 0.8, 0.8), L("MonsterChase", 1.4, 0.7, 0.7) },
+		},
+	},
+	-- 4. 에코 파동: 비명이 메아리처럼 되풀이되며 퍼져 나가는 파동
+	{
+		Name = "에코 파동 (되풀이되며 퍼짐)",
+		Sounds = {
+			MonsterIdle = snd(OUCH, 0.2, 0.5, 70, nil, FX_ECHO),
+			MonsterAlert = snd(OUCH, 0.35, 0.45, 90, nil, FX_ECHO),
+			MonsterChase = snd(OUCH, 0.4, 0.4, 110, nil, FX_ECHO),
+			MonsterScream2 = snd(OOF, 0.2, 0.45, 110, nil, FX_ECHO),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1) },
+			Alert = { L("MonsterAlert", 0, 1, 1), L("MonsterAlert", 0.5, 0.9, 0.8) },
+			Chase = { L("MonsterChase", 0, 1, 1), L("MonsterScream2", 0.25, 0.9, 0.8), L("MonsterChase", 0.7, 0.85, 0.9) },
+		},
+	},
+	-- 5. 플랜저 레이저: 쉬이잉— 하고 휘감기는 가는 음파가 훑고 지나간다
+	{
+		Name = "플랜저 음파 (쉬이잉 휘감김)",
+		Sounds = {
+			MonsterIdle = snd(WIND, 2, 1.5, 70, 0.9, FX_FLANGE),
+			MonsterAlert = snd(WIND, 4, 1.6, 90, 1.5, FX_FLANGE),
+			MonsterChase = snd(WIND, 5, 1.7, 110, 2.2, FX_FLANGE),
+			MonsterScream2 = snd(OUCH, 0.3, 1.4, 110, nil, FX_FLANGE),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1) },
+			Alert = { L("MonsterAlert", 0, 1, 1), L("MonsterScream2", 0.3, 1, 0.8) },
+			Chase = { L("MonsterChase", 0, 1, 1), L("MonsterScream2", 0.3, 1, 1), L("MonsterScream2", 0.8, 0.85, 0.9), L("MonsterScream2", 1.3, 0.7, 0.8) },
+		},
+	},
+	-- 6. 혼합 충격 포효: 거칠게 왜곡된 낮은 포효 + 바닥을 울리는 저주파 + 쿵 충격파
+	{
+		Name = "혼합 충격 포효 (포효 + 저주파 + 충격)",
+		Sounds = {
+			MonsterIdle = snd(OUCH, 0.2, 0.45, 70, nil, FX_ROAR),
+			MonsterAlert = snd(OUCH, 0.35, 0.42, 90, nil, FX_ROAR),
+			MonsterChase = snd(OUCH, 0.45, 0.38, 110, nil, FX_ROAR),
+			MonsterScream2 = snd(WIND, 5, 0.3, 110, 2.2, FX_PULSE),
+			MonsterWaveThud = snd(LAND, 1.5, 0.4, 110, 0.35, { REV(2, -2) }),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1) },
+			Alert = { L("MonsterAlert", 0, 1, 1), L("MonsterWaveThud", 0, 1, 1) },
+			Chase = {
+				L("MonsterChase", 0, 1, 1), L("MonsterScream2", 0, 1, 1), L("MonsterWaveThud", 0, 1, 1), L("MonsterWaveThud", 0.5, 1, 0.8),
+				L("MonsterChase", 0.6, 0.9, 0.9), L("MonsterWaveThud", 1.0, 1, 0.7), L("MonsterChase", 1.3, 0.8, 0.7),
+			},
+		},
 	},
 }
+
+-- ── 3번(떨리는 사이렌)의 높낮이 변형 7~12번: 소리를 반복하며 피치를 시간에 따라 바꾼다(sweep). 길이: 배회 1.2초 / 경계 1.8초 / 추격 2.7초 ──
+local FX_STUTTER = { { "TremoloSoundEffect", { Frequency = 9, Depth = 1, Duty = 0.5 } }, DIST(0.3), REV(3, -2) }
+local function sirenVariant(name: string, sweep: { { number } }, fx: { { any } }?): { [string]: any }
+	local f = fx or FX_SIREN
+	return {
+		Name = name,
+		Sounds = {
+			MonsterIdle = snd(OUCH, 0.2, 0.5, 70, nil, f),
+			MonsterAlert = snd(OUCH, 0.35, 0.5, 90, nil, f),
+			MonsterChase = snd(OUCH, 0.4, 0.5, 110, nil, f),
+			MonsterScream2 = snd(OOF, 0.2, 0.4, 110, nil, f),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1, sweep, 1.2) },
+			Alert = { L("MonsterAlert", 0, 1, 1, sweep, 1.8), L("MonsterScream2", 0.05, 1, 0.6, sweep, 1.8) },
+			Chase = { L("MonsterChase", 0, 1, 1, sweep, 2.7), L("MonsterScream2", 0.05, 1, 0.6, sweep, 2.7) },
+		},
+	}
+end
+do
+	local styles: any = Config.ScreamStyles
+	table.insert(styles, sirenVariant("3-A 사이렌: 내려갔다 올라감", { { 0, 1.3 }, { 0.5, 0.7 }, { 1, 1.3 } }))
+	table.insert(styles, sirenVariant("3-B 사이렌: 올라감", { { 0, 0.7 }, { 1, 1.7 } }))
+	table.insert(styles, sirenVariant("3-C 사이렌: 올라갔다 내려감", { { 0, 0.7 }, { 0.5, 1.5 }, { 1, 0.6 } }))
+	table.insert(styles, sirenVariant("3-D 사이렌: 끊기며 떨리는 소리(음 높이 일정)", { { 0, 1.2 }, { 1, 1.2 } }, FX_STUTTER))
+	table.insert(styles, sirenVariant("3-E 사이렌: 투톤(삐뽀삐뽀)", { { 0, 1 }, { 0.1667, 1 }, { 0.1668, 1.5 }, { 0.3333, 1.5 }, { 0.3334, 1 }, { 0.5, 1 }, { 0.5001, 1.5 }, { 0.6667, 1.5 }, { 0.6668, 1 }, { 0.8333, 1 }, { 0.8334, 1.5 }, { 1, 1.5 } }))
+	table.insert(styles, sirenVariant("3-F 사이렌: 오르락내리락 3번(앰뷸런스)", { { 0, 0.8 }, { 0.167, 1.5 }, { 0.333, 0.8 }, { 0.5, 1.5 }, { 0.667, 0.8 }, { 0.833, 1.5 }, { 1, 0.8 } }))
+end
+
+-- ── 귀신 곡소리(13~15번): 소름 끼치는 귀신 울음. 음 높이는 일정하고 gate 박자로 끊겨 들린다. 괴성은 추격(Chase) 때만 낸다(발소리는 평소에도 난다) ──
+-- (Idle/Alert 는 쓰지 않아 비워 둔다. MonsterAlert 소리 정의는 사망 연출(2D 한 번)이 쓰므로 반드시 있어야 한다)
+local FLAT = { { 0, 1 }, { 1, 1 } }
+local function ghost(name: string, voice: { [string]: any }, air: { [string]: any }, alert: { [string]: any }, gate: { number }): { [string]: any }
+	return {
+		Name = name,
+		Sounds = { MonsterIdle = voice, MonsterAlert = alert, MonsterChase = voice, MonsterScream2 = air },
+		Screams = {
+			Idle = {},
+			Alert = {},
+			Chase = { L("MonsterChase", 0, 1, 1, FLAT, 2.4, gate), L("MonsterScream2", 0, 1, 1, FLAT, 2.4, gate) },
+		},
+	}
+end
+do
+	local styles: any = Config.ScreamStyles
+	local FX_GHOST = { EQ(-30, -4, 6), { "ChorusSoundEffect", { Depth = 0.6, Mix = 0.6, Rate = 1.5 } }, TREM(5, 0.3), REV(4, -2) }
+	local FX_HOLLOW = { EQ(-20, -8, 2), { "FlangeSoundEffect", { Depth = 0.5, Mix = 0.5, Rate = 0.4 } }, { "EchoSoundEffect", { Delay = 0.35, Feedback = 0.6, DryLevel = -3, WetLevel = -3 } }, REV(5, -2) }
+	local FX_BREATH = { EQ(-40, -2, 8), { "FlangeSoundEffect", { Depth = 1, Mix = 0.8, Rate = 1.2 } }, { "ChorusSoundEffect", { Depth = 0.6, Mix = 0.6, Rate = 1.5 } }, REV(4, -2) }
+	-- 13: 높고 속삭이는 곡소리 (높은 목소리 + 바람 숨결, 약하게 떨림, 긴 울림)
+	table.insert(styles, ghost("13 귀신 곡소리: 높고 속삭이는 울음", snd(OUCH, 0.3, 1.25, 110, nil, FX_GHOST), snd(WIND, 6, 1.6, 110, nil, { EQ(-40, -2, 8), REV(4, -2) }), snd(OUCH, 0.35, 1.25, 90, nil, FX_GHOST), { 0.22, 0.14 }))
+	-- 14: 공허한 울음 (낮은 중음 + 되울림 + 천천히 휘감김)
+	table.insert(styles, ghost("14 귀신 곡소리: 공허하게 울리는 울음", snd(OUCH, 0.3, 0.8, 110, nil, FX_HOLLOW), snd(OOF, 0.1, 0.7, 110, nil, FX_HOLLOW), snd(OUCH, 0.35, 0.8, 90, nil, FX_HOLLOW), { 0.3, 0.2 }))
+	-- 15: 바람이 우는 소리 (숨소리 같은 바람이 휘감기고 아주 작은 목소리가 속삭임)
+	table.insert(styles, ghost("15 귀신 곡소리: 바람이 우는 숨소리", snd(WIND, 6, 2.0, 110, nil, FX_BREATH), snd(OOF, 0.1, 1.4, 110, nil, FX_GHOST), snd(OUCH, 0.3, 1.3, 90, nil, FX_GHOST), { 0.25, 0.15 }))
+end
+
+-- ── 괴성 카탈로그 + 직접 만들기 ──
+-- 미리듣기 페이지(tools/sound-preview/index.html)에 60개 카탈로그와 "직접 만들기" 칸이 있다.
+--   · 카탈로그에서 고르면: 아래 Config.ScreamRecipe 에 그 번호(1~60)를 적는다.
+--   · 직접 만들면: 페이지가 알려주는 한 줄(Config.ScreamCustom = {...})을 그대로 붙여 넣는다(이게 있으면 번호보다 우선).
+Config.ScreamRecipe = 0 -- 0 = 쓰지 않음(위의 ScreamStyle 사용), 1~60 = 카탈로그 번호
+
+-- ── 실제 녹음 괴성(Roblox 크리에이터 스토어, Pro Sound Effects 라이선스 — 어떤 게임에서든 무료로 써도 된다) ──
+-- 번호 하나(Config.RealScream)로 고른다. 0 이면 위의 합성 시안을 쓴다. 들어 보기: tools/sound-preview/real.html
+-- Start = 파일에서 시작 지점(초), Dur = 괴성 길이(초)
+Config.RealScreams = {
+	{ Id = 9114572653, Start = 0.5, Dur = 3, Volume = 0.55, Name = "귀신 비명 (다가오는 소름끼치는 쉿소리)" },
+	{ Id = 9114038256, Start = 0, Dur = 3, Volume = 0.45, Name = "악마 비명 (고통스럽게 쥐어짜는 비명)" },
+	{ Id = 9118850866, Start = 0, Dur = 2, Volume = 0.45, Name = "날카롭게 부풀어 오르는 비명" },
+	{ Id = 9113123369, Start = 0, Dur = 3, Volume = 0.6, Name = "천사 곡소리 (공허한 합창 울음)" },
+	{ Id = 9120358057, Start = 0, Dur = 3, Volume = 0.6, Name = "불협화음 합창 곡소리 (숨 섞인)" },
+	{ Id = 9126213995, Start = 0, Dur = 2.5, Volume = 0.7, Name = "귀신 속삭임 폭발 (알아들을 수 없는 악령)" },
+	{ Id = 9114573103, Start = 0, Dur = 3, Volume = 0.6, Name = "귀신의 긴 날숨 (느린 숨결)" },
+}
+Config.RealScream = 1 -- 위 목록 번호(0 = 합성 시안)
+Config.ScreamGate = { 0.2, 0.1 } -- 끊기는 박자: { 켜짐초, 꺼짐초 }
+Config.ScreamCustom = nil :: any -- 예: { src = "ouch", pitch = 1.25, fx = "ghost", gate = { 0.22, 0.14 }, dur = 2.4, air = "wind" }
+-- src: "ouch"(비명) / "oof"(낮은 목소리) / "wind"(바람 숨결)   pitch: 음 높이 배율(클수록 높음)
+-- fx: ghost hollow breath siren stutter echo flange screech roar pulse   gate: { 켜짐초, 꺼짐초 } (끊기는 박자, 없으면 이어짐)
+-- dur: 괴성 길이(초)   air: 겹치는 두 번째 소리 "wind" 또는 "oof"(없으면 생략)   to: 끝 음 높이 배율(음이 올라가거나 내려가게, 없으면 일정)
+local ScreamFx: { [string]: { { any } } } = {
+	ghost = { EQ(-30, -4, 6), { "ChorusSoundEffect", { Depth = 0.6, Mix = 0.6, Rate = 1.5 } }, TREM(5, 0.3), REV(4, -2) },
+	hollow = { EQ(-20, -8, 2), { "FlangeSoundEffect", { Depth = 0.5, Mix = 0.5, Rate = 0.4 } }, { "EchoSoundEffect", { Delay = 0.35, Feedback = 0.6, DryLevel = -3, WetLevel = -3 } }, REV(5, -2) },
+	breath = { EQ(-40, -2, 8), { "FlangeSoundEffect", { Depth = 1, Mix = 0.8, Rate = 1.2 } }, { "ChorusSoundEffect", { Depth = 0.6, Mix = 0.6, Rate = 1.5 } }, REV(4, -2) },
+	siren = FX_SIREN,
+	stutter = FX_STUTTER,
+	echo = FX_ECHO,
+	flange = FX_FLANGE,
+	screech = FX_SCREECH,
+	roar = FX_ROAR,
+	pulse = FX_PULSE,
+}
+local SCREAM_SRC = { ouch = OUCH, oof = OOF, wind = WIND }
+local SCREAM_VOL = { ouch = 0.3, oof = 0.12, wind = 6 } -- 원본 크기가 달라서(비명은 크고 바람은 아주 작다) 소리별로 맞춘 기본 볼륨
+local function recipeStyle(r: any): { [string]: any }
+	local fx = ScreamFx[r.fx] or {}
+	local voice = snd(SCREAM_SRC[r.src] or OUCH, SCREAM_VOL[r.src] or 0.3, r.pitch or 1, 110, nil, fx)
+	local alert = snd(SCREAM_SRC[r.src] or OUCH, (SCREAM_VOL[r.src] or 0.3) * 1.15, r.pitch or 1, 90, nil, fx) -- 사망 연출(2D 한 번)이 쓴다
+	local sounds: { [string]: any } = { MonsterIdle = voice, MonsterAlert = alert, MonsterChase = voice }
+	local sweep = if r.to then { { 0, 1 }, { 1, r.to } } else { { 0, 1 }, { 1, 1 } }
+	local dur = r.dur or 2.4
+	local layers = { L("MonsterChase", 0, 1, 1, sweep, dur, r.gate) }
+	if r.air == "wind" then
+		sounds.MonsterScream2 = snd(WIND, 6, 1.6, 110, nil, { EQ(-40, -2, 8), REV(4, -2) })
+		table.insert(layers, L("MonsterScream2", 0, 1, 1, sweep, dur, r.gate))
+	elseif r.air == "oof" then
+		sounds.MonsterScream2 = snd(OOF, 0.1, (r.pitch or 1) * 0.9, 110, nil, fx)
+		table.insert(layers, L("MonsterScream2", 0, 1, 1, sweep, dur, r.gate))
+	end
+	return { Name = "recipe", Sounds = sounds, Screams = { Idle = {}, Alert = {}, Chase = layers } }
+end
+-- BEGIN SCREAM RECIPES (자동 생성: node tools/sound-preview/build.js — 직접 고치지 말고 tools/sound-preview/recipes.js 를 고친다)
+local ScreamRecipes: { { [string]: any } } = {
+	{ fx = "ghost", src = "ouch", pitch = 1.5, gate = { 0.15, 0.1 }, air = "wind" }, -- 1 귀신 곡소리 · 높은 음 · 빠르게 끊김
+	{ fx = "ghost", src = "ouch", pitch = 1.5, gate = { 0.35, 0.25 }, air = "wind" }, -- 2 귀신 곡소리 · 높은 음 · 느리게 끊김
+	{ fx = "ghost", src = "ouch", pitch = 1.25, gate = { 0.15, 0.1 }, air = "wind" }, -- 3 귀신 곡소리 · 중간 음 · 빠르게 끊김
+	{ fx = "ghost", src = "ouch", pitch = 1.25, gate = { 0.35, 0.25 }, air = "wind" }, -- 4 귀신 곡소리 · 중간 음 · 느리게 끊김
+	{ fx = "ghost", src = "ouch", pitch = 0.9, gate = { 0.15, 0.1 }, air = "wind" }, -- 5 귀신 곡소리 · 낮은 음 · 빠르게 끊김
+	{ fx = "ghost", src = "ouch", pitch = 0.9, gate = { 0.35, 0.25 }, air = "wind" }, -- 6 귀신 곡소리 · 낮은 음 · 느리게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 1, gate = { 0.15, 0.1 }, air = "oof" }, -- 7 공허한 울음 · 높은 음 · 빠르게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 1, gate = { 0.35, 0.25 }, air = "oof" }, -- 8 공허한 울음 · 높은 음 · 느리게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 0.8, gate = { 0.15, 0.1 }, air = "oof" }, -- 9 공허한 울음 · 중간 음 · 빠르게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 0.8, gate = { 0.35, 0.25 }, air = "oof" }, -- 10 공허한 울음 · 중간 음 · 느리게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 0.55, gate = { 0.15, 0.1 }, air = "oof" }, -- 11 공허한 울음 · 낮은 음 · 빠르게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 0.55, gate = { 0.35, 0.25 }, air = "oof" }, -- 12 공허한 울음 · 낮은 음 · 느리게 끊김
+	{ fx = "breath", src = "wind", pitch = 2.4, gate = { 0.15, 0.1 }, air = "oof" }, -- 13 바람 숨소리 · 높은 음 · 빠르게 끊김
+	{ fx = "breath", src = "wind", pitch = 2.4, gate = { 0.35, 0.25 }, air = "oof" }, -- 14 바람 숨소리 · 높은 음 · 느리게 끊김
+	{ fx = "breath", src = "wind", pitch = 2, gate = { 0.15, 0.1 }, air = "oof" }, -- 15 바람 숨소리 · 중간 음 · 빠르게 끊김
+	{ fx = "breath", src = "wind", pitch = 2, gate = { 0.35, 0.25 }, air = "oof" }, -- 16 바람 숨소리 · 중간 음 · 느리게 끊김
+	{ fx = "breath", src = "wind", pitch = 1.4, gate = { 0.15, 0.1 }, air = "oof" }, -- 17 바람 숨소리 · 낮은 음 · 빠르게 끊김
+	{ fx = "breath", src = "wind", pitch = 1.4, gate = { 0.35, 0.25 }, air = "oof" }, -- 18 바람 숨소리 · 낮은 음 · 느리게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.9, gate = { 0.15, 0.1 } }, -- 19 떨리는 사이렌 · 높은 음 · 빠르게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.9, gate = { 0.35, 0.25 } }, -- 20 떨리는 사이렌 · 높은 음 · 느리게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.6, gate = { 0.15, 0.1 } }, -- 21 떨리는 사이렌 · 중간 음 · 빠르게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.6, gate = { 0.35, 0.25 } }, -- 22 떨리는 사이렌 · 중간 음 · 느리게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.45, gate = { 0.15, 0.1 } }, -- 23 떨리는 사이렌 · 낮은 음 · 빠르게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.45, gate = { 0.35, 0.25 } }, -- 24 떨리는 사이렌 · 낮은 음 · 느리게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.9, gate = { 0.15, 0.1 } }, -- 25 더듬는 사이렌 · 높은 음 · 빠르게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.9, gate = { 0.35, 0.25 } }, -- 26 더듬는 사이렌 · 높은 음 · 느리게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.6, gate = { 0.15, 0.1 } }, -- 27 더듬는 사이렌 · 중간 음 · 빠르게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.6, gate = { 0.35, 0.25 } }, -- 28 더듬는 사이렌 · 중간 음 · 느리게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.45, gate = { 0.15, 0.1 } }, -- 29 더듬는 사이렌 · 낮은 음 · 빠르게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.45, gate = { 0.35, 0.25 } }, -- 30 더듬는 사이렌 · 낮은 음 · 느리게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.7, gate = { 0.15, 0.1 } }, -- 31 에코 파동 · 높은 음 · 빠르게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.7, gate = { 0.35, 0.25 } }, -- 32 에코 파동 · 높은 음 · 느리게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.5, gate = { 0.15, 0.1 } }, -- 33 에코 파동 · 중간 음 · 빠르게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.5, gate = { 0.35, 0.25 } }, -- 34 에코 파동 · 중간 음 · 느리게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.4, gate = { 0.15, 0.1 } }, -- 35 에코 파동 · 낮은 음 · 빠르게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.4, gate = { 0.35, 0.25 } }, -- 36 에코 파동 · 낮은 음 · 느리게 끊김
+	{ fx = "flange", src = "wind", pitch = 2, gate = { 0.15, 0.1 } }, -- 37 플랜저 휘감김 · 높은 음 · 빠르게 끊김
+	{ fx = "flange", src = "wind", pitch = 2, gate = { 0.35, 0.25 } }, -- 38 플랜저 휘감김 · 높은 음 · 느리게 끊김
+	{ fx = "flange", src = "wind", pitch = 1.6, gate = { 0.15, 0.1 } }, -- 39 플랜저 휘감김 · 중간 음 · 빠르게 끊김
+	{ fx = "flange", src = "wind", pitch = 1.6, gate = { 0.35, 0.25 } }, -- 40 플랜저 휘감김 · 중간 음 · 느리게 끊김
+	{ fx = "flange", src = "wind", pitch = 1.1, gate = { 0.15, 0.1 } }, -- 41 플랜저 휘감김 · 낮은 음 · 빠르게 끊김
+	{ fx = "flange", src = "wind", pitch = 1.1, gate = { 0.35, 0.25 } }, -- 42 플랜저 휘감김 · 낮은 음 · 느리게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.8, gate = { 0.15, 0.1 } }, -- 43 초음파 비명 · 높은 음 · 빠르게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.8, gate = { 0.35, 0.25 } }, -- 44 초음파 비명 · 높은 음 · 느리게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.4, gate = { 0.15, 0.1 } }, -- 45 초음파 비명 · 중간 음 · 빠르게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.4, gate = { 0.35, 0.25 } }, -- 46 초음파 비명 · 중간 음 · 느리게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.1, gate = { 0.15, 0.1 } }, -- 47 초음파 비명 · 낮은 음 · 빠르게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.1, gate = { 0.35, 0.25 } }, -- 48 초음파 비명 · 낮은 음 · 느리게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.6, gate = { 0.15, 0.1 }, air = "wind" }, -- 49 왜곡 포효 · 높은 음 · 빠르게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.6, gate = { 0.35, 0.25 }, air = "wind" }, -- 50 왜곡 포효 · 높은 음 · 느리게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.45, gate = { 0.15, 0.1 }, air = "wind" }, -- 51 왜곡 포효 · 중간 음 · 빠르게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.45, gate = { 0.35, 0.25 }, air = "wind" }, -- 52 왜곡 포효 · 중간 음 · 느리게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.35, gate = { 0.15, 0.1 }, air = "wind" }, -- 53 왜곡 포효 · 낮은 음 · 빠르게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.35, gate = { 0.35, 0.25 }, air = "wind" }, -- 54 왜곡 포효 · 낮은 음 · 느리게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.5, gate = { 0.15, 0.1 } }, -- 55 저주파 맥동 · 높은 음 · 빠르게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.5, gate = { 0.35, 0.25 } }, -- 56 저주파 맥동 · 높은 음 · 느리게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.35, gate = { 0.15, 0.1 } }, -- 57 저주파 맥동 · 중간 음 · 빠르게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.35, gate = { 0.35, 0.25 } }, -- 58 저주파 맥동 · 중간 음 · 느리게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.28, gate = { 0.15, 0.1 } }, -- 59 저주파 맥동 · 낮은 음 · 빠르게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.28, gate = { 0.35, 0.25 } }, -- 60 저주파 맥동 · 낮은 음 · 느리게 끊김
+}
+-- END SCREAM RECIPES
+
+-- 고른 시안의 소리·겹침 표를 적용한다(직접 만든 것 > 카탈로그 번호 > 시안 번호 순)
+do
+	local styles: any = Config.ScreamStyles
+	local style: any = styles[Config.ScreamStyle] or styles[1]
+	if Config.ScreamCustom then
+		style = recipeStyle(Config.ScreamCustom)
+	elseif ScreamRecipes[Config.ScreamRecipe] then
+		style = recipeStyle(ScreamRecipes[Config.ScreamRecipe])
+	end
+	-- 실제 녹음 괴성(Config.RealScream): 있으면 위 합성 시안보다 우선
+	local real = Config.RealScreams[Config.RealScream]
+	if real then
+		local id = "rbxassetid://" .. real.Id
+		style = {
+			Sounds = {
+				MonsterChase = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Fx = { { "ReverbSoundEffect", { DecayTime = 2.5, WetLevel = -8 } } } },
+				MonsterAlert = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Cut = real.Dur }, -- (잡힐 때 점프스케어가 2D 로 튼다)
+				MonsterIdle = { Id = "", Volume = 0, Pitch = 1, Range = 0 }, -- 평소에는 소리를 내지 않는다
+				MonsterScream2 = { Id = "", Volume = 0, Pitch = 1, Range = 0 },
+			},
+			-- 추격 괴성: 끊었다 켰다 하며(Config.ScreamGate) 같은 음 높이로
+			Screams = { Chase = { { s = "MonsterChase", t = 0, p = 1, v = 1, dur = real.Dur, gate = Config.ScreamGate, start = real.Start } } },
+		}
+	end
+	for name, def in style.Sounds do
+		(Config.Sounds :: any)[name] = def
+	end
+	;(Config :: any).Screams = style.Screams
+end
 
 -- 태그 이름
 Config.Tags = {

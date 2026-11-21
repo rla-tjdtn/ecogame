@@ -64,25 +64,30 @@
       </Item>
       <Item class="RemoteEvent" referent="8">
         <Properties>
-          <string name="Name">SetMoveMode</string>
+          <string name="Name">SearchAction</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="9">
         <Properties>
-          <string name="Name">SonarFire</string>
+          <string name="Name">SetMoveMode</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="10">
+        <Properties>
+          <string name="Name">SonarFire</string>
+        </Properties>
+      </Item>
+      <Item class="RemoteEvent" referent="11">
         <Properties>
           <string name="Name">SonarPulse</string>
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="11">
+    <Item class="Folder" referent="12">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
-      <Item class="ModuleScript" referent="12">
+      <Item class="ModuleScript" referent="13">
         <Properties>
           <string name="Name">Config</string>
           <string name="Source"><![CDATA[--!strict
@@ -125,6 +130,7 @@ Config.Move = {
 	BobWalk = 0.045, -- 헤드밥 세기(스터드)
 	BobRun = 0.09,
 	BobCrouch = 0.02,
+	JumpPower = 40, -- 점프(약 4스터드 높이: 상자 위로는 오르지만 벽은 천장까지라 미로를 넘을 수 없다)
 }
 
 -- ─────────────────────────── 소리(괴물이 듣는 범위) ───────────────────────────
@@ -134,6 +140,7 @@ Config.Noise = {
 	Run = 25,
 	Sonar = 45,
 	Door = 16,
+	Land = 12, -- 점프 후 착지 소리(걷기보다 조금 크다)
 	-- 서버가 실제 이동 속도로 발소리 종류를 판정하는 기준(스터드/초)
 	RunSpeedAbove = 13.5,
 	WalkSpeedAbove = 7,
@@ -211,23 +218,19 @@ Config.Stages = {
 -- 기본값은 Roblox 클라이언트에 기본 포함된 rbxasset:// 파일만 쓴다(외부 에셋 ID 없음).
 -- 더 어울리는 소리가 있으면 Id 를 "rbxassetid://숫자" 로 바꾸면 된다. Id = "" 이면 그 소리는 재생하지 않는다.
 Config.Sounds = {
-	-- 사람 발소리: 실제 녹음된 발걸음 파일(2.5초 안에 4걸음: 0.03·0.62·1.22·1.82초 지점)에서 걸음 하나씩만 골라 쓰고(Steps = {시작초, 재생길이초}),
-	-- 몸무게가 실린 낮은 "툭"(FootThump)을 Thump 배율만큼 겹친다. 매 걸음 다른 걸음을 골라 같은 소리가 반복되지 않는다.
-	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.5, Pitch = 1.0, Range = 40, Steps = { { 0.03, 0.2 }, { 0.62, 0.22 }, { 1.22, 0.13 }, { 1.82, 0.13 } }, Thump = 0.22 },
-	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.85, Pitch = 1.12, Range = 70, Steps = { { 0.03, 0.2 }, { 0.62, 0.22 }, { 1.22, 0.13 }, { 1.82, 0.13 } }, Thump = 0.4 },
-	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.18, Pitch = 0.9, Range = 18, Steps = { { 1.22, 0.13 }, { 1.82, 0.13 } }, Thump = 0.05 },
-	FootThump = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 1.0, Pitch = 1.25, Range = 70, Cut = 0.1 },
+	-- 사람 발소리: 실제 녹음된 발걸음 파일(2.5초 안에 4걸음) 중 가장 또렷한 한 걸음(1.22초 지점)만 짧게(Steps = {시작초, 재생길이초}).
+	-- 걸음마다 똑같은 소리 하나 — 다른 소리를 섞거나 피치를 바꾸지 않는다(깔끔하게).
+	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.55, Pitch = 1.0, Range = 40, Steps = { { 1.22, 0.13 } } },
+	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.85, Pitch = 1.0, Range = 70, Steps = { { 1.22, 0.13 } } },
+	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.2, Pitch = 1.0, Range = 18, Steps = { { 1.22, 0.13 } } },
 	Sonar = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.3, Pitch = 0.35, Range = 90 }, -- (크면 머리가 아프다: 0.9 → 0.3)
 	SonarEcho = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.12, Pitch = 0.28, Range = 90 },
 	Door = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.8, Pitch = 0.55, Range = 60 },
 	-- 괴물 발소리: 사람과 완전히 다르게 — 깊고 무거운 "쿵"(울림) + 낮게 늘인 발톱 "타닥"(Claw). 걸음 간격도 사람보다 느리고 불규칙하다
-	MonsterStep = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.5, Pitch = 0.7, Range = 95, Cut = 0.24, Claw = "MonsterClaw", Fx = { Reverb = 1.2 } },
+	-- 괴물 발소리: 실제 녹음된 무거운 생물 발걸음(Pro Sound Effects). 쫓아올 때만 들린다
+	MonsterStep = { Id = "rbxassetid://9114166413", Volume = 0.45, Pitch = 0.9, Range = 95, Cut = 0.6 },
 	MonsterClaw = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.35, Pitch = 0.55, Range = 95, Steps = { { 0.03, 0.34 }, { 0.62, 0.34 } } },
-	-- 괴물 소리는 전부 괴성(비명): 사람 목소리 파일을 낮고 길게 + 왜곡 + 울림. Fx = 왜곡 정도 / 울림(초)
-	MonsterIdle = { Id = "rbxasset://sounds/ouch.ogg", Volume = 0.22, Pitch = 0.6, Range = 70, Fx = { Distortion = 0.5, Reverb = 2.5 } },
-	MonsterAlert = { Id = "rbxasset://sounds/ouch.ogg", Volume = 0.45, Pitch = 0.55, Range = 90, Fx = { Distortion = 0.6, Reverb = 2.5 } },
-	MonsterChase = { Id = "rbxasset://sounds/ouch.ogg", Volume = 0.5, Pitch = 0.45, Range = 110, Fx = { Distortion = 0.7, Reverb = 3 } },
-	MonsterScream2 = { Id = "rbxasset://sounds/oof.ogg", Volume = 0.4, Pitch = 0.5, Range = 110, Fx = { Distortion = 0.7, Reverb = 3 } }, -- 괴성에 겹치는 두 번째 목소리
+	-- MonsterIdle / MonsterAlert / MonsterChase / MonsterScream2 / MonsterWaveThud(괴성)는 아래 Config.ScreamStyles 에서 고른 시안이 채운다.
 	AmbientHum = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.18, Pitch = 0.22, Range = 0 }, -- 환풍기·배관 진동(루프)
 	AmbientFan = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.5, Pitch = 0.4, Range = 45 }, -- 맵 안 환풍기 위치(루프)
 	AmbientDrip = { Id = "", Volume = 0.25, Pitch = 2.2, Range = 60 }, -- 물방울(찰팍) 소리 제거
@@ -236,28 +239,346 @@ Config.Sounds = {
 	AmbientWater = { Id = "", Volume = 0.35, Pitch = 0.6, Range = 50 }, -- 하수도 물소리(찰팍거림) 제거
 }
 
--- 괴성: 짧은 목소리 파일을 시간차로 여러 번 겹쳐 길게 지른다. s = Sounds 이름, t = 시작 지연(초), p = 피치 배율, v = 볼륨 배율
-Config.Screams = {
-	Idle = { -- 배회 중 먼 괴성 (약 2초)
-		{ s = "MonsterIdle", t = 0, p = 1, v = 1 },
-		{ s = "MonsterScream2", t = 0.3, p = 0.85, v = 0.6 },
-		{ s = "MonsterIdle", t = 0.75, p = 0.8, v = 0.6 },
+-- ── 괴성 시안(음파 공격 느낌) ──
+-- Config.ScreamStyle 숫자 하나로 고른다(아래 1~6). 시안마다 Sounds(소리 정의)와 Screams(시간차 겹침 표)가 있다.
+-- Fx = { { "효과클래스", { 속성 = 값 } }, ... } — Roblox SoundEffect 속성 이름 그대로(Audio.luau 가 pcall 로 안전하게 적용).
+-- 목소리 파일(ouch/oof)은 원래 아주 크고 바람 파일(action_falling)은 아주 작아서 Volume 이 다르다.
+-- Screams 표: s = 소리 이름, t = 시작 지연(초), p = 피치 배율, v = 볼륨 배율.
+Config.ScreamStyle = 13 -- 선택: 귀신 곡소리. 1~6 괴성 시안, 7~12 사이렌 변형(10 = 끊기는 사이렌), 13~15 귀신 곡소리(끊기는 박자·음 높이 일정). 괴물 괴성은 추격 때만(발소리는 평소에도 난다)
+
+local OUCH, OOF, WIND, LAND = "rbxasset://sounds/ouch.ogg", "rbxasset://sounds/oof.ogg", "rbxasset://sounds/action_falling.ogg", "rbxasset://sounds/action_jump_land.mp3"
+local function snd(id: string, vol: number, pitch: number, range: number, cut: number?, fx: { { any } }?): { [string]: any }
+	return { Id = id, Volume = vol, Pitch = pitch, Range = range, Cut = cut, Fx = fx }
+end
+local function L(s: string, t: number, p: number, v: number, sweep: { { number } }?, dur: number?, gate: { number }?): { [string]: any }
+	return { s = s, t = t, p = p, v = v, sweep = sweep, dur = dur, gate = gate } -- gate = { 켜짐초, 꺼짐초 }: 끊기는 박자 -- sweep = { {정규화 시간 0~1, 피치 배율}, ... }, dur = 길이(초)
+end
+local function EQ(lo: number, mid: number, hi: number): { any }
+	return { "EqualizerSoundEffect", { LowGain = lo, MidGain = mid, HighGain = hi } }
+end
+local function TREM(freq: number, depth: number): { any }
+	return { "TremoloSoundEffect", { Frequency = freq, Depth = depth } }
+end
+local function DIST(level: number): { any }
+	return { "DistortionSoundEffect", { Level = level } }
+end
+local function REV(decay: number, wet: number): { any }
+	return { "ReverbSoundEffect", { DecayTime = decay, WetLevel = wet } }
+end
+
+local FX_SCREECH = { TREM(25, 0.6), DIST(0.25), EQ(-20, 0, 4) }
+local FX_PULSE = { TREM(7, 0.85), EQ(6, -12, -40), REV(2.5, -4) }
+local FX_SIREN = { TREM(14, 0.9), DIST(0.3), REV(3, -2) }
+local FX_ECHO = { { "EchoSoundEffect", { Delay = 0.28, Feedback = 0.55, DryLevel = 0, WetLevel = -3 } }, { "ChorusSoundEffect", { Depth = 0.5, Mix = 0.5, Rate = 2 } } }
+local FX_FLANGE = { { "FlangeSoundEffect", { Depth = 1, Mix = 0.8, Rate = 1.2 } }, EQ(-40, -4, 6) }
+local FX_ROAR = { DIST(0.8), REV(3, -2) }
+
+Config.ScreamStyles = {
+	-- 1. 초음파 비명: 높은 음이 떨리며 점점 날카롭게 치솟는다(고주파 찢는 소리)
+	{
+		Name = "초음파 비명 (치솟는 고주파)",
+		Sounds = {
+			MonsterIdle = snd(OUCH, 0.2, 1.3, 70, nil, FX_SCREECH),
+			MonsterAlert = snd(OUCH, 0.35, 1.45, 90, nil, FX_SCREECH),
+			MonsterChase = snd(OUCH, 0.4, 1.5, 110, nil, FX_SCREECH),
+			MonsterScream2 = snd(OOF, 0.2, 1.3, 110, nil, FX_SCREECH),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 0.9, 1), L("MonsterIdle", 0.12, 1.1, 1), L("MonsterIdle", 0.24, 1.3, 0.8) },
+			Alert = { L("MonsterAlert", 0, 0.75, 1), L("MonsterAlert", 0.1, 0.9, 1), L("MonsterAlert", 0.2, 1.05, 1), L("MonsterAlert", 0.3, 1.2, 1), L("MonsterAlert", 0.4, 1.35, 0.9) },
+			Chase = {
+				L("MonsterChase", 0, 0.6, 1), L("MonsterChase", 0.1, 0.72, 1), L("MonsterChase", 0.2, 0.84, 1), L("MonsterChase", 0.3, 0.96, 1),
+				L("MonsterChase", 0.4, 1.08, 1), L("MonsterChase", 0.5, 1.2, 1), L("MonsterChase", 0.6, 1.32, 0.9), L("MonsterChase", 0.7, 1.44, 0.8),
+				L("MonsterScream2", 0.5, 1.0, 0.8), L("MonsterScream2", 0.8, 1.3, 0.7),
+			},
+		},
 	},
-	Alert = { -- 경계 (약 2.5초)
-		{ s = "MonsterAlert", t = 0, p = 1, v = 1 },
-		{ s = "MonsterScream2", t = 0.25, p = 0.9, v = 0.8 },
-		{ s = "MonsterAlert", t = 0.6, p = 0.85, v = 0.9 },
-		{ s = "MonsterScream2", t = 1.0, p = 0.8, v = 0.6 },
+	-- 2. 저주파 맥동파: 바닥을 울리는 낮은 "우우웅" 이 맥박처럼 일렁이고 쿵, 쿵 충격파가 번진다
+	{
+		Name = "저주파 맥동파 (우우웅 + 쿵쿵)",
+		Sounds = {
+			MonsterIdle = snd(WIND, 3, 0.35, 70, 1.2, FX_PULSE),
+			MonsterAlert = snd(WIND, 4.5, 0.33, 90, 1.8, FX_PULSE),
+			MonsterChase = snd(WIND, 6, 0.3, 110, 2.6, FX_PULSE),
+			MonsterScream2 = snd(LAND, 1.5, 0.4, 110, 0.35, { REV(2, -2) }),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1) },
+			Alert = { L("MonsterAlert", 0, 1, 1), L("MonsterScream2", 0, 1, 1), L("MonsterScream2", 0.5, 1, 0.8) },
+			Chase = { L("MonsterChase", 0, 1, 1), L("MonsterScream2", 0, 1, 1), L("MonsterScream2", 0.45, 1, 0.9), L("MonsterScream2", 0.9, 1, 0.8), L("MonsterScream2", 1.35, 1, 0.7), L("MonsterScream2", 1.8, 1, 0.6) },
+		},
 	},
-	Chase = { -- 추격 시작 (약 3초 이상, 점점 낮아지며 길게)
-		{ s = "MonsterChase", t = 0, p = 1, v = 1 },
-		{ s = "MonsterScream2", t = 0.25, p = 0.85, v = 0.9 },
-		{ s = "MonsterChase", t = 0.6, p = 0.85, v = 1 },
-		{ s = "MonsterScream2", t = 1.0, p = 0.7, v = 0.8 },
-		{ s = "MonsterChase", t = 1.4, p = 0.65, v = 0.7 },
-		{ s = "MonsterScream2", t = 1.9, p = 0.55, v = 0.5 },
+	-- 3. 떨리는 사이렌: 비명이 빠르게 떨려 경보 사이렌처럼 일렁이며 점점 낮아진다
+	{
+		Name = "떨리는 사이렌 비명",
+		Sounds = {
+			MonsterIdle = snd(OUCH, 0.2, 0.7, 70, nil, FX_SIREN),
+			MonsterAlert = snd(OUCH, 0.35, 0.6, 90, nil, FX_SIREN),
+			MonsterChase = snd(OUCH, 0.4, 0.5, 110, nil, FX_SIREN),
+			MonsterScream2 = snd(OOF, 0.2, 0.55, 110, nil, FX_SIREN),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1), L("MonsterIdle", 0.4, 0.9, 0.7) },
+			Alert = { L("MonsterAlert", 0, 1, 1), L("MonsterAlert", 0.3, 0.9, 0.9), L("MonsterAlert", 0.7, 0.8, 0.8) },
+			Chase = { L("MonsterChase", 0, 1, 1), L("MonsterScream2", 0.15, 1, 0.9), L("MonsterChase", 0.4, 0.9, 1), L("MonsterScream2", 0.7, 0.85, 0.8), L("MonsterChase", 1.0, 0.8, 0.8), L("MonsterChase", 1.4, 0.7, 0.7) },
+		},
+	},
+	-- 4. 에코 파동: 비명이 메아리처럼 되풀이되며 퍼져 나가는 파동
+	{
+		Name = "에코 파동 (되풀이되며 퍼짐)",
+		Sounds = {
+			MonsterIdle = snd(OUCH, 0.2, 0.5, 70, nil, FX_ECHO),
+			MonsterAlert = snd(OUCH, 0.35, 0.45, 90, nil, FX_ECHO),
+			MonsterChase = snd(OUCH, 0.4, 0.4, 110, nil, FX_ECHO),
+			MonsterScream2 = snd(OOF, 0.2, 0.45, 110, nil, FX_ECHO),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1) },
+			Alert = { L("MonsterAlert", 0, 1, 1), L("MonsterAlert", 0.5, 0.9, 0.8) },
+			Chase = { L("MonsterChase", 0, 1, 1), L("MonsterScream2", 0.25, 0.9, 0.8), L("MonsterChase", 0.7, 0.85, 0.9) },
+		},
+	},
+	-- 5. 플랜저 레이저: 쉬이잉— 하고 휘감기는 가는 음파가 훑고 지나간다
+	{
+		Name = "플랜저 음파 (쉬이잉 휘감김)",
+		Sounds = {
+			MonsterIdle = snd(WIND, 2, 1.5, 70, 0.9, FX_FLANGE),
+			MonsterAlert = snd(WIND, 4, 1.6, 90, 1.5, FX_FLANGE),
+			MonsterChase = snd(WIND, 5, 1.7, 110, 2.2, FX_FLANGE),
+			MonsterScream2 = snd(OUCH, 0.3, 1.4, 110, nil, FX_FLANGE),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1) },
+			Alert = { L("MonsterAlert", 0, 1, 1), L("MonsterScream2", 0.3, 1, 0.8) },
+			Chase = { L("MonsterChase", 0, 1, 1), L("MonsterScream2", 0.3, 1, 1), L("MonsterScream2", 0.8, 0.85, 0.9), L("MonsterScream2", 1.3, 0.7, 0.8) },
+		},
+	},
+	-- 6. 혼합 충격 포효: 거칠게 왜곡된 낮은 포효 + 바닥을 울리는 저주파 + 쿵 충격파
+	{
+		Name = "혼합 충격 포효 (포효 + 저주파 + 충격)",
+		Sounds = {
+			MonsterIdle = snd(OUCH, 0.2, 0.45, 70, nil, FX_ROAR),
+			MonsterAlert = snd(OUCH, 0.35, 0.42, 90, nil, FX_ROAR),
+			MonsterChase = snd(OUCH, 0.45, 0.38, 110, nil, FX_ROAR),
+			MonsterScream2 = snd(WIND, 5, 0.3, 110, 2.2, FX_PULSE),
+			MonsterWaveThud = snd(LAND, 1.5, 0.4, 110, 0.35, { REV(2, -2) }),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1) },
+			Alert = { L("MonsterAlert", 0, 1, 1), L("MonsterWaveThud", 0, 1, 1) },
+			Chase = {
+				L("MonsterChase", 0, 1, 1), L("MonsterScream2", 0, 1, 1), L("MonsterWaveThud", 0, 1, 1), L("MonsterWaveThud", 0.5, 1, 0.8),
+				L("MonsterChase", 0.6, 0.9, 0.9), L("MonsterWaveThud", 1.0, 1, 0.7), L("MonsterChase", 1.3, 0.8, 0.7),
+			},
+		},
 	},
 }
+
+-- ── 3번(떨리는 사이렌)의 높낮이 변형 7~12번: 소리를 반복하며 피치를 시간에 따라 바꾼다(sweep). 길이: 배회 1.2초 / 경계 1.8초 / 추격 2.7초 ──
+local FX_STUTTER = { { "TremoloSoundEffect", { Frequency = 9, Depth = 1, Duty = 0.5 } }, DIST(0.3), REV(3, -2) }
+local function sirenVariant(name: string, sweep: { { number } }, fx: { { any } }?): { [string]: any }
+	local f = fx or FX_SIREN
+	return {
+		Name = name,
+		Sounds = {
+			MonsterIdle = snd(OUCH, 0.2, 0.5, 70, nil, f),
+			MonsterAlert = snd(OUCH, 0.35, 0.5, 90, nil, f),
+			MonsterChase = snd(OUCH, 0.4, 0.5, 110, nil, f),
+			MonsterScream2 = snd(OOF, 0.2, 0.4, 110, nil, f),
+		},
+		Screams = {
+			Idle = { L("MonsterIdle", 0, 1, 1, sweep, 1.2) },
+			Alert = { L("MonsterAlert", 0, 1, 1, sweep, 1.8), L("MonsterScream2", 0.05, 1, 0.6, sweep, 1.8) },
+			Chase = { L("MonsterChase", 0, 1, 1, sweep, 2.7), L("MonsterScream2", 0.05, 1, 0.6, sweep, 2.7) },
+		},
+	}
+end
+do
+	local styles: any = Config.ScreamStyles
+	table.insert(styles, sirenVariant("3-A 사이렌: 내려갔다 올라감", { { 0, 1.3 }, { 0.5, 0.7 }, { 1, 1.3 } }))
+	table.insert(styles, sirenVariant("3-B 사이렌: 올라감", { { 0, 0.7 }, { 1, 1.7 } }))
+	table.insert(styles, sirenVariant("3-C 사이렌: 올라갔다 내려감", { { 0, 0.7 }, { 0.5, 1.5 }, { 1, 0.6 } }))
+	table.insert(styles, sirenVariant("3-D 사이렌: 끊기며 떨리는 소리(음 높이 일정)", { { 0, 1.2 }, { 1, 1.2 } }, FX_STUTTER))
+	table.insert(styles, sirenVariant("3-E 사이렌: 투톤(삐뽀삐뽀)", { { 0, 1 }, { 0.1667, 1 }, { 0.1668, 1.5 }, { 0.3333, 1.5 }, { 0.3334, 1 }, { 0.5, 1 }, { 0.5001, 1.5 }, { 0.6667, 1.5 }, { 0.6668, 1 }, { 0.8333, 1 }, { 0.8334, 1.5 }, { 1, 1.5 } }))
+	table.insert(styles, sirenVariant("3-F 사이렌: 오르락내리락 3번(앰뷸런스)", { { 0, 0.8 }, { 0.167, 1.5 }, { 0.333, 0.8 }, { 0.5, 1.5 }, { 0.667, 0.8 }, { 0.833, 1.5 }, { 1, 0.8 } }))
+end
+
+-- ── 귀신 곡소리(13~15번): 소름 끼치는 귀신 울음. 음 높이는 일정하고 gate 박자로 끊겨 들린다. 괴성은 추격(Chase) 때만 낸다(발소리는 평소에도 난다) ──
+-- (Idle/Alert 는 쓰지 않아 비워 둔다. MonsterAlert 소리 정의는 사망 연출(2D 한 번)이 쓰므로 반드시 있어야 한다)
+local FLAT = { { 0, 1 }, { 1, 1 } }
+local function ghost(name: string, voice: { [string]: any }, air: { [string]: any }, alert: { [string]: any }, gate: { number }): { [string]: any }
+	return {
+		Name = name,
+		Sounds = { MonsterIdle = voice, MonsterAlert = alert, MonsterChase = voice, MonsterScream2 = air },
+		Screams = {
+			Idle = {},
+			Alert = {},
+			Chase = { L("MonsterChase", 0, 1, 1, FLAT, 2.4, gate), L("MonsterScream2", 0, 1, 1, FLAT, 2.4, gate) },
+		},
+	}
+end
+do
+	local styles: any = Config.ScreamStyles
+	local FX_GHOST = { EQ(-30, -4, 6), { "ChorusSoundEffect", { Depth = 0.6, Mix = 0.6, Rate = 1.5 } }, TREM(5, 0.3), REV(4, -2) }
+	local FX_HOLLOW = { EQ(-20, -8, 2), { "FlangeSoundEffect", { Depth = 0.5, Mix = 0.5, Rate = 0.4 } }, { "EchoSoundEffect", { Delay = 0.35, Feedback = 0.6, DryLevel = -3, WetLevel = -3 } }, REV(5, -2) }
+	local FX_BREATH = { EQ(-40, -2, 8), { "FlangeSoundEffect", { Depth = 1, Mix = 0.8, Rate = 1.2 } }, { "ChorusSoundEffect", { Depth = 0.6, Mix = 0.6, Rate = 1.5 } }, REV(4, -2) }
+	-- 13: 높고 속삭이는 곡소리 (높은 목소리 + 바람 숨결, 약하게 떨림, 긴 울림)
+	table.insert(styles, ghost("13 귀신 곡소리: 높고 속삭이는 울음", snd(OUCH, 0.3, 1.25, 110, nil, FX_GHOST), snd(WIND, 6, 1.6, 110, nil, { EQ(-40, -2, 8), REV(4, -2) }), snd(OUCH, 0.35, 1.25, 90, nil, FX_GHOST), { 0.22, 0.14 }))
+	-- 14: 공허한 울음 (낮은 중음 + 되울림 + 천천히 휘감김)
+	table.insert(styles, ghost("14 귀신 곡소리: 공허하게 울리는 울음", snd(OUCH, 0.3, 0.8, 110, nil, FX_HOLLOW), snd(OOF, 0.1, 0.7, 110, nil, FX_HOLLOW), snd(OUCH, 0.35, 0.8, 90, nil, FX_HOLLOW), { 0.3, 0.2 }))
+	-- 15: 바람이 우는 소리 (숨소리 같은 바람이 휘감기고 아주 작은 목소리가 속삭임)
+	table.insert(styles, ghost("15 귀신 곡소리: 바람이 우는 숨소리", snd(WIND, 6, 2.0, 110, nil, FX_BREATH), snd(OOF, 0.1, 1.4, 110, nil, FX_GHOST), snd(OUCH, 0.3, 1.3, 90, nil, FX_GHOST), { 0.25, 0.15 }))
+end
+
+-- ── 괴성 카탈로그 + 직접 만들기 ──
+-- 미리듣기 페이지(tools/sound-preview/index.html)에 60개 카탈로그와 "직접 만들기" 칸이 있다.
+--   · 카탈로그에서 고르면: 아래 Config.ScreamRecipe 에 그 번호(1~60)를 적는다.
+--   · 직접 만들면: 페이지가 알려주는 한 줄(Config.ScreamCustom = {...})을 그대로 붙여 넣는다(이게 있으면 번호보다 우선).
+Config.ScreamRecipe = 0 -- 0 = 쓰지 않음(위의 ScreamStyle 사용), 1~60 = 카탈로그 번호
+
+-- ── 실제 녹음 괴성(Roblox 크리에이터 스토어, Pro Sound Effects 라이선스 — 어떤 게임에서든 무료로 써도 된다) ──
+-- 번호 하나(Config.RealScream)로 고른다. 0 이면 위의 합성 시안을 쓴다. 들어 보기: tools/sound-preview/real.html
+-- Start = 파일에서 시작 지점(초), Dur = 괴성 길이(초)
+Config.RealScreams = {
+	{ Id = 9114572653, Start = 0.5, Dur = 3, Volume = 0.55, Name = "귀신 비명 (다가오는 소름끼치는 쉿소리)" },
+	{ Id = 9114038256, Start = 0, Dur = 3, Volume = 0.45, Name = "악마 비명 (고통스럽게 쥐어짜는 비명)" },
+	{ Id = 9118850866, Start = 0, Dur = 2, Volume = 0.45, Name = "날카롭게 부풀어 오르는 비명" },
+	{ Id = 9113123369, Start = 0, Dur = 3, Volume = 0.6, Name = "천사 곡소리 (공허한 합창 울음)" },
+	{ Id = 9120358057, Start = 0, Dur = 3, Volume = 0.6, Name = "불협화음 합창 곡소리 (숨 섞인)" },
+	{ Id = 9126213995, Start = 0, Dur = 2.5, Volume = 0.7, Name = "귀신 속삭임 폭발 (알아들을 수 없는 악령)" },
+	{ Id = 9114573103, Start = 0, Dur = 3, Volume = 0.6, Name = "귀신의 긴 날숨 (느린 숨결)" },
+}
+Config.RealScream = 1 -- 위 목록 번호(0 = 합성 시안)
+Config.ScreamGate = { 0.2, 0.1 } -- 끊기는 박자: { 켜짐초, 꺼짐초 }
+Config.ScreamCustom = nil :: any -- 예: { src = "ouch", pitch = 1.25, fx = "ghost", gate = { 0.22, 0.14 }, dur = 2.4, air = "wind" }
+-- src: "ouch"(비명) / "oof"(낮은 목소리) / "wind"(바람 숨결)   pitch: 음 높이 배율(클수록 높음)
+-- fx: ghost hollow breath siren stutter echo flange screech roar pulse   gate: { 켜짐초, 꺼짐초 } (끊기는 박자, 없으면 이어짐)
+-- dur: 괴성 길이(초)   air: 겹치는 두 번째 소리 "wind" 또는 "oof"(없으면 생략)   to: 끝 음 높이 배율(음이 올라가거나 내려가게, 없으면 일정)
+local ScreamFx: { [string]: { { any } } } = {
+	ghost = { EQ(-30, -4, 6), { "ChorusSoundEffect", { Depth = 0.6, Mix = 0.6, Rate = 1.5 } }, TREM(5, 0.3), REV(4, -2) },
+	hollow = { EQ(-20, -8, 2), { "FlangeSoundEffect", { Depth = 0.5, Mix = 0.5, Rate = 0.4 } }, { "EchoSoundEffect", { Delay = 0.35, Feedback = 0.6, DryLevel = -3, WetLevel = -3 } }, REV(5, -2) },
+	breath = { EQ(-40, -2, 8), { "FlangeSoundEffect", { Depth = 1, Mix = 0.8, Rate = 1.2 } }, { "ChorusSoundEffect", { Depth = 0.6, Mix = 0.6, Rate = 1.5 } }, REV(4, -2) },
+	siren = FX_SIREN,
+	stutter = FX_STUTTER,
+	echo = FX_ECHO,
+	flange = FX_FLANGE,
+	screech = FX_SCREECH,
+	roar = FX_ROAR,
+	pulse = FX_PULSE,
+}
+local SCREAM_SRC = { ouch = OUCH, oof = OOF, wind = WIND }
+local SCREAM_VOL = { ouch = 0.3, oof = 0.12, wind = 6 } -- 원본 크기가 달라서(비명은 크고 바람은 아주 작다) 소리별로 맞춘 기본 볼륨
+local function recipeStyle(r: any): { [string]: any }
+	local fx = ScreamFx[r.fx] or {}
+	local voice = snd(SCREAM_SRC[r.src] or OUCH, SCREAM_VOL[r.src] or 0.3, r.pitch or 1, 110, nil, fx)
+	local alert = snd(SCREAM_SRC[r.src] or OUCH, (SCREAM_VOL[r.src] or 0.3) * 1.15, r.pitch or 1, 90, nil, fx) -- 사망 연출(2D 한 번)이 쓴다
+	local sounds: { [string]: any } = { MonsterIdle = voice, MonsterAlert = alert, MonsterChase = voice }
+	local sweep = if r.to then { { 0, 1 }, { 1, r.to } } else { { 0, 1 }, { 1, 1 } }
+	local dur = r.dur or 2.4
+	local layers = { L("MonsterChase", 0, 1, 1, sweep, dur, r.gate) }
+	if r.air == "wind" then
+		sounds.MonsterScream2 = snd(WIND, 6, 1.6, 110, nil, { EQ(-40, -2, 8), REV(4, -2) })
+		table.insert(layers, L("MonsterScream2", 0, 1, 1, sweep, dur, r.gate))
+	elseif r.air == "oof" then
+		sounds.MonsterScream2 = snd(OOF, 0.1, (r.pitch or 1) * 0.9, 110, nil, fx)
+		table.insert(layers, L("MonsterScream2", 0, 1, 1, sweep, dur, r.gate))
+	end
+	return { Name = "recipe", Sounds = sounds, Screams = { Idle = {}, Alert = {}, Chase = layers } }
+end
+-- BEGIN SCREAM RECIPES (자동 생성: node tools/sound-preview/build.js — 직접 고치지 말고 tools/sound-preview/recipes.js 를 고친다)
+local ScreamRecipes: { { [string]: any } } = {
+	{ fx = "ghost", src = "ouch", pitch = 1.5, gate = { 0.15, 0.1 }, air = "wind" }, -- 1 귀신 곡소리 · 높은 음 · 빠르게 끊김
+	{ fx = "ghost", src = "ouch", pitch = 1.5, gate = { 0.35, 0.25 }, air = "wind" }, -- 2 귀신 곡소리 · 높은 음 · 느리게 끊김
+	{ fx = "ghost", src = "ouch", pitch = 1.25, gate = { 0.15, 0.1 }, air = "wind" }, -- 3 귀신 곡소리 · 중간 음 · 빠르게 끊김
+	{ fx = "ghost", src = "ouch", pitch = 1.25, gate = { 0.35, 0.25 }, air = "wind" }, -- 4 귀신 곡소리 · 중간 음 · 느리게 끊김
+	{ fx = "ghost", src = "ouch", pitch = 0.9, gate = { 0.15, 0.1 }, air = "wind" }, -- 5 귀신 곡소리 · 낮은 음 · 빠르게 끊김
+	{ fx = "ghost", src = "ouch", pitch = 0.9, gate = { 0.35, 0.25 }, air = "wind" }, -- 6 귀신 곡소리 · 낮은 음 · 느리게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 1, gate = { 0.15, 0.1 }, air = "oof" }, -- 7 공허한 울음 · 높은 음 · 빠르게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 1, gate = { 0.35, 0.25 }, air = "oof" }, -- 8 공허한 울음 · 높은 음 · 느리게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 0.8, gate = { 0.15, 0.1 }, air = "oof" }, -- 9 공허한 울음 · 중간 음 · 빠르게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 0.8, gate = { 0.35, 0.25 }, air = "oof" }, -- 10 공허한 울음 · 중간 음 · 느리게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 0.55, gate = { 0.15, 0.1 }, air = "oof" }, -- 11 공허한 울음 · 낮은 음 · 빠르게 끊김
+	{ fx = "hollow", src = "ouch", pitch = 0.55, gate = { 0.35, 0.25 }, air = "oof" }, -- 12 공허한 울음 · 낮은 음 · 느리게 끊김
+	{ fx = "breath", src = "wind", pitch = 2.4, gate = { 0.15, 0.1 }, air = "oof" }, -- 13 바람 숨소리 · 높은 음 · 빠르게 끊김
+	{ fx = "breath", src = "wind", pitch = 2.4, gate = { 0.35, 0.25 }, air = "oof" }, -- 14 바람 숨소리 · 높은 음 · 느리게 끊김
+	{ fx = "breath", src = "wind", pitch = 2, gate = { 0.15, 0.1 }, air = "oof" }, -- 15 바람 숨소리 · 중간 음 · 빠르게 끊김
+	{ fx = "breath", src = "wind", pitch = 2, gate = { 0.35, 0.25 }, air = "oof" }, -- 16 바람 숨소리 · 중간 음 · 느리게 끊김
+	{ fx = "breath", src = "wind", pitch = 1.4, gate = { 0.15, 0.1 }, air = "oof" }, -- 17 바람 숨소리 · 낮은 음 · 빠르게 끊김
+	{ fx = "breath", src = "wind", pitch = 1.4, gate = { 0.35, 0.25 }, air = "oof" }, -- 18 바람 숨소리 · 낮은 음 · 느리게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.9, gate = { 0.15, 0.1 } }, -- 19 떨리는 사이렌 · 높은 음 · 빠르게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.9, gate = { 0.35, 0.25 } }, -- 20 떨리는 사이렌 · 높은 음 · 느리게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.6, gate = { 0.15, 0.1 } }, -- 21 떨리는 사이렌 · 중간 음 · 빠르게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.6, gate = { 0.35, 0.25 } }, -- 22 떨리는 사이렌 · 중간 음 · 느리게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.45, gate = { 0.15, 0.1 } }, -- 23 떨리는 사이렌 · 낮은 음 · 빠르게 끊김
+	{ fx = "siren", src = "ouch", pitch = 0.45, gate = { 0.35, 0.25 } }, -- 24 떨리는 사이렌 · 낮은 음 · 느리게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.9, gate = { 0.15, 0.1 } }, -- 25 더듬는 사이렌 · 높은 음 · 빠르게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.9, gate = { 0.35, 0.25 } }, -- 26 더듬는 사이렌 · 높은 음 · 느리게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.6, gate = { 0.15, 0.1 } }, -- 27 더듬는 사이렌 · 중간 음 · 빠르게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.6, gate = { 0.35, 0.25 } }, -- 28 더듬는 사이렌 · 중간 음 · 느리게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.45, gate = { 0.15, 0.1 } }, -- 29 더듬는 사이렌 · 낮은 음 · 빠르게 끊김
+	{ fx = "stutter", src = "ouch", pitch = 0.45, gate = { 0.35, 0.25 } }, -- 30 더듬는 사이렌 · 낮은 음 · 느리게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.7, gate = { 0.15, 0.1 } }, -- 31 에코 파동 · 높은 음 · 빠르게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.7, gate = { 0.35, 0.25 } }, -- 32 에코 파동 · 높은 음 · 느리게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.5, gate = { 0.15, 0.1 } }, -- 33 에코 파동 · 중간 음 · 빠르게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.5, gate = { 0.35, 0.25 } }, -- 34 에코 파동 · 중간 음 · 느리게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.4, gate = { 0.15, 0.1 } }, -- 35 에코 파동 · 낮은 음 · 빠르게 끊김
+	{ fx = "echo", src = "ouch", pitch = 0.4, gate = { 0.35, 0.25 } }, -- 36 에코 파동 · 낮은 음 · 느리게 끊김
+	{ fx = "flange", src = "wind", pitch = 2, gate = { 0.15, 0.1 } }, -- 37 플랜저 휘감김 · 높은 음 · 빠르게 끊김
+	{ fx = "flange", src = "wind", pitch = 2, gate = { 0.35, 0.25 } }, -- 38 플랜저 휘감김 · 높은 음 · 느리게 끊김
+	{ fx = "flange", src = "wind", pitch = 1.6, gate = { 0.15, 0.1 } }, -- 39 플랜저 휘감김 · 중간 음 · 빠르게 끊김
+	{ fx = "flange", src = "wind", pitch = 1.6, gate = { 0.35, 0.25 } }, -- 40 플랜저 휘감김 · 중간 음 · 느리게 끊김
+	{ fx = "flange", src = "wind", pitch = 1.1, gate = { 0.15, 0.1 } }, -- 41 플랜저 휘감김 · 낮은 음 · 빠르게 끊김
+	{ fx = "flange", src = "wind", pitch = 1.1, gate = { 0.35, 0.25 } }, -- 42 플랜저 휘감김 · 낮은 음 · 느리게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.8, gate = { 0.15, 0.1 } }, -- 43 초음파 비명 · 높은 음 · 빠르게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.8, gate = { 0.35, 0.25 } }, -- 44 초음파 비명 · 높은 음 · 느리게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.4, gate = { 0.15, 0.1 } }, -- 45 초음파 비명 · 중간 음 · 빠르게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.4, gate = { 0.35, 0.25 } }, -- 46 초음파 비명 · 중간 음 · 느리게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.1, gate = { 0.15, 0.1 } }, -- 47 초음파 비명 · 낮은 음 · 빠르게 끊김
+	{ fx = "screech", src = "ouch", pitch = 1.1, gate = { 0.35, 0.25 } }, -- 48 초음파 비명 · 낮은 음 · 느리게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.6, gate = { 0.15, 0.1 }, air = "wind" }, -- 49 왜곡 포효 · 높은 음 · 빠르게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.6, gate = { 0.35, 0.25 }, air = "wind" }, -- 50 왜곡 포효 · 높은 음 · 느리게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.45, gate = { 0.15, 0.1 }, air = "wind" }, -- 51 왜곡 포효 · 중간 음 · 빠르게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.45, gate = { 0.35, 0.25 }, air = "wind" }, -- 52 왜곡 포효 · 중간 음 · 느리게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.35, gate = { 0.15, 0.1 }, air = "wind" }, -- 53 왜곡 포효 · 낮은 음 · 빠르게 끊김
+	{ fx = "roar", src = "ouch", pitch = 0.35, gate = { 0.35, 0.25 }, air = "wind" }, -- 54 왜곡 포효 · 낮은 음 · 느리게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.5, gate = { 0.15, 0.1 } }, -- 55 저주파 맥동 · 높은 음 · 빠르게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.5, gate = { 0.35, 0.25 } }, -- 56 저주파 맥동 · 높은 음 · 느리게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.35, gate = { 0.15, 0.1 } }, -- 57 저주파 맥동 · 중간 음 · 빠르게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.35, gate = { 0.35, 0.25 } }, -- 58 저주파 맥동 · 중간 음 · 느리게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.28, gate = { 0.15, 0.1 } }, -- 59 저주파 맥동 · 낮은 음 · 빠르게 끊김
+	{ fx = "pulse", src = "wind", pitch = 0.28, gate = { 0.35, 0.25 } }, -- 60 저주파 맥동 · 낮은 음 · 느리게 끊김
+}
+-- END SCREAM RECIPES
+
+-- 고른 시안의 소리·겹침 표를 적용한다(직접 만든 것 > 카탈로그 번호 > 시안 번호 순)
+do
+	local styles: any = Config.ScreamStyles
+	local style: any = styles[Config.ScreamStyle] or styles[1]
+	if Config.ScreamCustom then
+		style = recipeStyle(Config.ScreamCustom)
+	elseif ScreamRecipes[Config.ScreamRecipe] then
+		style = recipeStyle(ScreamRecipes[Config.ScreamRecipe])
+	end
+	-- 실제 녹음 괴성(Config.RealScream): 있으면 위 합성 시안보다 우선
+	local real = Config.RealScreams[Config.RealScream]
+	if real then
+		local id = "rbxassetid://" .. real.Id
+		style = {
+			Sounds = {
+				MonsterChase = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Fx = { { "ReverbSoundEffect", { DecayTime = 2.5, WetLevel = -8 } } } },
+				MonsterAlert = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Cut = real.Dur }, -- (잡힐 때 점프스케어가 2D 로 튼다)
+				MonsterIdle = { Id = "", Volume = 0, Pitch = 1, Range = 0 }, -- 평소에는 소리를 내지 않는다
+				MonsterScream2 = { Id = "", Volume = 0, Pitch = 1, Range = 0 },
+			},
+			-- 추격 괴성: 끊었다 켰다 하며(Config.ScreamGate) 같은 음 높이로
+			Screams = { Chase = { { s = "MonsterChase", t = 0, p = 1, v = 1, dur = real.Dur, gate = Config.ScreamGate, start = real.Start } } },
+		}
+	end
+	for name, def in style.Sounds do
+		(Config.Sounds :: any)[name] = def
+	end
+	;(Config :: any).Screams = style.Screams
+end
 
 -- 태그 이름
 Config.Tags = {
@@ -274,7 +595,7 @@ return Config
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="14">
         <Properties>
           <string name="Name">SonarGeometry</string>
           <string name="Source"><![CDATA[--!strict
@@ -546,15 +867,15 @@ return Geo
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="14">
+  <Item class="ServerScriptService" referent="15">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="15">
+    <Item class="Folder" referent="16">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">Doors</string>
           <string name="Source"><![CDATA[--!strict
@@ -589,12 +910,40 @@ local function setPose(d: Door, t: number)
 	d.panel.CFrame = d.hinge * rot * d.closedRel
 end
 
-function Doors.toggle(d: Door, source: Player?)
+-- 문짝이나 그 근처에 캐릭터(플레이어·괴물)가 겹쳐 있는가
+local overlap = OverlapParams.new()
+overlap.FilterType = Enum.RaycastFilterType.Exclude
+local function someoneInside(panel: BasePart): boolean
+	overlap.FilterDescendantsInstances = { panel.Parent :: Instance }
+	for _, p in workspace:GetPartBoundsInBox(panel.CFrame, panel.Size + Vector3.new(0.4, 0, 0.6), overlap) do
+		local m = p:FindFirstAncestorOfClass("Model")
+		if m and m:FindFirstChildOfClass("Humanoid") then
+			return true
+		end
+	end
+	return false
+end
+
+-- from: 여는 사람(또는 괴물) 위치. 열 때 그 반대쪽으로 열려서 문짝이 사람을 치거나 가두지 않는다
+function Doors.toggle(d: Door, source: Player?, from: Vector3?)
 	if d.busy then
 		return
 	end
 	d.busy = true
 	local opening = not d.open
+	if opening then
+		local pos = from
+		if not pos and source and source.Character then
+			local r = source.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			pos = r and r.Position
+		end
+		if pos then
+			-- 문짝은 경첩 기준 -Z*swing 쪽으로 열린다: 여는 사람이 있는 쪽의 반대
+			d.swing = if (pos - d.hinge.Position):Dot(d.hinge.ZVector) >= 0 then 1 else -1
+		end
+	end
+	-- 움직이는 동안은 부딪히지 않는다(끼임 방지)
+	d.panel.CanCollide = false
 	d.open = opening
 	d.model:SetAttribute("Open", opening)
 	d.prompt.ActionText = if opening then "문 닫기" else "문 열기"
@@ -612,6 +961,15 @@ function Doors.toggle(d: Door, source: Player?)
 			RunService.Heartbeat:Wait()
 		end
 		d.busy = false
+		-- 멈춘 뒤: 아무도 겹쳐 있지 않을 때 다시 단단해진다
+		local waited = 0
+		while d.panel.Parent and someoneInside(d.panel) and waited < 10 do
+			task.wait(0.2)
+			waited += 0.2
+		end
+		if d.panel.Parent and not d.busy then
+			d.panel.CanCollide = true
+		end
 	end)
 end
 
@@ -691,11 +1049,11 @@ function Doors.all(): { Door }
 end
 
 -- 괴물용: pos 근처 닫힌 문을 연다
-function Doors.openNear(pos: Vector3, radius: number): boolean
+function Doors.openNear(pos: Vector3, radius: number, from: Vector3?): boolean
 	local any = false
 	for _, d in doors do
 		if not d.open and not d.busy and (d.panel.Position - pos).Magnitude <= radius then
-			Doors.toggle(d, nil)
+			Doors.toggle(d, nil, from or pos)
 			any = true
 		end
 	end
@@ -710,7 +1068,7 @@ return Doors
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">Hiding</string>
           <string name="Source"><![CDATA[--!strict
@@ -959,7 +1317,7 @@ return Hiding
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">Lobby</string>
           <string name="Source"><![CDATA[--!strict
@@ -1190,7 +1548,7 @@ return Lobby
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="19">
+      <Item class="Script" referent="20">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -1290,7 +1648,7 @@ task.spawn(Lobby.boot)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">MapKit</string>
           <string name="Source"><![CDATA[--!strict
@@ -1592,7 +1950,7 @@ return Kit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="22">
         <Properties>
           <string name="Name">Monster</string>
           <string name="Source"><![CDATA[--!strict
@@ -2084,7 +2442,7 @@ function Monster.follow(self: Monster): boolean
 	end
 	self.hum:MoveTo(wp.Position)
 	-- 앞에 닫힌 문이 있으면 연다
-	Doors.openNear(pos + self.root.CFrame.LookVector * 2, 6)
+	Doors.openNear(pos + self.root.CFrame.LookVector * 2, 6, self.root.Position)
 	return false
 end
 
@@ -2320,7 +2678,7 @@ function Monster.tick(self: Monster)
 		if los and d < 14 and math.abs(tp.Y - self.root.Position.Y) < 3 then
 			self.waypoints = {}
 			self.hum:MoveTo(tp)
-			Doors.openNear(self.root.Position + self.root.CFrame.LookVector * 2, 6)
+			Doors.openNear(self.root.Position + self.root.CFrame.LookVector * 2, 6, self.root.Position)
 		else
 			if #self.waypoints == 0 or now - self.lastRepath > MC.RepathChase then
 				local goal = self.lastKnown or tp
@@ -2476,7 +2834,7 @@ return Monster
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="22">
+      <Item class="ModuleScript" referent="23">
         <Properties>
           <string name="Name">Props</string>
           <string name="Source"><![CDATA[--!strict
@@ -2723,7 +3081,7 @@ return Props
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="24">
         <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[--!strict
@@ -2876,7 +3234,13 @@ function Round.spawnPlayer(p: Player)
 	end
 	hum.WalkSpeed = Config.Move.Walk
 	hum.UseJumpPower = true
-	hum.JumpPower = 0
+	hum.JumpPower = Config.Move.JumpPower
+	-- 착지 소리: 괴물이 듣는다
+	hum.StateChanged:Connect(function(_, new)
+		if new == Enum.HumanoidStateType.Landed and Round.state == "Playing" and Round.status(p) == "Alive" and p.Character == char then
+			SoundBus.emit(root.Position - Vector3.new(0, 2.5, 0), Config.Noise.Land, p, "StepLand")
+		end
+	end)
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 	hum.BreakJointsOnDeath = false
@@ -3207,39 +3571,51 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="24">
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">Search</string>
           <string name="Source"><![CDATA[--!strict
--- 뒤질 수 있는 상자·서랍(맵 문자 Z). 스테이지마다 그중 한 곳에 열쇠가 있고(라운드마다 서버가 고른다),
--- 누군가 찾으면 팀 전체가 열쇠를 가진다(ReplicatedStorage 속성 HasKey). 열쇠가 없으면 출구가 열리지 않는다(Round).
--- E 로 뒤지면 서랍이 열리거나 뚜껑이 들리고(음파에 그 순간 모습으로), 뒤지는 소리를 가까운 괴물이 듣는다.
+-- 뒤질 수 있는 상자·서랍(맵 문자 Z). 챕터별 모양(SearchStyle). 서랍장은 서랍마다, 상자는 뚜껑을 따로 열고 닫는다.
+-- 조작: 조준점으로 서랍/뚜껑을 보고 E(클라이언트 SearchLook → Remotes.SearchAction(spotId, index)). 다시 E 면 닫힌다.
+-- 스테이지마다 한 칸(서랍 하나 또는 뚜껑 하나)에 열쇠가 있고(라운드마다 서버가 고른다), 누가 찾든 팀 전체가 가진다
+-- (ReplicatedStorage 속성 HasKey). 열쇠가 없으면 출구가 열리지 않는다(Round). 처음 열 때 뒤지는 소리를 괴물이 듣는다.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Kit = require(script.Parent.MapKit)
 local SoundBus = require(script.Parent.SoundBus)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
+local SearchAction = Remotes:WaitForChild("SearchAction") :: RemoteEvent
 
 local Search = {}
 
-export type Spot = {
-	model: Model,
-	moving: Model, -- 열릴 때 움직이는 서랍/뚜껑(음파는 움직이는 물체로 그린다)
-	openOffset: CFrame,
-	front: Vector3,
-	prompt: ProximityPrompt,
+export type Comp = {
+	model: Model, -- 움직이는 서랍/뚜껑(음파는 움직이는 물체로 그린다)
+	closedPivot: CFrame,
+	openPivot: CFrame,
+	open: boolean,
+	busy: boolean,
 	searched: boolean,
 	hasKey: boolean,
-	busy: boolean,
+}
+export type Spot = {
+	id: number,
+	model: Model,
+	center: Vector3,
+	front: Vector3,
+	comps: { Comp },
+	name: string,
 }
 
 local spots: { Spot } = {}
+local byId: { [number]: Spot } = {}
+local nextId = 0
 
--- 챕터별 모양: w 폭, h 높이, d 깊이, kind = "drawers" | "lid"
+-- 챕터별 모양: w 폭, h 높이, d 깊이, kind = "drawers"(rows 칸) | "lid"
 type Style = { w: number, h: number, d: number, kind: string, rows: number, name: string }
 local STYLES: { [string]: Style } = {
 	drawers = { w = 3.2, h = 3.8, d = 2.2, kind = "drawers", rows = 3, name = "서랍장" }, -- 지하 시설: 철제 서랍장
@@ -3250,40 +3626,56 @@ local STYLES: { [string]: Style } = {
 }
 Search.Styles = STYLES
 
-local function build(parent: Instance, cf: CFrame, s: Style): (Model, Model, CFrame)
+local function newComp(parent: Model, idx: number, spotId: number): Model
+	local mv = Instance.new("Model")
+	mv.Name = "Comp" .. idx
+	mv:SetAttribute(Config.Tags.Dynamic, true)
+	mv:SetAttribute("SpotId", spotId)
+	mv:SetAttribute("Comp", idx)
+	mv.Parent = parent
+	return mv
+end
+
+-- cf: 바닥 가운데, LookVector(-Z) = 앞(방 안쪽)
+local function build(parent: Instance, cf: CFrame, s: Style, spotId: number): (Model, { Comp })
 	local m = Instance.new("Model")
 	m.Name = "SearchSpot"
-	local mv = Instance.new("Model")
-	mv.Name = "Moving"
-	mv:SetAttribute(Config.Tags.Dynamic, true)
+	m:SetAttribute("SpotId", spotId)
+	m:SetAttribute("Label", s.name)
 	local t = 0.2
 	local w, h, d = s.w, s.h, s.d
 	local function box(par: Instance, local_: CFrame, size: Vector3, opts: Kit.Opts?): Part
 		return Kit.box(par, cf * local_, size, opts)
 	end
-	-- 몸통(앞 = -Z)
 	box(m, CFrame.new(0, h / 2, d / 2 - t / 2), Vector3.new(w, h, t))
 	for _, sx in { -1, 1 } do
 		box(m, CFrame.new(sx * (w / 2 - t / 2), h / 2, 0), Vector3.new(t, h, d))
 	end
 	box(m, CFrame.new(0, t / 2, 0), Vector3.new(w, t, d))
-	local openOffset
+	local comps: { Comp } = {}
+	local facing = cf.LookVector
 	if s.kind == "drawers" then
 		box(m, CFrame.new(0, h - t / 2, 0), Vector3.new(w + 0.1, t, d + 0.1))
 		local rowH = (h - t * 2) / s.rows
 		for k = 1, s.rows do
-			local y = t + rowH * (k - 0.5)
-			local par: Instance = if k == s.rows then mv else m -- 맨 위 서랍이 열린다
-			box(par, CFrame.new(0, y, -d / 2 + t / 2), Vector3.new(w - t * 2 - 0.08, rowH - 0.1, t), { blocks = false })
-			box(par, CFrame.new(0, y, -d / 2 - 0.1), Vector3.new(0.8, 0.12, 0.12), { blocks = false, collide = false })
-			if k == s.rows then
-				box(mv, CFrame.new(0, y - rowH / 2 + 0.15, 0), Vector3.new(w - t * 2 - 0.1, 0.1, d - t * 2), { blocks = false, collide = false })
+			local mv = newComp(m, k, spotId)
+			local y = h - t - rowH * (k - 0.5) -- 1 = 맨 위
+			local inner = d - t * 2
+			box(mv, CFrame.new(0, y, -d / 2 + t / 2), Vector3.new(w - t * 2 - 0.08, rowH - 0.1, t), { blocks = false })
+			box(mv, CFrame.new(0, y, -d / 2 - 0.1), Vector3.new(0.8, 0.12, 0.12), { blocks = false, collide = false })
+			-- 서랍 통(바닥 + 양옆 + 뒤): 빠졌을 때 서랍 모양이 보이게
+			box(mv, CFrame.new(0, y - rowH / 2 + 0.12, -d / 2 + t + inner / 2), Vector3.new(w - t * 2 - 0.15, 0.08, inner), { blocks = false, collide = false })
+			for _, sx in { -1, 1 } do
+				box(mv, CFrame.new(sx * (w / 2 - t - 0.12), y - rowH * 0.15, -d / 2 + t + inner / 2), Vector3.new(0.08, rowH * 0.6, inner), { blocks = false, collide = false })
 			end
+			box(mv, CFrame.new(0, y - rowH * 0.15, d / 2 - t - 0.06), Vector3.new(w - t * 2 - 0.15, rowH * 0.6, 0.08), { blocks = false, collide = false })
+			local closed = mv:GetPivot()
+			-- 앞으로 곧게 빠진다(월드 기준 이동)
+			table.insert(comps, { model = mv, closedPivot = closed, openPivot = closed + facing * (inner * 0.75), open = false, busy = false, searched = false, hasKey = false })
 		end
-		openOffset = CFrame.new(0, 0, -(d * 0.6)) -- 앞으로 빠진다
 	else
-		-- 앞판 + 뚜껑(+ 띠)
 		box(m, CFrame.new(0, h / 2, -d / 2 + t / 2), Vector3.new(w, h, t))
+		local mv = newComp(m, 1, spotId)
 		box(mv, CFrame.new(0, h + t / 2, 0), Vector3.new(w + 0.12, t, d + 0.12))
 		if s.name ~= "공구함" then
 			for _, sx in { -0.3, 0.3 } do
@@ -3292,11 +3684,14 @@ local function build(parent: Instance, cf: CFrame, s: Style): (Model, Model, CFr
 		else
 			box(mv, CFrame.new(0, h + t + 0.25, 0), Vector3.new(w * 0.5, 0.12, 0.12), { blocks = false, collide = false })
 		end
-		openOffset = CFrame.new(0, 0.6, d * 0.45) * CFrame.Angles(math.rad(-55), 0, 0) -- 뒤로 젖혀진다
+		local closed = mv:GetPivot()
+		-- 뒤쪽 경첩을 축으로 뒤로 젖혀진다(월드 기준 회전)
+		local hinge = (cf * CFrame.new(0, h + t, d / 2)).Position
+		local turn = CFrame.new(hinge) * CFrame.fromAxisAngle(cf.RightVector, math.rad(100)) * CFrame.new(-hinge)
+		table.insert(comps, { model = mv, closedPivot = closed, openPivot = turn * closed, open = false, busy = false, searched = false, hasKey = false })
 	end
-	mv.Parent = m
 	m.Parent = parent
-	return m, mv, openOffset
+	return m, comps
 end
 
 -- pos: 타일 가운데 바닥, back: 벽 쪽(단위 벡터)
@@ -3305,37 +3700,18 @@ function Search.create(parent: Instance, pos: Vector3, back: Vector3, styleName:
 	local facing = -back
 	local center = pos + back * (Config.Hide.Tile / 2 - s.d / 2 - 0.15)
 	local cf = CFrame.lookAt(center, center + facing)
-	local model, moving, openOffset = build(parent, cf, s)
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.ActionText = "뒤지기"
-	prompt.ObjectText = s.name
-	prompt.KeyboardKeyCode = Enum.KeyCode.E
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = Config.Key.PromptDistance
-	prompt.RequiresLineOfSight = false
-	prompt.Style = Enum.ProximityPromptStyle.Custom
-	local anchor = model:FindFirstChildWhichIsA("BasePart") :: BasePart
-	prompt.Parent = anchor
+	nextId += 1
+	local model, comps = build(parent, cf, s, nextId)
 	CollectionService:AddTag(model, Config.Tags.SearchSpot)
-	local spot: Spot = {
-		model = model,
-		moving = moving,
-		openOffset = openOffset,
-		front = center + facing * (s.d / 2 + 2.2),
-		prompt = prompt,
-		searched = false,
-		hasKey = false,
-		busy = false,
-	}
+	local spot: Spot = { id = nextId, model = model, center = center, front = center + facing * (s.d / 2 + 2.2), comps = comps, name = s.name }
 	table.insert(spots, spot)
-	prompt.Triggered:Connect(function(player)
-		Search.search(player, spot)
-	end)
+	byId[spot.id] = spot
 	model.Destroying:Connect(function()
 		local i = table.find(spots, spot)
 		if i then
 			table.remove(spots, i)
 		end
+		byId[spot.id] = nil
 	end)
 	return spot
 end
@@ -3344,40 +3720,91 @@ local function hasKey(): boolean
 	return ReplicatedStorage:GetAttribute("HasKey") == true
 end
 
--- 뒤지기: 잠깐 뒤진 뒤 결과. 열쇠가 있으면 팀 전체가 가진다. 결과 문자열을 돌려준다("key" | "empty" | "already" | "busy")
-function Search.search(player: Player, spot: Spot): string
-	if player:GetAttribute("Status") ~= "Alive" or player:GetAttribute("Hidden") then
+local function move(c: Comp, toOpen: boolean)
+	c.busy = true
+	local a, b = if toOpen then c.closedPivot else c.openPivot, if toOpen then c.openPivot else c.closedPivot
+	local t0 = os.clock()
+	local dur = 0.25
+	while true do
+		local k = math.clamp((os.clock() - t0) / dur, 0, 1)
+		local e = 1 - (1 - k) * (1 - k)
+		if not c.model.Parent then
+			break
+		end
+		c.model:PivotTo(a:Lerp(b, e))
+		if k >= 1 then
+			break
+		end
+		RunService.Heartbeat:Wait()
+	end
+	c.open = toOpen
+	c.model:SetAttribute("Open", toOpen)
+	c.busy = false
+end
+
+-- 서랍/뚜껑 하나를 열거나 닫는다. 처음 열면 뒤진다(결과: "key" | "empty").
+-- 돌려주는 값: "key" | "empty" | "opened" | "closed" | "busy"
+function Search.toggle(player: Player, spot: Spot, index: number): string
+	local c = spot.comps[index]
+	if not c or c.busy or player:GetAttribute("Status") ~= "Alive" or player:GetAttribute("Hidden") then
 		return "busy"
 	end
-	if spot.searched then
-		RoundEvent:FireClient(player, "SearchResult", { result = "already" })
-		return "already"
+	if c.open then
+		move(c, false)
+		return "closed"
 	end
-	if spot.busy then
-		return "busy"
+	local first = not c.searched
+	if first then
+		SoundBus.emit(spot.front + Vector3.new(0, 2, 0), Config.Key.SearchNoise, player, "Search")
+		RoundEvent:FireClient(player, "SearchResult", { result = "searching" })
 	end
-	spot.busy = true
-	-- 열린다(서랍 빠짐 / 뚜껑 젖힘)
-	local pivot = spot.moving:GetPivot()
-	spot.moving:PivotTo(pivot * spot.openOffset)
-	SoundBus.emit(spot.front + Vector3.new(0, 2, 0), Config.Key.SearchNoise, player, "Search")
-	RoundEvent:FireClient(player, "SearchResult", { result = "searching" })
-	task.wait(Config.Key.SearchSeconds)
-	spot.busy = false
-	spot.searched = true
-	spot.prompt.Enabled = false
-	if spot.hasKey and not hasKey() then
+	move(c, true)
+	if not first then
+		return "opened"
+	end
+	task.wait(math.max(0, Config.Key.SearchSeconds - 0.25))
+	c.searched = true
+	if c.hasKey and not hasKey() then
 		ReplicatedStorage:SetAttribute("HasKey", true)
 		RoundEvent:FireAllClients("KeyFound", { by = player.DisplayName, userId = player.UserId })
 		return "key"
 	end
-	RoundEvent:FireClient(player, "SearchResult", { result = "empty" })
+	RoundEvent:FireClient(player, "SearchResult", { result = if c.hasKey then "empty" else "empty" })
 	return "empty"
 end
 
--- 새 스테이지: 열쇠를 한 곳에 넣는다(시작에서 먼 쪽 절반 중에서 무작위)
+-- (예전 호출용) 그 상자의 첫 칸을 연다
+function Search.search(player: Player, spot: Spot): string
+	for i, c in spot.comps do
+		if not c.searched then
+			return Search.toggle(player, spot, i)
+		end
+	end
+	RoundEvent:FireClient(player, "SearchResult", { result = "already" })
+	return "already"
+end
+
+SearchAction.OnServerEvent:Connect(function(player: Player, spotId: any, index: any)
+	if type(spotId) ~= "number" or type(index) ~= "number" then
+		return
+	end
+	local spot = byId[spotId]
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not spot or not root or (root.Position - spot.center).Magnitude > Config.Key.PromptDistance + 2 then
+		return
+	end
+	Search.toggle(player, spot, index)
+end)
+
+-- 새 스테이지: 열쇠를 한 칸에 넣는다(시작에서 먼 쪽 절반의 상자 중 무작위, 그 상자의 무작위 칸)
 function Search.assignKey(start: Vector3)
 	ReplicatedStorage:SetAttribute("HasKey", false)
+	for _, s in spots do
+		for _, c in s.comps do
+			c.hasKey = false
+		end
+	end
 	if #spots == 0 then
 		return
 	end
@@ -3385,31 +3812,31 @@ function Search.assignKey(start: Vector3)
 	table.sort(sorted, function(a, b)
 		return (a.front - start).Magnitude > (b.front - start).Magnitude
 	end)
-	local half = math.max(1, math.ceil(#sorted / 2))
-	local pick = sorted[math.random(1, half)]
-	for _, s in spots do
-		s.hasKey = s == pick
-	end
+	local pick = sorted[math.random(1, math.max(1, math.ceil(#sorted / 2)))]
+	pick.comps[math.random(1, #pick.comps)].hasKey = true
 end
 
 function Search.all(): { Spot }
 	return spots
 end
 
-function Search.keySpot(): Spot?
+-- 열쇠가 든 상자와 칸 번호
+function Search.keySpot(): (Spot?, number?)
 	for _, s in spots do
-		if s.hasKey then
-			return s
+		for i, c in s.comps do
+			if c.hasKey then
+				return s, i
+			end
 		end
 	end
-	return nil
+	return nil, nil
 end
 
 return Search
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">SoundBus</string>
           <string name="Source"><![CDATA[--!strict
@@ -3506,7 +3933,7 @@ return SoundBus
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="26">
+      <Item class="ModuleScript" referent="27">
         <Properties>
           <string name="Name">StageBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -4157,11 +4584,11 @@ return Builder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="27">
+      <Item class="Folder" referent="28">
         <Properties>
           <string name="Name">Stages</string>
         </Properties>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">Lobby</string>
             <string name="Source"><![CDATA[--!strict
@@ -4193,7 +4620,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">Stage1</string>
             <string name="Source"><![CDATA[--!strict
@@ -4252,7 +4679,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">Stage2</string>
             <string name="Source"><![CDATA[--!strict
@@ -4313,7 +4740,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">Stage3</string>
             <string name="Source"><![CDATA[--!strict
@@ -4376,7 +4803,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">Stage4</string>
             <string name="Source"><![CDATA[--!strict
@@ -4438,7 +4865,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">Stage5</string>
             <string name="Source"><![CDATA[--!strict
@@ -4518,7 +4945,7 @@ return {
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="34">
+      <Item class="Script" referent="35">
         <Properties>
           <string name="Name">TestHarness</string>
           <token name="RunContext">0</token>
@@ -4699,6 +5126,43 @@ end
 
 local function stageFolder()
 	return workspace:FindFirstChild("Stage")
+end
+
+-- ─────────────────────────────── 문 끼임 ───────────────────────────────
+-- 문 바로 앞(예전에 문짝이 휘두르던 자리)에 서서 열고 지나간다 — 양쪽에서. 문짝은 여는 사람 반대쪽으로 열려야 한다
+local function doorTests(p)
+	local door = nil
+	for _, d in Doors.all() do
+		if (d.panel.Position - tile(5, 3, 4.5)).Magnitude < 4 then
+			door = d
+		end
+	end
+	if not door then
+		check("door for the stuck test", false)
+		return
+	end
+	local x0 = door.panel.Position.X
+	for _, side in { -1, 1 } do
+		if door.open then
+			Doors.toggle(door)
+			task.wait(1)
+		end
+		local from = Vector3.new(x0 + side * 2.2, 3, tile(5, 3).Z)
+		local to = Vector3.new(x0 - side * 9, 3, tile(5, 3).Z)
+		place(p, from, to)
+		task.wait(0.4)
+		Doors.toggle(door, p)
+		task.wait(0.8)
+		ask(p, "move", to)
+		local crossed = waitFor(function()
+			local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			return r and (r.Position.X - x0) * -side > 2.5
+		end, 4)
+		check(string.format("open a door standing right at it and walk through (%s side)", if side < 0 then "west" else "east"), crossed ~= nil)
+	end
+	if door.open then
+		Doors.toggle(door)
+	end
 end
 
 -- ─────────────────────────────── 괴물 모습·등장 ───────────────────────────────
@@ -5105,6 +5569,42 @@ local function core()
 	local steps = (st1 and st0) and (st1.steps - st0.steps) or -1
 	check("footsteps: about one sound per step while walking (~2 per second)", steps >= 2 and steps <= 5, steps)
 
+	-- 실제 녹음 소리가 이 게임에서 불러와진다(라이선스 효과음)
+	local sc = ask(p, "soundCheck")
+	local zero = 0
+	for _, l in (sc and sc.lengths) or {} do
+		if l <= 0 then
+			zero += 1
+		end
+	end
+	check("licensed sounds load (screams + monster steps)", sc and #sc.bad == 0 and zero == 0, sc and (table.concat(sc.bad, ", ") .. " lengths " .. table.concat(sc.lengths, "/")))
+
+	-- 점프: 뛰어오르고, 착지 소리를 괴물이 들을 수 있다
+	do
+		place(p, tile(2, 6, 3), tile(2, 8, 3))
+		task.wait(0.6)
+		local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		local y0 = r and r.Position.Y or 0
+		local n0 = #SoundBus.recent
+		ask(p, "jump")
+		local peak = y0
+		local t0 = os.clock()
+		while os.clock() - t0 < 1.4 do
+			if r then
+				peak = math.max(peak, r.Position.Y)
+			end
+			task.wait()
+		end
+		local landed = false
+		for i = n0 + 1, #SoundBus.recent do
+			if SoundBus.recent[i].kind == "StepLand" then
+				landed = true
+			end
+		end
+		check("players can jump", peak - y0 > 1.5, string.format("%.1f studs", peak - y0))
+		check("landing makes a noise monsters can hear", landed)
+	end
+
 	-- 소리 감쇠
 	local a, b = tile(2, 3, 3), tile(2, 5, 3) -- 시작 방과 그 아래(벽 사이)
 	local walls = SoundBus.wallsBetween(a, b)
@@ -5209,8 +5709,8 @@ local function core()
 	Config.Key.Required = true
 	local spotsZ = Search.all()
 	check("searchable boxes/drawers built", #spotsZ >= 5, #spotsZ)
-	local ks = Search.keySpot()
-	check("exactly one of them holds the key", ks ~= nil)
+	local ks, ki = Search.keySpot()
+	check("exactly one of them holds the key", ks ~= nil and ki ~= nil)
 	place(p, Round.info.exitCFrame.Position + Vector3.new(0, -0.5, 0))
 	task.wait(1.2)
 	check("exit is locked without the key", p:GetAttribute("Status") == "Alive" and ReplicatedStorage:GetAttribute("HasKey") ~= true, p:GetAttribute("Status"))
@@ -5224,16 +5724,50 @@ local function core()
 		end
 	end
 	if empty then
-		place(p, empty.front + Vector3.new(0, 3, 0))
+		place(p, empty.front + Vector3.new(0, 3, 0), empty.center + Vector3.new(0, 3, 0))
 		task.wait(0.3)
-		local r1 = Search.search(p, empty)
-		local r2 = Search.search(p, empty)
-		check("searching an empty box: empty, then already searched", r1 == "empty" and r2 == "already", r1 .. "/" .. r2)
+		-- 서랍(뚜껑)마다 따로 열고 닫는다: 처음 열면 뒤짐(비어 있음), 닫고 다시 열 수 있다
+		local r1 = Search.toggle(p, empty, 1)
+		local r2 = Search.toggle(p, empty, 1)
+		local r3 = Search.toggle(p, empty, 1)
+		check("a drawer opens (empty), closes, and opens again", r1 == "empty" and r2 == "closed" and r3 == "opened", r1 .. "/" .. r2 .. "/" .. r3)
+		local allOpen = true
+		for i = 2, #empty.comps do
+			Search.toggle(p, empty, i)
+		end
+		for _, c in empty.comps do
+			allOpen = allOpen and c.open
+		end
+		check("every drawer of a cabinet can be opened", allOpen, #empty.comps)
+		local fwd = (empty.front - empty.center).Unit
+		local c1 = empty.comps[1]
+		local moved = c1.model:GetPivot().Position - c1.closedPivot.Position
+		check("an opened drawer/lid moves toward the player, not sideways", (moved:Dot(fwd) > 0.4 or moved.Y > 0.4) and math.abs(moved:Dot(Vector3.new(fwd.Z, 0, -fwd.X))) < 0.2, string.format("fwd %.2f side %.2f up %.2f", moved:Dot(fwd), moved:Dot(Vector3.new(fwd.Z, 0, -fwd.X)), moved.Y))
+		for i = 1, #empty.comps do
+			Search.toggle(p, empty, i)
+		end
+		local allClosed = true
+		for _, c in empty.comps do
+			allClosed = allClosed and not c.open
+		end
+		check("every drawer closes again", allClosed)
+		-- 조준점으로 보고 E(클라이언트 경로)
+		local c1pos = c1.model:GetPivot().Position
+		place(p, c1pos + fwd * 3.2 + Vector3.new(0, 1.2, 0), c1pos)
+		task.wait(0.6)
+		local tgt = ask(p, "lookTarget", c1pos)
+		check("crosshair on a drawer targets it", tgt ~= nil and tgt.spot == empty.id, tgt and (tgt.spot .. ":" .. tgt.comp))
+		local wasOpen = tgt and empty.comps[tgt.comp].open
+		ask(p, "useLook", c1pos)
+		local toggled = waitFor(function()
+			return tgt and empty.comps[tgt.comp].open ~= wasOpen
+		end, 3)
+		check("E while looking opens/closes that drawer", toggled ~= nil)
 	end
-	if ks then
+	if ks and ki then
 		place(p, ks.front + Vector3.new(0, 3, 0))
 		task.wait(0.3)
-		local r3 = Search.search(p, ks)
+		local r3 = Search.toggle(p, ks, ki)
 		check("searching the right one finds the key (whole team)", r3 == "key" and ReplicatedStorage:GetAttribute("HasKey") == true, r3)
 		task.wait(0.4)
 		local kh1 = ask(p, "keyHud")
@@ -5295,6 +5829,7 @@ local function core()
 	local fs = ask(p, "stats")
 	R.info.frame = fs and { avg = fs.avgFrame, worst = fs.worstFrame }
 	if back then
+		doorTests(p)
 		monsterTests(p)
 		hideTests(p)
 	end
@@ -5512,8 +6047,13 @@ local function lobbyTest()
 	check("sonar lights up the lobby", lit and lit.lines.lit > 50, lit and lit.lines.lit)
 	local u = ask(p1, "lobby")
 	check("room panel shown in the lobby", u and u.visible and table.find(u.buttons, "방 만들기") ~= nil, u and table.concat(u.buttons, ","))
+	local c0 = ask(p1, "cursor")
+	check("cursor hidden while looking around", c0 == false, tostring(c0))
 	local m = ask(p1, "lobbyMenu", true)
 	check("Tab menu frees the mouse", m and m.mouseFree == true)
+	task.wait(0.2)
+	local c1 = ask(p1, "cursor")
+	check("cursor shown only while the menu is open", c1 == true, tostring(c1))
 	ask(p1, "lobbyClick", "방 만들기")
 	local id = waitFor(function()
 		return p1:GetAttribute("RoomId")
@@ -5849,29 +6389,29 @@ end)
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="35">
+  <Item class="SoundService" referent="36">
     <Properties>
       <string name="Name">SoundService</string>
       <token name="AmbientReverb">11</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="36">
+  <Item class="StarterPlayer" referent="37">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
       <float name="CameraMaxZoomDistance">0.5</float>
       <float name="CameraMinZoomDistance">0.5</float>
       <token name="CameraMode">1</token>
-      <float name="CharacterJumpPower">0</float>
+      <float name="CharacterJumpPower">40</float>
       <bool name="CharacterUseJumpPower">true</bool>
       <float name="CharacterWalkSpeed">10</float>
       <bool name="EnableMouseLockOption">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="37">
+    <Item class="StarterPlayerScripts" referent="38">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="ModuleScript" referent="38">
+      <Item class="ModuleScript" referent="39">
         <Properties>
           <string name="Name">Audio</string>
           <string name="Source"><![CDATA[--!strict
@@ -5887,7 +6427,7 @@ local SoundService = game:GetService("SoundService")
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local Audio = {}
-local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number, Cut: number?, Fx: { Distortion: number?, Reverb: number? }?, Steps: { { number } }?, Thump: number?, Claw: string? } }
+local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number, Cut: number?, Fx: { { any } }?, Steps: { { number } }?, Thump: number?, Claw: string? } }
 local player = Players.LocalPlayer
 
 local master = Instance.new("SoundGroup")
@@ -5918,18 +6458,21 @@ local function makeSound(name: string, parent: Instance, looped: boolean?): Soun
 		s.RollOffMinDistance = 5
 		s.RollOffMaxDistance = def.Range
 	end
-	-- 괴성: 왜곡 + 울림 효과(Fx)
+	-- Fx = { { "SoundEffect 클래스", { 속성 = 값 } }, ... }: 소리 효과(왜곡·울림·떨림·에코·플랜저 등).
+	-- 클래스·속성 이름이 틀려도 소리 전체가 죽지 않게 pcall 로 하나씩 적용한다.
 	if def.Fx then
-		if def.Fx.Distortion then
-			local d = Instance.new("DistortionSoundEffect")
-			d.Level = def.Fx.Distortion
-			d.Parent = s
-		end
-		if def.Fx.Reverb then
-			local r = Instance.new("ReverbSoundEffect")
-			r.DecayTime = def.Fx.Reverb
-			r.WetLevel = 3 -- (ReverbSoundEffect 에는 Wetness 가 없다: 울림 크기는 WetLevel, dB)
-			r.Parent = s
+		for _, fx in def.Fx do
+			local ok, eff = pcall(function()
+				return Instance.new(fx[1] :: string)
+			end)
+			if ok and eff then
+				for k, v in fx[2] :: { [string]: any } do
+					pcall(function()
+						(eff :: any)[k] = v
+					end)
+				end
+				eff.Parent = s
+			end
 		end
 	end
 	s.Parent = parent
@@ -5939,7 +6482,8 @@ end
 -- 한 번 재생하고 지운다. at 이 Vector3 이면 그 위치에서(3D), Instance 면 거기 붙여서, nil 이면 2D.
 Audio.steps = 0 -- (테스트) 지금까지 재생한 플레이어 발소리 수
 
-function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?, startAt: number?, cutOverride: number?)
+-- opts.gate = { 켜짐초, 꺼짐초 }: 그 박자로 소리를 끊어 켰다 껐다 한다(끊기는 괴성). opts.sweep = { { 정규화 시간 0~1, 피치 배율 }, ... }, opts.dur = 전체 길이(초): 소리를 반복 재생하면서 피치를 시간에 따라 바꾼다(사이렌·오르내리는 괴성)
+function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?, startAt: number?, cutOverride: number?, opts: { sweep: { { number } }?, dur: number?, gate: { number }? }?)
 	local parent: Instance
 	local holder: Attachment? = nil
 	if typeof(at) == "Vector3" then
@@ -5971,6 +6515,46 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 	end
 	if startAt then
 		s.TimePosition = startAt
+	end
+	local sweep = opts and opts.sweep
+	local gate = opts and opts.gate
+	if gate and not sweep then
+		sweep = { { 0, 1 }, { 1, 1 } } -- 음 높이 일정
+	end
+	if sweep then
+		local pts = sweep :: { { number } } -- (reassigned 변수라 클로저 안에서 nil 검사가 풀리므로 복사해 둔다)
+		local base, v0, dur = s.PlaybackSpeed, s.Volume, (opts and opts.dur) or 1
+		s.Looped = true
+		s.Volume = 0
+		task.spawn(function()
+			local t0 = os.clock()
+			while s.Parent do
+				local x = (os.clock() - t0) / dur
+				if x >= 1 then
+					break
+				end
+				local m = pts[#pts][2]
+				for i = 2, #pts do
+					if x <= pts[i][1] then
+						local a, b = pts[i - 1], pts[i]
+						m = a[2] + (b[2] - a[2]) * (x - a[1]) / math.max(b[1] - a[1], 1e-4)
+						break
+					end
+				end
+				s.PlaybackSpeed = base * m
+				-- 시작 0.05초 페이드인, 끝 0.15초 페이드아웃
+				local g = 1
+				if gate then
+					local ph = (x * dur) % (gate[1] + gate[2])
+					g = if ph < gate[1] then math.min(1, ph / 0.015, (gate[1] - ph) / 0.015) else 0
+				end
+				s.Volume = v0 * g * math.min(1, x * dur / 0.05, (1 - x) * dur / 0.15)
+				task.wait()
+			end
+			if s.Parent then
+				s:Stop()
+			end
+		end)
 	end
 	s:Play()
 	-- Cut: 그 시간(초)만 재생하고 짧게 줄여 끈다(여러 발짝이 든 발소리 파일에서 한 발짝만)
@@ -6005,7 +6589,7 @@ function Audio.scream(kind: string, at: Instance)
 	for _, layer in seq do
 		task.delay(layer.t, function()
 			if at.Parent then
-				Audio.play(layer.s, at, 0.05, layer.v, layer.p)
+				Audio.play(layer.s, at, 0.05, layer.v, layer.p, layer.start, nil, if layer.sweep or layer.gate then { sweep = layer.sweep, dur = layer.dur, gate = layer.gate } else nil)
 			end
 		end)
 	end
@@ -6083,8 +6667,8 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 			tr.acc = 0
 			tr.foot = -tr.foot
 			local name = if mode == "Run" then "FootRun" elseif mode == "Crouch" then "FootCrouch" else "FootWalk"
-			-- 왼발·오른발: 높낮이를 조금 다르게
-			Audio.footstep(name, root, 0.04, 1 + tr.foot * 0.04)
+			-- 매 걸음 똑같은 깔끔한 한 번의 소리(피치 흔들림·왼발/오른발 차이 없음)
+			Audio.footstep(name, root, 0)
 			Audio.steps += 1
 		end
 	end
@@ -6092,7 +6676,8 @@ end
 
 -- ── 괴물 상태 반응음 ──
 local monsterConns: { [Model]: { RBXScriptConnection } } = {}
-local idleAt: { [Model]: number } = {}
+local screamAt: { [Model]: number } = {} -- 추격 중 다음 괴성 시각
+local CHASE_SCREAM_GAP = { 3.5, 6 } -- 추격 중 괴성 사이 간격(초, 범위). 괴성 하나가 약 2.4초
 local function watchMonster(m: Instance)
 	if not m:IsA("Model") or monsterConns[m] then
 		return
@@ -6105,20 +6690,20 @@ local function watchMonster(m: Instance)
 		if not root then
 			return
 		end
-		if st == "Alert" then
-			Audio.scream("Alert", root)
-		elseif st == "Chase" then
-			Audio.scream("Chase", root)
-		end
+		-- 괴성은 플레이어를 발견해 쫓기 시작할 때만(배회·조사·수색·경계에는 지르지 않는다). 발소리는 평소에도 난다
+			if st == "Chase" then
+				Audio.scream("Chase", root)
+				screamAt[model] = os.clock() + CHASE_SCREAM_GAP[1] + math.random() * (CHASE_SCREAM_GAP[2] - CHASE_SCREAM_GAP[1])
+			end
 	end))
 	monsterConns[model] = conns
-	idleAt[model] = os.clock() + 5 + math.random() * 6
+	
 	model.Destroying:Connect(function()
 		for _, c in conns do
 			c:Disconnect()
 		end
 		monsterConns[model] = nil
-		idleAt[model] = nil
+		screamAt[model] = nil
 		trackers[model] = nil
 	end)
 end
@@ -6185,10 +6770,14 @@ function Audio.update()
 	local now = os.clock()
 	for _, m in CollectionService:GetTagged(Config.Tags.Monster) do
 		if m:IsA("Model") and m.PrimaryPart then
-			stepFor(m, m.PrimaryPart, true)
-			if m:GetAttribute("State") == "Wander" and idleAt[m] and now > idleAt[m] then
-				idleAt[m] = now + 7 + math.random() * 9
-				Audio.scream("Idle", m.PrimaryPart)
+			-- 평소에는 소리를 내지 않는다: 발소리·괴성 모두 쫓아올 때만
+			if m:GetAttribute("State") == "Chase" then
+				stepFor(m, m.PrimaryPart, true)
+				local at = screamAt[m]
+				if at and now > at then
+					screamAt[m] = now + CHASE_SCREAM_GAP[1] + math.random() * (CHASE_SCREAM_GAP[2] - CHASE_SCREAM_GAP[1])
+					Audio.scream("Chase", m.PrimaryPart)
+				end
 			end
 		end
 	end
@@ -6214,7 +6803,7 @@ return Audio
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="39">
+      <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">JumpScare</string>
           <string name="Source"><![CDATA[--!strict
@@ -6408,7 +6997,7 @@ return JumpScare
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="40">
+      <Item class="ModuleScript" referent="41">
         <Properties>
           <string name="Name">KeyHUD</string>
           <string name="Source"><![CDATA[--!strict
@@ -6459,7 +7048,7 @@ return KeyHUD
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="41">
+      <Item class="ModuleScript" referent="42">
         <Properties>
           <string name="Name">LobbyUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -6730,6 +7319,11 @@ function LobbyUI.click(text: string): boolean
 	return false
 end
 
+-- 메뉴가 열려 마우스가 풀려 있는가(커서 표시 여부)
+function LobbyUI.mouseFree(): boolean
+	return modal.Visible
+end
+
 function LobbyUI.state()
 	local names = {}
 	for t in buttons do
@@ -6753,7 +7347,7 @@ return LobbyUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="42">
+      <Item class="LocalScript" referent="43">
         <Properties>
           <string name="Name">Main</string>
           <string name="Source"><![CDATA[--!strict
@@ -6778,6 +7372,7 @@ local LobbyUI = require(script.Parent:WaitForChild("LobbyUI"))
 local Mates = require(script.Parent:WaitForChild("Mates"))
 local KeyHUD = require(script.Parent:WaitForChild("KeyHUD"))
 local JumpScare = require(script.Parent:WaitForChild("JumpScare"))
+local SearchLook = require(script.Parent:WaitForChild("SearchLook"))
 Pulses.onReach = MapView.onReach
 
 local player = Players.LocalPlayer
@@ -7024,6 +7619,8 @@ end)
 -- ── 매 프레임 ──
 RunService.RenderStepped:Connect(function(dt)
 	local now = os.clock()
+	-- 마우스 커서: 1인칭에서는 숨긴다(조준점만). 로비 메뉴(Tab)를 열었을 때만 보인다
+	UserInputService.MouseIconEnabled = LobbyUI.mouseFree()
 	table.insert(frameTimes, dt)
 	if #frameTimes > 240 then
 		table.remove(frameTimes, 1)
@@ -7149,6 +7746,50 @@ task.spawn(function()
 		elseif cmd == "linesNear" then
 			local t = arg :: { any }
 			return Lines.countNear(t[1], t[2])
+		elseif cmd == "lookTarget" or cmd == "useLook" then
+			-- (테스트) arg 위치를 바라보게 한 뒤
+			if typeof(arg) == "Vector3" then
+				local cam = workspace.CurrentCamera
+				cam.CFrame = CFrame.lookAt(cam.CFrame.Position, arg :: Vector3)
+			end
+			return if cmd == "lookTarget" then SearchLook.target() else SearchLook.use()
+		elseif cmd == "soundCheck" then
+			-- 실제 녹음 소리(괴성 후보 전부 + 괴물 발소리)가 이 게임에서 불러와지는가
+			local ids = {}
+			for _, r in (Config :: any).RealScreams do
+				table.insert(ids, "rbxassetid://" .. r.Id)
+			end
+			table.insert(ids, (Config.Sounds :: any).MonsterStep.Id)
+			local sounds = {}
+			for _, id in ids do
+				local snd = Instance.new("Sound")
+				snd.SoundId = id
+				snd.Volume = 0
+				snd.Parent = workspace
+				table.insert(sounds, snd)
+			end
+			local bad = {}
+			pcall(function()
+				game:GetService("ContentProvider"):PreloadAsync(sounds, function(contentId, status)
+					if status ~= Enum.AssetFetchStatus.Success then
+						table.insert(bad, contentId .. "=" .. status.Name)
+					end
+				end)
+			end)
+			local lengths = {}
+			for _, snd in sounds do
+				table.insert(lengths, math.floor(snd.TimeLength * 10) / 10)
+				snd:Destroy()
+			end
+			return { total = #ids, bad = bad, lengths = lengths }
+		elseif cmd == "jump" then
+			local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if h then
+				h.Jump = true
+			end
+			return h ~= nil
+		elseif cmd == "cursor" then
+			return UserInputService.MouseIconEnabled
 		elseif cmd == "jumpscare" then
 			return JumpScare.state()
 		elseif cmd == "keyHud" then
@@ -7203,7 +7844,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="43">
+      <Item class="ModuleScript" referent="44">
         <Properties>
           <string name="Name">MapView</string>
           <string name="Source"><![CDATA[--!strict
@@ -7448,7 +8089,7 @@ return Map
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="44">
+      <Item class="ModuleScript" referent="45">
         <Properties>
           <string name="Name">Mates</string>
           <string name="Source"><![CDATA[--!strict
@@ -7516,7 +8157,7 @@ return Mates
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="45">
+      <Item class="ModuleScript" referent="46">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
@@ -7617,7 +8258,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="46">
+      <Item class="LocalScript" referent="47">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -7625,7 +8266,99 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="47">
+      <Item class="ModuleScript" referent="48">
+        <Properties>
+          <string name="Name">SearchLook</string>
+          <string name="Source"><![CDATA[--!strict
+-- 상자·서랍 조작: 조준점(화면 가운데)으로 서랍이나 뚜껑을 보고 E → 열기/닫기(서버 Search 가 판정).
+-- 서랍마다 따로 열고 닫을 수 있다. 안내 문구는 UI.setPrompt 로 보여 준다.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local UI = require(script.Parent:WaitForChild("UI"))
+
+local SearchLook = {}
+
+local player = Players.LocalPlayer
+local SearchAction = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("SearchAction") :: RemoteEvent
+local RANGE = 8
+
+local params = RaycastParams.new()
+params.FilterType = Enum.RaycastFilterType.Exclude
+
+type Target = { spot: number, comp: number, model: Model, label: string }
+local current: Target? = nil
+local shown = false
+
+local function find(): Target?
+	if player:GetAttribute("Status") ~= "Alive" or player:GetAttribute("Hidden") then
+		return nil
+	end
+	local cam = workspace.CurrentCamera
+	if not cam then
+		return nil
+	end
+	params.FilterDescendantsInstances = if player.Character then { player.Character } else {}
+	local hit = workspace:Raycast(cam.CFrame.Position, cam.CFrame.LookVector * RANGE, params)
+	local inst: Instance? = hit and hit.Instance
+	while inst and inst ~= workspace do
+		if inst:IsA("Model") and inst:GetAttribute("Comp") then
+			local spotModel = inst.Parent
+			local label = (spotModel and spotModel:GetAttribute("Label") :: string?) or "상자"
+			return { spot = inst:GetAttribute("SpotId") :: number, comp = inst:GetAttribute("Comp") :: number, model = inst, label = label }
+		end
+		inst = inst.Parent
+	end
+	return nil
+end
+
+function SearchLook.target(): { spot: number, comp: number }?
+	local t = find()
+	return if t then { spot = t.spot, comp = t.comp } else nil
+end
+
+-- 보고 있는 서랍/뚜껑을 연다/닫는다(E)
+function SearchLook.use(): boolean
+	local t = find()
+	if not t then
+		return false
+	end
+	SearchAction:FireServer(t.spot, t.comp)
+	return true
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if input.KeyCode == Enum.KeyCode.E and current then
+		SearchLook.use()
+	end
+end)
+
+local acc = 0
+RunService.RenderStepped:Connect(function(dt)
+	acc += dt
+	if acc < 0.08 then
+		return
+	end
+	acc = 0
+	current = find()
+	if current then
+		local open = current.model:GetAttribute("Open") == true
+		local what = if current.label == "서랍장" or current.label == "협탁" then "서랍" else current.label
+		UI.setPrompt(if open then ("E   " .. what .. " 닫기") else ("E   " .. what .. " 열기"))
+		shown = true
+	elseif shown then
+		UI.setPrompt(nil)
+		shown = false
+	end
+end)
+
+return SearchLook
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="49">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -7862,7 +8595,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="48">
+      <Item class="ModuleScript" referent="50">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -8293,7 +9026,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="49">
+      <Item class="ModuleScript" referent="51">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -8859,7 +9592,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="50">
+      <Item class="ModuleScript" referent="52">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -9057,7 +9790,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="51">
+  <Item class="Workspace" referent="53">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

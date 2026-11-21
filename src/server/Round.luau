@@ -148,7 +148,13 @@ function Round.spawnPlayer(p: Player)
 	end
 	hum.WalkSpeed = Config.Move.Walk
 	hum.UseJumpPower = true
-	hum.JumpPower = 0
+	hum.JumpPower = Config.Move.JumpPower
+	-- 착지 소리: 괴물이 듣는다
+	hum.StateChanged:Connect(function(_, new)
+		if new == Enum.HumanoidStateType.Landed and Round.state == "Playing" and Round.status(p) == "Alive" and p.Character == char then
+			SoundBus.emit(root.Position - Vector3.new(0, 2.5, 0), Config.Noise.Land, p, "StepLand")
+		end
+	end)
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 	hum.BreakJointsOnDeath = false

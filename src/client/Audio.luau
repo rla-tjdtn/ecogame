@@ -11,7 +11,7 @@ local SoundService = game:GetService("SoundService")
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local Audio = {}
-local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number, Cut: number?, Fx: { Distortion: number?, Reverb: number? }?, Steps: { { number } }?, Thump: number?, Claw: string? } }
+local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number, Cut: number?, Fx: { { any } }?, Steps: { { number } }?, Thump: number?, Claw: string? } }
 local player = Players.LocalPlayer
 
 local master = Instance.new("SoundGroup")
@@ -42,18 +42,21 @@ local function makeSound(name: string, parent: Instance, looped: boolean?): Soun
 		s.RollOffMinDistance = 5
 		s.RollOffMaxDistance = def.Range
 	end
-	-- 괴성: 왜곡 + 울림 효과(Fx)
+	-- Fx = { { "SoundEffect 클래스", { 속성 = 값 } }, ... }: 소리 효과(왜곡·울림·떨림·에코·플랜저 등).
+	-- 클래스·속성 이름이 틀려도 소리 전체가 죽지 않게 pcall 로 하나씩 적용한다.
 	if def.Fx then
-		if def.Fx.Distortion then
-			local d = Instance.new("DistortionSoundEffect")
-			d.Level = def.Fx.Distortion
-			d.Parent = s
-		end
-		if def.Fx.Reverb then
-			local r = Instance.new("ReverbSoundEffect")
-			r.DecayTime = def.Fx.Reverb
-			r.WetLevel = 3 -- (ReverbSoundEffect 에는 Wetness 가 없다: 울림 크기는 WetLevel, dB)
-			r.Parent = s
+		for _, fx in def.Fx do
+			local ok, eff = pcall(function()
+				return Instance.new(fx[1] :: string)
+			end)
+			if ok and eff then
+				for k, v in fx[2] :: { [string]: any } do
+					pcall(function()
+						(eff :: any)[k] = v
+					end)
+				end
+				eff.Parent = s
+			end
 		end
 	end
 	s.Parent = parent
@@ -63,7 +66,8 @@ end
 -- 한 번 재생하고 지운다. at 이 Vector3 이면 그 위치에서(3D), Instance 면 거기 붙여서, nil 이면 2D.
 Audio.steps = 0 -- (테스트) 지금까지 재생한 플레이어 발소리 수
 
-function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?, startAt: number?, cutOverride: number?)
+-- opts.gate = { 켜짐초, 꺼짐초 }: 그 박자로 소리를 끊어 켰다 껐다 한다(끊기는 괴성). opts.sweep = { { 정규화 시간 0~1, 피치 배율 }, ... }, opts.dur = 전체 길이(초): 소리를 반복 재생하면서 피치를 시간에 따라 바꾼다(사이렌·오르내리는 괴성)
+function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?, startAt: number?, cutOverride: number?, opts: { sweep: { { number } }?, dur: number?, gate: { number }? }?)
 	local parent: Instance
 	local holder: Attachment? = nil
 	if typeof(at) == "Vector3" then
@@ -95,6 +99,46 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 	end
 	if startAt then
 		s.TimePosition = startAt
+	end
+	local sweep = opts and opts.sweep
+	local gate = opts and opts.gate
+	if gate and not sweep then
+		sweep = { { 0, 1 }, { 1, 1 } } -- 음 높이 일정
+	end
+	if sweep then
+		local pts = sweep :: { { number } } -- (reassigned 변수라 클로저 안에서 nil 검사가 풀리므로 복사해 둔다)
+		local base, v0, dur = s.PlaybackSpeed, s.Volume, (opts and opts.dur) or 1
+		s.Looped = true
+		s.Volume = 0
+		task.spawn(function()
+			local t0 = os.clock()
+			while s.Parent do
+				local x = (os.clock() - t0) / dur
+				if x >= 1 then
+					break
+				end
+				local m = pts[#pts][2]
+				for i = 2, #pts do
+					if x <= pts[i][1] then
+						local a, b = pts[i - 1], pts[i]
+						m = a[2] + (b[2] - a[2]) * (x - a[1]) / math.max(b[1] - a[1], 1e-4)
+						break
+					end
+				end
+				s.PlaybackSpeed = base * m
+				-- 시작 0.05초 페이드인, 끝 0.15초 페이드아웃
+				local g = 1
+				if gate then
+					local ph = (x * dur) % (gate[1] + gate[2])
+					g = if ph < gate[1] then math.min(1, ph / 0.015, (gate[1] - ph) / 0.015) else 0
+				end
+				s.Volume = v0 * g * math.min(1, x * dur / 0.05, (1 - x) * dur / 0.15)
+				task.wait()
+			end
+			if s.Parent then
+				s:Stop()
+			end
+		end)
 	end
 	s:Play()
 	-- Cut: 그 시간(초)만 재생하고 짧게 줄여 끈다(여러 발짝이 든 발소리 파일에서 한 발짝만)
@@ -129,7 +173,7 @@ function Audio.scream(kind: string, at: Instance)
 	for _, layer in seq do
 		task.delay(layer.t, function()
 			if at.Parent then
-				Audio.play(layer.s, at, 0.05, layer.v, layer.p)
+				Audio.play(layer.s, at, 0.05, layer.v, layer.p, layer.start, nil, if layer.sweep or layer.gate then { sweep = layer.sweep, dur = layer.dur, gate = layer.gate } else nil)
 			end
 		end)
 	end
@@ -207,8 +251,8 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 			tr.acc = 0
 			tr.foot = -tr.foot
 			local name = if mode == "Run" then "FootRun" elseif mode == "Crouch" then "FootCrouch" else "FootWalk"
-			-- 왼발·오른발: 높낮이를 조금 다르게
-			Audio.footstep(name, root, 0.04, 1 + tr.foot * 0.04)
+			-- 매 걸음 똑같은 깔끔한 한 번의 소리(피치 흔들림·왼발/오른발 차이 없음)
+			Audio.footstep(name, root, 0)
 			Audio.steps += 1
 		end
 	end
@@ -216,7 +260,8 @@ end
 
 -- ── 괴물 상태 반응음 ──
 local monsterConns: { [Model]: { RBXScriptConnection } } = {}
-local idleAt: { [Model]: number } = {}
+local screamAt: { [Model]: number } = {} -- 추격 중 다음 괴성 시각
+local CHASE_SCREAM_GAP = { 3.5, 6 } -- 추격 중 괴성 사이 간격(초, 범위). 괴성 하나가 약 2.4초
 local function watchMonster(m: Instance)
 	if not m:IsA("Model") or monsterConns[m] then
 		return
@@ -229,20 +274,20 @@ local function watchMonster(m: Instance)
 		if not root then
 			return
 		end
-		if st == "Alert" then
-			Audio.scream("Alert", root)
-		elseif st == "Chase" then
-			Audio.scream("Chase", root)
-		end
+		-- 괴성은 플레이어를 발견해 쫓기 시작할 때만(배회·조사·수색·경계에는 지르지 않는다). 발소리는 평소에도 난다
+			if st == "Chase" then
+				Audio.scream("Chase", root)
+				screamAt[model] = os.clock() + CHASE_SCREAM_GAP[1] + math.random() * (CHASE_SCREAM_GAP[2] - CHASE_SCREAM_GAP[1])
+			end
 	end))
 	monsterConns[model] = conns
-	idleAt[model] = os.clock() + 5 + math.random() * 6
+	
 	model.Destroying:Connect(function()
 		for _, c in conns do
 			c:Disconnect()
 		end
 		monsterConns[model] = nil
-		idleAt[model] = nil
+		screamAt[model] = nil
 		trackers[model] = nil
 	end)
 end
@@ -309,10 +354,14 @@ function Audio.update()
 	local now = os.clock()
 	for _, m in CollectionService:GetTagged(Config.Tags.Monster) do
 		if m:IsA("Model") and m.PrimaryPart then
-			stepFor(m, m.PrimaryPart, true)
-			if m:GetAttribute("State") == "Wander" and idleAt[m] and now > idleAt[m] then
-				idleAt[m] = now + 7 + math.random() * 9
-				Audio.scream("Idle", m.PrimaryPart)
+			-- 평소에는 소리를 내지 않는다: 발소리·괴성 모두 쫓아올 때만
+			if m:GetAttribute("State") == "Chase" then
+				stepFor(m, m.PrimaryPart, true)
+				local at = screamAt[m]
+				if at and now > at then
+					screamAt[m] = now + CHASE_SCREAM_GAP[1] + math.random() * (CHASE_SCREAM_GAP[2] - CHASE_SCREAM_GAP[1])
+					Audio.scream("Chase", m.PrimaryPart)
+				end
 			end
 		end
 	end

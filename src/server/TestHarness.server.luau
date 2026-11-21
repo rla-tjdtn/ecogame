@@ -618,6 +618,42 @@ local function core()
 	local steps = (st1 and st0) and (st1.steps - st0.steps) or -1
 	check("footsteps: about one sound per step while walking (~2 per second)", steps >= 2 and steps <= 5, steps)
 
+	-- 실제 녹음 소리가 이 게임에서 불러와진다(라이선스 효과음)
+	local sc = ask(p, "soundCheck")
+	local zero = 0
+	for _, l in (sc and sc.lengths) or {} do
+		if l <= 0 then
+			zero += 1
+		end
+	end
+	check("licensed sounds load (screams + monster steps)", sc and #sc.bad == 0 and zero == 0, sc and (table.concat(sc.bad, ", ") .. " lengths " .. table.concat(sc.lengths, "/")))
+
+	-- 점프: 뛰어오르고, 착지 소리를 괴물이 들을 수 있다
+	do
+		place(p, tile(2, 6, 3), tile(2, 8, 3))
+		task.wait(0.6)
+		local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		local y0 = r and r.Position.Y or 0
+		local n0 = #SoundBus.recent
+		ask(p, "jump")
+		local peak = y0
+		local t0 = os.clock()
+		while os.clock() - t0 < 1.4 do
+			if r then
+				peak = math.max(peak, r.Position.Y)
+			end
+			task.wait()
+		end
+		local landed = false
+		for i = n0 + 1, #SoundBus.recent do
+			if SoundBus.recent[i].kind == "StepLand" then
+				landed = true
+			end
+		end
+		check("players can jump", peak - y0 > 1.5, string.format("%.1f studs", peak - y0))
+		check("landing makes a noise monsters can hear", landed)
+	end
+
 	-- 소리 감쇠
 	local a, b = tile(2, 3, 3), tile(2, 5, 3) -- 시작 방과 그 아래(벽 사이)
 	local walls = SoundBus.wallsBetween(a, b)
