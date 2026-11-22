@@ -90,6 +90,14 @@ local crouchBtn = button("Crouch", "웅크리기", 64, UDim2.new(), 14)
 local useBtn = button("Use", "E\n상호작용", 70, UDim2.new(), 14)
 local mapBtn = button("Map", "지도", 56, UDim2.new(), 15)
 local menuBtn = button("Menu", "방 메뉴", 62, UDim2.new(), 13)
+local hintBtn = button("Hint", "힌트", 52, UDim2.new(), 13) -- (마지막 열쇠 힌트가 준비됐을 때만)
+MobileUI.onHint = nil :: (() -> ())?
+MobileUI.hintAvailable = nil :: (() -> boolean)?
+hintBtn.Activated:Connect(function()
+	if MobileUI.onHint then
+		MobileUI.onHint()
+	end
+end)
 
 -- ── 배치: 오른손 엄지가 닿는 부채꼴(음파 가운데, 달리기·웅크리기·상호작용이 둘레), 버튼 사이 간격 약 25px ──
 -- 좌표는 작은 휴대폰(짧은 변 약 390) 기준 "버튼 가운데" 위치(화면 오른쪽 아래 / 오른쪽 위 모서리에서의 거리), 지름.
@@ -102,6 +110,7 @@ local LAYOUT: { Slot } = {
 	{ b = useBtn, x = -105, y = -200, d = 70, text = 14 }, -- 상호작용: 음파 바로 위
 	{ b = mapBtn, x = -52, y = 118, d = 56, text = 15, top = true }, -- 지도(게임 중): 오른쪽 위, 목숨 표시 아래
 	{ b = menuBtn, x = -56, y = 122, d = 62, text = 13, top = true }, -- 방 메뉴(로비): 지도와 같은 자리
+	{ b = hintBtn, x = -52, y = 182, d = 52, text = 13, top = true }, -- 힌트(마지막 열쇠): 지도 아래
 }
 local hookedJump: Instance? = nil -- (로블록스 점프 버튼: 다시 켜지는 순간 바로 숨긴다)
 local lastVP = Vector2.zero
@@ -218,6 +227,7 @@ RunService.Heartbeat:Connect(function(dt)
 	useBtn.Visible = alive and MobileUI.canInteract ~= nil and MobileUI.canInteract()
 	mapBtn.Visible = playing
 	menuBtn.Visible = lobby
+	hintBtn.Visible = playing and alive and MobileUI.hintAvailable ~= nil and MobileUI.hintAvailable()
 	-- 죽거나 스테이지가 바뀌면 달리기·웅크리기 해제
 	if not alive and (MobileUI.run or MobileUI.crouch) then
 		MobileUI.run = false

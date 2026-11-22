@@ -5,6 +5,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local KeyHUD = {}
@@ -30,6 +31,9 @@ local function makeLabel(y: number, size: number): TextLabel
 end
 local label = makeLabel(18, 18)
 local livesLabel = makeLabel(46, 18)
+local hintLabel = makeLabel(74, 15) -- (마지막 열쇠 힌트 안내)
+hintLabel.TextColor3 = Color3.fromRGB(239, 200, 110)
+hintLabel.Visible = false
 
 local safeLabel = Instance.new("TextLabel")
 safeLabel.AnchorPoint = Vector2.new(0.5, 0)
@@ -99,13 +103,51 @@ RunService.Heartbeat:Connect(function(dt)
 	safeLabel.Visible = Config.SafeZone.Enabled and playing() and root ~= nil and player:GetAttribute("Status") == "Alive" and inSafe(root.Position)
 end)
 
+-- 마지막 열쇠 힌트: 준비되면(서버 KeyHintReady) H(휴대폰은 힌트 버튼)로 그 상자 위치를 팀 지도에 표시
+local KeyHint = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("KeyHint") :: RemoteEvent
+function KeyHUD.hintAvailable(): boolean
+	return playing()
+		and ReplicatedStorage:GetAttribute("KeyHintReady") == true
+		and ReplicatedStorage:GetAttribute("HasKey") ~= true
+		and ReplicatedStorage:GetAttribute("KeyHintPos") == nil
+		and player:GetAttribute("Status") == "Alive"
+end
+function KeyHUD.requestHint()
+	if KeyHUD.hintAvailable() then
+		KeyHint:FireServer()
+	end
+end
+local function refreshHint()
+	local shown = ReplicatedStorage:GetAttribute("KeyHintPos") ~= nil and ReplicatedStorage:GetAttribute("HasKey") ~= true
+	if KeyHUD.hintAvailable() then
+		hintLabel.Text = if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then "힌트 버튼 — 마지막 열쇠 위치 보기" else "H — 마지막 열쇠 힌트 보기"
+		hintLabel.Visible = true
+	elseif shown and playing() then
+		hintLabel.Text = "마지막 열쇠 위치가 지도(Q)에 표시됨"
+		hintLabel.Visible = true
+	else
+		hintLabel.Visible = false
+	end
+end
+for _, a in { "KeyHintReady", "KeyHintPos" } do
+	ReplicatedStorage:GetAttributeChangedSignal(a):Connect(refreshHint)
+end
+UserInputService.InputBegan:Connect(function(input, processed)
+	if not processed and input.KeyCode == Enum.KeyCode.H then
+		KeyHUD.requestHint()
+	end
+end)
+
 function KeyHUD.state()
-	return { visible = gui.Enabled, text = label.Text, lives = livesLabel.Text, safe = safeLabel.Visible }
+	return { visible = gui.Enabled, text = label.Text, lives = livesLabel.Text, safe = safeLabel.Visible, hint = hintLabel.Visible and hintLabel.Text or nil }
 end
 
 for _, a in { "HasKey", "Keys", "KeysNeeded", "Mode", "RoundState" } do
 	ReplicatedStorage:GetAttributeChangedSignal(a):Connect(refresh)
+	ReplicatedStorage:GetAttributeChangedSignal(a):Connect(refreshHint)
 end
+player:GetAttributeChangedSignal("Status"):Connect(refreshHint)
+refreshHint()
 player:GetAttributeChangedSignal("Lives"):Connect(refresh)
 refresh()
 

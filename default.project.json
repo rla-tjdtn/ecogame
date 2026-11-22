@@ -12,7 +12,8 @@
         "RoundEvent": { "$className": "RemoteEvent" },
         "RoomAction": { "$className": "RemoteEvent" },
         "SearchAction": { "$className": "RemoteEvent" },
-        "MapShare": { "$className": "RemoteEvent" }
+        "MapShare": { "$className": "RemoteEvent" },
+        "KeyHint": { "$className": "RemoteEvent" }
       }
     },
     "ServerScriptService": {

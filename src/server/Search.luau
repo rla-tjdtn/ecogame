@@ -14,6 +14,19 @@ local SoundBus = require(script.Parent.SoundBus)
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
 local SearchAction = Remotes:WaitForChild("SearchAction") :: RemoteEvent
+local KeyHint = Remotes:WaitForChild("KeyHint") :: RemoteEvent
+-- 마지막 열쇠 힌트: 하나만 남고 Config.Key.HintAfter 초가 지나면 KeyHintReady. 누가 "힌트 보기"를 누르면
+-- 그 상자 위치를 KeyHintPos 로 팀 전체 지도에 표시한다(ReplicatedStorage 속성)
+local assignId = 0
+local function armHint()
+	ReplicatedStorage:SetAttribute("KeyHintReady", false)
+	local id = assignId
+	task.delay(Config.Key.HintAfter or 60, function()
+		if assignId == id and ReplicatedStorage:GetAttribute("HasKey") ~= true then
+			ReplicatedStorage:SetAttribute("KeyHintReady", true)
+		end
+	end)
+end
 
 local Search = {}
 
@@ -197,6 +210,10 @@ function Search.toggle(player: Player, spot: Spot, index: number): string
 		ReplicatedStorage:SetAttribute("Keys", found)
 		if found >= need then
 			ReplicatedStorage:SetAttribute("HasKey", true)
+			ReplicatedStorage:SetAttribute("KeyHintReady", false)
+			ReplicatedStorage:SetAttribute("KeyHintPos", nil)
+		elseif found == need - 1 then
+			armHint() -- (마지막 하나 남음: 시간이 지나면 힌트)
 		end
 		RoundEvent:FireAllClients("KeyFound", { by = player.DisplayName, userId = player.UserId, found = found, need = need })
 		return "key"
@@ -232,8 +249,11 @@ end)
 -- 새 스테이지: 열쇠 Config.Key.Count 개를 서로 다른 상자에 하나씩 넣는다.
 -- 시작에서 가장 가까운 상자들(3분의 1)은 빼고, 열쇠끼리는 되도록 멀리 흩어 놓는다(무작위 + 서로 먼 곳)
 function Search.assignKey(start: Vector3)
+	assignId += 1
 	ReplicatedStorage:SetAttribute("HasKey", false)
 	ReplicatedStorage:SetAttribute("Keys", 0)
+	ReplicatedStorage:SetAttribute("KeyHintReady", false)
+	ReplicatedStorage:SetAttribute("KeyHintPos", nil)
 	for _, s in spots do
 		for _, c in s.comps do
 			c.hasKey = false
@@ -283,7 +303,25 @@ function Search.assignKey(start: Vector3)
 		choice.comps[math.random(1, #choice.comps)].hasKey = true
 	end
 	ReplicatedStorage:SetAttribute("KeysNeeded", need)
+	if need == 1 then
+		armHint() -- (열쇠가 하나뿐이면 처음부터 그 하나가 마지막)
+	end
 end
+
+-- "힌트 보기": 준비됐고 아직 남은 열쇠가 있으면 그 상자 위치를 팀 전체 지도에 표시
+KeyHint.OnServerEvent:Connect(function(player: Player)
+	if ReplicatedStorage:GetAttribute("KeyHintReady") ~= true or ReplicatedStorage:GetAttribute("HasKey") == true then
+		return
+	end
+	if player:GetAttribute("Status") ~= "Alive" or ReplicatedStorage:GetAttribute("KeyHintPos") ~= nil then
+		return
+	end
+	local spot = Search.keySpot()
+	if spot then
+		ReplicatedStorage:SetAttribute("KeyHintPos", spot.center)
+		RoundEvent:FireAllClients("KeyHintShown", { by = player.DisplayName, userId = player.UserId })
+	end
+end)
 
 function Search.all(): { Spot }
 	return spots

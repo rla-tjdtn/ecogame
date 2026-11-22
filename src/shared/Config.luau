@@ -159,6 +159,7 @@ Config.Round = {
 Config.Key = {
 	Required = true, -- false 면 열쇠 없이도 탈출(테스트용)
 	Count = 3, -- 스테이지마다 열쇠 수: 팀이 모두 찾아야 출구가 열린다(누가 찾든 팀 공유)
+	HintAfter = 60, -- 마지막 열쇠 하나만 남은 뒤 이 시간(초)이 지나면 "힌트 보기"로 그 상자 위치를 지도에 표시할 수 있다
 	PromptDistance = 6,
 	SearchSeconds = 0.8, -- 뒤지는 시간
 	SearchNoise = 10, -- 뒤지는 소리 반경(스터드)

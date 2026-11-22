@@ -121,6 +121,9 @@ local function mateMark(i: number): Frame
 	return f
 end
 local exitMark = square(Color3.new(1, 1, 1), 8, 2)
+-- 마지막 열쇠 힌트(노란 마름모): ReplicatedStorage 속성 KeyHintPos(팀 공유)
+local keyMark = square(Color3.fromRGB(239, 190, 70), 11, 4)
+keyMark.Rotation = 45
 
 local title = Instance.new("TextLabel")
 title.BackgroundTransparency = 1
@@ -275,6 +278,13 @@ end)
 RunService.RenderStepped:Connect(function()
 	if not isOpen or W == 0 then
 		return
+	end
+	local kp = ReplicatedStorage:GetAttribute("KeyHintPos")
+	if typeof(kp) == "Vector3" and ReplicatedStorage:GetAttribute("HasKey") ~= true then
+		keyMark.Position = UDim2.fromScale(kp.X / (W * T), kp.Z / (H * T))
+		keyMark.Visible = true
+	else
+		keyMark.Visible = false
 	end
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?

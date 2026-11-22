@@ -54,45 +54,50 @@
       </Properties>
       <Item class="RemoteEvent" referent="6">
         <Properties>
-          <string name="Name">MapShare</string>
+          <string name="Name">KeyHint</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="7">
         <Properties>
-          <string name="Name">RoomAction</string>
+          <string name="Name">MapShare</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="8">
         <Properties>
-          <string name="Name">RoundEvent</string>
+          <string name="Name">RoomAction</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="9">
         <Properties>
-          <string name="Name">SearchAction</string>
+          <string name="Name">RoundEvent</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="10">
         <Properties>
-          <string name="Name">SetMoveMode</string>
+          <string name="Name">SearchAction</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="11">
         <Properties>
-          <string name="Name">SonarFire</string>
+          <string name="Name">SetMoveMode</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="12">
+        <Properties>
+          <string name="Name">SonarFire</string>
+        </Properties>
+      </Item>
+      <Item class="RemoteEvent" referent="13">
         <Properties>
           <string name="Name">SonarPulse</string>
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="13">
+    <Item class="Folder" referent="14">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
-      <Item class="ModuleScript" referent="14">
+      <Item class="ModuleScript" referent="15">
         <Properties>
           <string name="Name">Config</string>
           <string name="Source"><![CDATA[--!strict
@@ -256,6 +261,7 @@ Config.Round = {
 Config.Key = {
 	Required = true, -- false 면 열쇠 없이도 탈출(테스트용)
 	Count = 3, -- 스테이지마다 열쇠 수: 팀이 모두 찾아야 출구가 열린다(누가 찾든 팀 공유)
+	HintAfter = 60, -- 마지막 열쇠 하나만 남은 뒤 이 시간(초)이 지나면 "힌트 보기"로 그 상자 위치를 지도에 표시할 수 있다
 	PromptDistance = 6,
 	SearchSeconds = 0.8, -- 뒤지는 시간
 	SearchNoise = 10, -- 뒤지는 소리 반경(스터드)
@@ -728,7 +734,7 @@ return Config
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">MonsterFaces</string>
           <string name="Source"><![CDATA[--!strict
@@ -933,7 +939,7 @@ return Faces
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">SonarGeometry</string>
           <string name="Source"><![CDATA[--!strict
@@ -1205,15 +1211,15 @@ return Geo
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="17">
+  <Item class="ServerScriptService" referent="18">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="18">
+    <Item class="Folder" referent="19">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">Doors</string>
           <string name="Source"><![CDATA[--!strict
@@ -1406,7 +1412,7 @@ return Doors
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">Hiding</string>
           <string name="Source"><![CDATA[--!strict
@@ -1655,7 +1661,7 @@ return Hiding
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="22">
         <Properties>
           <string name="Name">Lobby</string>
           <string name="Source"><![CDATA[--!strict
@@ -1918,7 +1924,7 @@ return Lobby
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="22">
+      <Item class="Script" referent="23">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -2018,7 +2024,7 @@ task.spawn(Lobby.boot)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="24">
         <Properties>
           <string name="Name">MapKit</string>
           <string name="Source"><![CDATA[--!strict
@@ -2320,7 +2326,7 @@ return Kit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="24">
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">Monster</string>
           <string name="Source"><![CDATA[--!strict
@@ -4491,7 +4497,7 @@ return Monster
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">Props</string>
           <string name="Source"><![CDATA[--!strict
@@ -4740,7 +4746,7 @@ return Props
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="26">
+      <Item class="ModuleScript" referent="27">
         <Properties>
           <string name="Name">Rejoin</string>
           <string name="Source"><![CDATA[--!strict
@@ -4854,7 +4860,7 @@ return Rejoin
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="27">
+      <Item class="ModuleScript" referent="28">
         <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[--!strict
@@ -5722,7 +5728,7 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="28">
+      <Item class="ModuleScript" referent="29">
         <Properties>
           <string name="Name">Search</string>
           <string name="Source"><![CDATA[--!strict
@@ -5741,6 +5747,19 @@ local SoundBus = require(script.Parent.SoundBus)
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
 local SearchAction = Remotes:WaitForChild("SearchAction") :: RemoteEvent
+local KeyHint = Remotes:WaitForChild("KeyHint") :: RemoteEvent
+-- 마지막 열쇠 힌트: 하나만 남고 Config.Key.HintAfter 초가 지나면 KeyHintReady. 누가 "힌트 보기"를 누르면
+-- 그 상자 위치를 KeyHintPos 로 팀 전체 지도에 표시한다(ReplicatedStorage 속성)
+local assignId = 0
+local function armHint()
+	ReplicatedStorage:SetAttribute("KeyHintReady", false)
+	local id = assignId
+	task.delay(Config.Key.HintAfter or 60, function()
+		if assignId == id and ReplicatedStorage:GetAttribute("HasKey") ~= true then
+			ReplicatedStorage:SetAttribute("KeyHintReady", true)
+		end
+	end)
+end
 
 local Search = {}
 
@@ -5924,6 +5943,10 @@ function Search.toggle(player: Player, spot: Spot, index: number): string
 		ReplicatedStorage:SetAttribute("Keys", found)
 		if found >= need then
 			ReplicatedStorage:SetAttribute("HasKey", true)
+			ReplicatedStorage:SetAttribute("KeyHintReady", false)
+			ReplicatedStorage:SetAttribute("KeyHintPos", nil)
+		elseif found == need - 1 then
+			armHint() -- (마지막 하나 남음: 시간이 지나면 힌트)
 		end
 		RoundEvent:FireAllClients("KeyFound", { by = player.DisplayName, userId = player.UserId, found = found, need = need })
 		return "key"
@@ -5959,8 +5982,11 @@ end)
 -- 새 스테이지: 열쇠 Config.Key.Count 개를 서로 다른 상자에 하나씩 넣는다.
 -- 시작에서 가장 가까운 상자들(3분의 1)은 빼고, 열쇠끼리는 되도록 멀리 흩어 놓는다(무작위 + 서로 먼 곳)
 function Search.assignKey(start: Vector3)
+	assignId += 1
 	ReplicatedStorage:SetAttribute("HasKey", false)
 	ReplicatedStorage:SetAttribute("Keys", 0)
+	ReplicatedStorage:SetAttribute("KeyHintReady", false)
+	ReplicatedStorage:SetAttribute("KeyHintPos", nil)
 	for _, s in spots do
 		for _, c in s.comps do
 			c.hasKey = false
@@ -6010,7 +6036,25 @@ function Search.assignKey(start: Vector3)
 		choice.comps[math.random(1, #choice.comps)].hasKey = true
 	end
 	ReplicatedStorage:SetAttribute("KeysNeeded", need)
+	if need == 1 then
+		armHint() -- (열쇠가 하나뿐이면 처음부터 그 하나가 마지막)
+	end
 end
+
+-- "힌트 보기": 준비됐고 아직 남은 열쇠가 있으면 그 상자 위치를 팀 전체 지도에 표시
+KeyHint.OnServerEvent:Connect(function(player: Player)
+	if ReplicatedStorage:GetAttribute("KeyHintReady") ~= true or ReplicatedStorage:GetAttribute("HasKey") == true then
+		return
+	end
+	if player:GetAttribute("Status") ~= "Alive" or ReplicatedStorage:GetAttribute("KeyHintPos") ~= nil then
+		return
+	end
+	local spot = Search.keySpot()
+	if spot then
+		ReplicatedStorage:SetAttribute("KeyHintPos", spot.center)
+		RoundEvent:FireAllClients("KeyHintShown", { by = player.DisplayName, userId = player.UserId })
+	end
+end)
 
 function Search.all(): { Spot }
 	return spots
@@ -6032,7 +6076,7 @@ return Search
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="29">
+      <Item class="ModuleScript" referent="30">
         <Properties>
           <string name="Name">SoundBus</string>
           <string name="Source"><![CDATA[--!strict
@@ -6129,7 +6173,7 @@ return SoundBus
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="30">
+      <Item class="ModuleScript" referent="31">
         <Properties>
           <string name="Name">StageBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -6780,11 +6824,11 @@ return Builder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="31">
+      <Item class="Folder" referent="32">
         <Properties>
           <string name="Name">Stages</string>
         </Properties>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">Lobby</string>
             <string name="Source"><![CDATA[--!strict
@@ -6807,7 +6851,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">Stage1</string>
             <string name="Source"><![CDATA[--!strict
@@ -6868,7 +6912,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">Stage2</string>
             <string name="Source"><![CDATA[--!strict
@@ -6929,7 +6973,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">Stage3</string>
             <string name="Source"><![CDATA[--!strict
@@ -6992,7 +7036,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">Stage4</string>
             <string name="Source"><![CDATA[--!strict
@@ -7054,7 +7098,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">Stage5</string>
             <string name="Source"><![CDATA[--!strict
@@ -7134,7 +7178,7 @@ return {
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="38">
+      <Item class="Script" referent="39">
         <Properties>
           <string name="Name">TestHarness</string>
           <token name="RunContext">0</token>
@@ -9222,13 +9266,13 @@ end)
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="39">
+  <Item class="SoundService" referent="40">
     <Properties>
       <string name="Name">SoundService</string>
       <token name="AmbientReverb">11</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="40">
+  <Item class="StarterPlayer" referent="41">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -9240,11 +9284,11 @@ end)
       <float name="CharacterWalkSpeed">10</float>
       <bool name="EnableMouseLockOption">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="41">
+    <Item class="StarterPlayerScripts" referent="42">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="ModuleScript" referent="42">
+      <Item class="ModuleScript" referent="43">
         <Properties>
           <string name="Name">Audio</string>
           <string name="Source"><![CDATA[--!strict
@@ -9810,7 +9854,7 @@ return Audio
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="43">
+      <Item class="ModuleScript" referent="44">
         <Properties>
           <string name="Name">DoppelFx</string>
           <string name="Source"><![CDATA[--!strict
@@ -10018,7 +10062,7 @@ return DoppelFx
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="44">
+      <Item class="ModuleScript" referent="45">
         <Properties>
           <string name="Name">JumpScare</string>
           <string name="Source"><![CDATA[--!strict
@@ -10343,7 +10387,7 @@ return JumpScare
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="45">
+      <Item class="ModuleScript" referent="46">
         <Properties>
           <string name="Name">KeyHUD</string>
           <string name="Source"><![CDATA[--!strict
@@ -10353,6 +10397,7 @@ return JumpScare
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local KeyHUD = {}
@@ -10378,6 +10423,9 @@ local function makeLabel(y: number, size: number): TextLabel
 end
 local label = makeLabel(18, 18)
 local livesLabel = makeLabel(46, 18)
+local hintLabel = makeLabel(74, 15) -- (마지막 열쇠 힌트 안내)
+hintLabel.TextColor3 = Color3.fromRGB(239, 200, 110)
+hintLabel.Visible = false
 
 local safeLabel = Instance.new("TextLabel")
 safeLabel.AnchorPoint = Vector2.new(0.5, 0)
@@ -10447,13 +10495,51 @@ RunService.Heartbeat:Connect(function(dt)
 	safeLabel.Visible = Config.SafeZone.Enabled and playing() and root ~= nil and player:GetAttribute("Status") == "Alive" and inSafe(root.Position)
 end)
 
+-- 마지막 열쇠 힌트: 준비되면(서버 KeyHintReady) H(휴대폰은 힌트 버튼)로 그 상자 위치를 팀 지도에 표시
+local KeyHint = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("KeyHint") :: RemoteEvent
+function KeyHUD.hintAvailable(): boolean
+	return playing()
+		and ReplicatedStorage:GetAttribute("KeyHintReady") == true
+		and ReplicatedStorage:GetAttribute("HasKey") ~= true
+		and ReplicatedStorage:GetAttribute("KeyHintPos") == nil
+		and player:GetAttribute("Status") == "Alive"
+end
+function KeyHUD.requestHint()
+	if KeyHUD.hintAvailable() then
+		KeyHint:FireServer()
+	end
+end
+local function refreshHint()
+	local shown = ReplicatedStorage:GetAttribute("KeyHintPos") ~= nil and ReplicatedStorage:GetAttribute("HasKey") ~= true
+	if KeyHUD.hintAvailable() then
+		hintLabel.Text = if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then "힌트 버튼 — 마지막 열쇠 위치 보기" else "H — 마지막 열쇠 힌트 보기"
+		hintLabel.Visible = true
+	elseif shown and playing() then
+		hintLabel.Text = "마지막 열쇠 위치가 지도(Q)에 표시됨"
+		hintLabel.Visible = true
+	else
+		hintLabel.Visible = false
+	end
+end
+for _, a in { "KeyHintReady", "KeyHintPos" } do
+	ReplicatedStorage:GetAttributeChangedSignal(a):Connect(refreshHint)
+end
+UserInputService.InputBegan:Connect(function(input, processed)
+	if not processed and input.KeyCode == Enum.KeyCode.H then
+		KeyHUD.requestHint()
+	end
+end)
+
 function KeyHUD.state()
-	return { visible = gui.Enabled, text = label.Text, lives = livesLabel.Text, safe = safeLabel.Visible }
+	return { visible = gui.Enabled, text = label.Text, lives = livesLabel.Text, safe = safeLabel.Visible, hint = hintLabel.Visible and hintLabel.Text or nil }
 end
 
 for _, a in { "HasKey", "Keys", "KeysNeeded", "Mode", "RoundState" } do
 	ReplicatedStorage:GetAttributeChangedSignal(a):Connect(refresh)
+	ReplicatedStorage:GetAttributeChangedSignal(a):Connect(refreshHint)
 end
+player:GetAttributeChangedSignal("Status"):Connect(refreshHint)
+refreshHint()
 player:GetAttributeChangedSignal("Lives"):Connect(refresh)
 refresh()
 
@@ -10461,7 +10547,7 @@ return KeyHUD
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="46">
+      <Item class="ModuleScript" referent="47">
         <Properties>
           <string name="Name">LobbyUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -10768,7 +10854,7 @@ return LobbyUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="47">
+      <Item class="LocalScript" referent="48">
         <Properties>
           <string name="Name">Main</string>
           <string name="Source"><![CDATA[--!strict
@@ -11014,6 +11100,8 @@ end
 MobileUI.onMap = function()
 	MapView.toggle()
 end
+MobileUI.onHint = KeyHUD.requestHint
+MobileUI.hintAvailable = KeyHUD.hintAvailable
 MobileUI.onMenu = function()
 	LobbyUI.setMenu(not LobbyUI.state().menuOpen)
 end
@@ -11113,6 +11201,8 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	elseif kind == "SearchResult" then
 		local t = if data.result == "searching" then "뒤지는 중…" elseif data.result == "empty" then "비어 있다" else "이미 뒤진 곳이다"
 		UI.hint(t, if data.result == "searching" then 1 else 2)
+	elseif kind == "KeyHintShown" then
+		UI.hint((if data.userId == player.UserId then "힌트를 봤다" else (data.by .. " 님이 힌트를 봤다")) .. " — 마지막 열쇠 위치가 지도(Q)에 표시됨", 5)
 	elseif kind == "ExitFound" then
 		-- 누가 출구를 찾았다(팀 공유, 지도 Q 에도 표시된다)
 		UI.hint((if data.userId == player.UserId then "출구를 찾았다" else (data.by .. " 님이 출구를 찾았다")) .. " — 지도(Q)에 표시됨", 5)
@@ -11416,7 +11506,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="48">
+      <Item class="ModuleScript" referent="49">
         <Properties>
           <string name="Name">MapView</string>
           <string name="Source"><![CDATA[--!strict
@@ -11542,6 +11632,9 @@ local function mateMark(i: number): Frame
 	return f
 end
 local exitMark = square(Color3.new(1, 1, 1), 8, 2)
+-- 마지막 열쇠 힌트(노란 마름모): ReplicatedStorage 속성 KeyHintPos(팀 공유)
+local keyMark = square(Color3.fromRGB(239, 190, 70), 11, 4)
+keyMark.Rotation = 45
 
 local title = Instance.new("TextLabel")
 title.BackgroundTransparency = 1
@@ -11697,6 +11790,13 @@ RunService.RenderStepped:Connect(function()
 	if not isOpen or W == 0 then
 		return
 	end
+	local kp = ReplicatedStorage:GetAttribute("KeyHintPos")
+	if typeof(kp) == "Vector3" and ReplicatedStorage:GetAttribute("HasKey") ~= true then
+		keyMark.Position = UDim2.fromScale(kp.X / (W * T), kp.Z / (H * T))
+		keyMark.Visible = true
+	else
+		keyMark.Visible = false
+	end
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if root then
@@ -11737,7 +11837,7 @@ return Map
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="49">
+      <Item class="ModuleScript" referent="50">
         <Properties>
           <string name="Name">Mates</string>
           <string name="Source"><![CDATA[--!strict
@@ -11805,7 +11905,7 @@ return Mates
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="50">
+      <Item class="ModuleScript" referent="51">
         <Properties>
           <string name="Name">MobileUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -11900,6 +12000,14 @@ local crouchBtn = button("Crouch", "웅크리기", 64, UDim2.new(), 14)
 local useBtn = button("Use", "E\n상호작용", 70, UDim2.new(), 14)
 local mapBtn = button("Map", "지도", 56, UDim2.new(), 15)
 local menuBtn = button("Menu", "방 메뉴", 62, UDim2.new(), 13)
+local hintBtn = button("Hint", "힌트", 52, UDim2.new(), 13) -- (마지막 열쇠 힌트가 준비됐을 때만)
+MobileUI.onHint = nil :: (() -> ())?
+MobileUI.hintAvailable = nil :: (() -> boolean)?
+hintBtn.Activated:Connect(function()
+	if MobileUI.onHint then
+		MobileUI.onHint()
+	end
+end)
 
 -- ── 배치: 오른손 엄지가 닿는 부채꼴(음파 가운데, 달리기·웅크리기·상호작용이 둘레), 버튼 사이 간격 약 25px ──
 -- 좌표는 작은 휴대폰(짧은 변 약 390) 기준 "버튼 가운데" 위치(화면 오른쪽 아래 / 오른쪽 위 모서리에서의 거리), 지름.
@@ -11912,6 +12020,7 @@ local LAYOUT: { Slot } = {
 	{ b = useBtn, x = -105, y = -200, d = 70, text = 14 }, -- 상호작용: 음파 바로 위
 	{ b = mapBtn, x = -52, y = 118, d = 56, text = 15, top = true }, -- 지도(게임 중): 오른쪽 위, 목숨 표시 아래
 	{ b = menuBtn, x = -56, y = 122, d = 62, text = 13, top = true }, -- 방 메뉴(로비): 지도와 같은 자리
+	{ b = hintBtn, x = -52, y = 182, d = 52, text = 13, top = true }, -- 힌트(마지막 열쇠): 지도 아래
 }
 local hookedJump: Instance? = nil -- (로블록스 점프 버튼: 다시 켜지는 순간 바로 숨긴다)
 local lastVP = Vector2.zero
@@ -12028,6 +12137,7 @@ RunService.Heartbeat:Connect(function(dt)
 	useBtn.Visible = alive and MobileUI.canInteract ~= nil and MobileUI.canInteract()
 	mapBtn.Visible = playing
 	menuBtn.Visible = lobby
+	hintBtn.Visible = playing and alive and MobileUI.hintAvailable ~= nil and MobileUI.hintAvailable()
 	-- 죽거나 스테이지가 바뀌면 달리기·웅크리기 해제
 	if not alive and (MobileUI.run or MobileUI.crouch) then
 		MobileUI.run = false
@@ -12053,7 +12163,7 @@ return MobileUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="51">
+      <Item class="ModuleScript" referent="52">
         <Properties>
           <string name="Name">MonsterAnim</string>
           <string name="Source"><![CDATA[--!strict
@@ -12882,7 +12992,7 @@ return Anim
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="52">
+      <Item class="ModuleScript" referent="53">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
@@ -12984,7 +13094,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="53">
+      <Item class="LocalScript" referent="54">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -12992,7 +13102,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="54">
+      <Item class="ModuleScript" referent="55">
         <Properties>
           <string name="Name">Reveal</string>
           <string name="Source"><![CDATA[--!strict
@@ -13219,7 +13329,7 @@ return Reveal
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="55">
+      <Item class="ModuleScript" referent="56">
         <Properties>
           <string name="Name">SearchLook</string>
           <string name="Source"><![CDATA[--!strict
@@ -13311,7 +13421,7 @@ return SearchLook
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="56">
+      <Item class="ModuleScript" referent="57">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -13607,7 +13717,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="57">
+      <Item class="ModuleScript" referent="58">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -14054,7 +14164,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="58">
+      <Item class="ModuleScript" referent="59">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -14633,7 +14743,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="59">
+      <Item class="ModuleScript" referent="60">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -14846,7 +14956,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="60">
+  <Item class="Workspace" referent="61">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
