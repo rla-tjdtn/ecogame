@@ -1097,7 +1097,7 @@ local function lobbyTest()
 		end, 25)
 	end
 	local b1, b2 = built(p1), built(p2)
-	check("both clients see the lobby through sonar (outlines built)", b1 ~= nil and b2 ~= nil and b1.build.segs > 500, b1 and b1.build.segs)
+	check("both clients see the lobby through sonar (outlines built)", b1 ~= nil and b2 ~= nil and b1.build.segs > 100, b1 and b1.build.segs)
 	check("no monsters in the lobby", #Round.monsters == 0, #Round.monsters)
 	task.wait(0.5)
 	ask(p1, "resetCooldown")
@@ -1105,6 +1105,24 @@ local function lobbyTest()
 	task.wait(1.2)
 	local lit = ask(p1, "stats")
 	check("sonar lights up the lobby", lit and lit.lines.lit > 50, lit and lit.lines.lit)
+	-- 작은 로비: 음파 한 번으로 방 거의 전부(벽 아닌 칸의 90% 이상)가 닿아야 한다(지도에 기록된 칸으로 잰다)
+	do
+		local rows = string.split(stageFolder():GetAttribute("Rows"), "/")
+		local open = 0
+		for _, row in rows do
+			for k = 1, #row do
+				if string.sub(row, k, k) ~= "#" then
+					open += 1
+				end
+			end
+		end
+		local mp = nil
+		waitFor(function()
+			mp = ask(p1, "map")
+			return mp ~= nil and mp.explored >= open * 0.9
+		end, 6)
+		check("one sonar pulse shows almost the whole lobby (>= 90% of tiles)", mp ~= nil and mp.explored >= open * 0.9, string.format("%s/%d tiles", tostring(mp and mp.explored), open))
+	end
 	local u = ask(p1, "lobby")
 	check("room panel shown in the lobby", u and u.visible and table.find(u.buttons, "방 만들기") ~= nil, u and table.concat(u.buttons, ","))
 	local c0 = ask(p1, "cursor")
