@@ -10985,13 +10985,50 @@ local function button(name: string, text: string, size: number, pos: UDim2, text
 	return b
 end
 
--- 오른쪽 아래(로블록스 점프 버튼 위·왼쪽): 음파가 가장 크고 엄지가 닿기 쉬운 곳
-local sonarBtn = button("Sonar", "음파", 104, UDim2.new(1, -185, 1, -120), 22)
-local runBtn = button("Run", "달리기", 66, UDim2.new(1, -300, 1, -95), 15)
-local crouchBtn = button("Crouch", "웅크리기", 66, UDim2.new(1, -290, 1, -180), 14)
-local useBtn = button("Use", "E\n상호작용", 76, UDim2.new(1, -185, 1, -245), 14)
-local mapBtn = button("Map", "지도", 56, UDim2.new(1, -60, 0, 110), 15)
-local menuBtn = button("Menu", "방 메뉴", 70, UDim2.new(1, -70, 0, 190), 14)
+local sonarBtn = button("Sonar", "음파", 100, UDim2.new(), 22)
+local runBtn = button("Run", "달리기", 64, UDim2.new(), 15)
+local crouchBtn = button("Crouch", "웅크리기", 64, UDim2.new(), 14)
+local useBtn = button("Use", "E\n상호작용", 70, UDim2.new(), 14)
+local mapBtn = button("Map", "지도", 56, UDim2.new(), 15)
+local menuBtn = button("Menu", "방 메뉴", 62, UDim2.new(), 13)
+
+-- ── 배치: 오른손 엄지가 닿는 부채꼴(음파 가운데, 달리기·웅크리기·상호작용이 둘레), 버튼 사이 간격 약 25px ──
+-- 좌표는 작은 휴대폰(짧은 변 약 390) 기준 "버튼 가운데" 위치(화면 오른쪽 아래 / 오른쪽 위 모서리에서의 거리), 지름.
+-- 휴대폰에서는 로블록스 점프 버튼을 없앴으므로(이 게임에서는 점프가 거의 필요 없다) 음파를 엄지가 쉬는 오른쪽 아래에 둔다.
+type Slot = { b: TextButton, x: number, y: number, d: number, text: number, top: boolean? }
+local LAYOUT: { Slot } = {
+	{ b = sonarBtn, x = -110, y = -95, d = 100, text = 22 }, -- 음파: 오른쪽 아래 엄지 자리, 가장 크게
+	{ b = runBtn, x = -215, y = -55, d = 64, text = 15 }, -- 달리기: 음파 왼쪽 아래(엄지를 왼쪽으로)
+	{ b = crouchBtn, x = -210, y = -150, d = 64, text = 14 }, -- 웅크리기: 달리기 위
+	{ b = useBtn, x = -105, y = -200, d = 70, text = 14 }, -- 상호작용: 음파 바로 위
+	{ b = mapBtn, x = -52, y = 118, d = 56, text = 15, top = true }, -- 지도(게임 중): 오른쪽 위, 목숨 표시 아래
+	{ b = menuBtn, x = -56, y = 122, d = 62, text = 13, top = true }, -- 방 메뉴(로비): 지도와 같은 자리
+}
+local hookedJump: Instance? = nil -- (로블록스 점프 버튼: 다시 켜지는 순간 바로 숨긴다)
+local lastVP = Vector2.zero
+local function layout()
+	local cam = workspace.CurrentCamera
+	local vp = if cam then cam.ViewportSize else Vector2.new(812, 375)
+	if vp == lastVP then
+		return
+	end
+	lastVP = vp
+	local short = math.min(vp.X, vp.Y)
+	-- 작은 휴대폰은 조금 작게, 태블릿은 크게
+	local s = math.clamp(short / 390, 0.85, 1.3)
+	local shift = 0
+	for _, slot in LAYOUT do
+		local d = math.floor(slot.d * s)
+		slot.b.Size = UDim2.fromOffset(d, d)
+		slot.b.TextSize = math.floor(slot.text * s)
+		if slot.top then
+			slot.b.Position = UDim2.new(1, slot.x * s, 0, slot.y * s)
+		else
+			slot.b.Position = UDim2.new(1, slot.x * s + shift, 1, slot.y * s)
+		end
+	end
+end
+layout()
 
 local function paintToggle(b: TextButton, on: boolean)
 	b.BackgroundColor3 = if on then Color3.fromRGB(230, 230, 230) else DIM
@@ -11049,6 +11086,26 @@ RunService.Heartbeat:Connect(function(dt)
 	gui.Enabled = on
 	if not on then
 		return
+	end
+	layout() -- (화면을 돌리거나 크기가 바뀌면 다시 배치)
+	-- 로블록스 기본 점프 버튼 숨기기(휴대폰에서만. 로블록스가 상태에 따라 다시 켜므로 계속 확인)
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	local touchGui = pg and pg:FindFirstChild("TouchGui")
+	local frame = touchGui and touchGui:FindFirstChild("TouchControlFrame")
+	local jump = frame and frame:FindFirstChild("JumpButton")
+	if jump and jump:IsA("GuiObject") then
+		if jump.Visible then
+			jump.Visible = false
+		end
+		if hookedJump ~= jump then
+			hookedJump = jump
+			local j = jump :: GuiObject
+			j:GetPropertyChangedSignal("Visible"):Connect(function()
+				if j.Visible and gui.Enabled then
+					j.Visible = false
+				end
+			end)
+		end
 	end
 	local mode = ReplicatedStorage:GetAttribute("Mode")
 	local lobby = mode == "Lobby"
