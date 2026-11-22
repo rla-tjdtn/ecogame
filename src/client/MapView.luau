@@ -6,6 +6,10 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local World = require(script.Parent:WaitForChild("SonarWorld"))
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- 팀 지도 공유: 내가 새로 밝힌 칸을 서버에 보내고, 서버가 모은 팀 전체 기록을 받는다(멀리 있는 팀원·다시 살아남·재접속도 같은 지도)
+local MapShare = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("MapShare") :: RemoteEvent
+local currentBuild: number? = nil
 
 local Map = {}
 
@@ -125,10 +129,10 @@ local function line(x1: number, y1: number, x2: number, y2: number)
 	f.Parent = lines
 end
 
-local function markTile(i: number, j: number)
+local function markTile(i: number, j: number): boolean
 	local k = j * 1024 + i
 	if explored[k] or isWall(i, j) or i < 1 or j < 1 or i > W or j > H then
-		return
+		return false
 	end
 	explored[k] = true
 	exploredCount += 1
@@ -148,6 +152,7 @@ local function markTile(i: number, j: number)
 		exitMark.Position = UDim2.fromScale((i - 0.5) / W, (j - 0.5) / H)
 		exitMark.Visible = true
 	end
+	return true
 end
 
 -- 새 스테이지: 기록을 지운다
@@ -163,18 +168,41 @@ function Map.load(stage: Instance)
 	exploredCount = 0
 	exitMark.Visible = false
 	aspect.AspectRatio = if H > 0 then W / H else 1
+	-- 팀이 이미 밝힌 칸을 서버에서 받아 온다(다시 살아나거나 다시 들어와도 지도가 이어진다)
+	currentBuild = stage:GetAttribute("BuildId") :: number?
+	MapShare:FireServer("sync")
 end
+
+-- 서버가 보낸 팀원 기록(같은 스테이지일 때만)
+MapShare.OnClientEvent:Connect(function(data: any)
+	if type(data) ~= "table" or data.build ~= currentBuild or type(data.tiles) ~= "table" or W == 0 then
+		return
+	end
+	for _, k in data.tiles do
+		if type(k) == "number" then
+			markTile(k % 1024, k // 1024)
+		end
+	end
+end)
 
 -- 내 음파가 끝났다: 닿은 복셀의 칸을 기록
 function Map.onReach(dist: { [number]: number }, radius: number)
 	if W == 0 then
 		return
 	end
+	local fresh = {}
 	for idx, d in dist do
 		if d <= radius then
 			local c = World.cellCenter(idx)
-			markTile(math.floor(c.X / T) + 1, math.floor(c.Z / T) + 1)
+			local i, j = math.floor(c.X / T) + 1, math.floor(c.Z / T) + 1
+			if markTile(i, j) then
+				table.insert(fresh, j * 1024 + i)
+			end
 		end
+	end
+	-- 새로 밝힌 칸을 팀에 알린다
+	if #fresh > 0 and currentBuild then
+		MapShare:FireServer({ build = currentBuild, tiles = fresh })
 	end
 end
 

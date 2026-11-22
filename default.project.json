@@ -11,7 +11,8 @@
         "SetMoveMode": { "$className": "RemoteEvent" },
         "RoundEvent": { "$className": "RemoteEvent" },
         "RoomAction": { "$className": "RemoteEvent" },
-        "SearchAction": { "$className": "RemoteEvent" }
+        "SearchAction": { "$className": "RemoteEvent" },
+        "MapShare": { "$className": "RemoteEvent" }
       }
     },
     "ServerScriptService": {

@@ -18,6 +18,40 @@ local Search = require(script.Parent.Search)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
+local MapShare = Remotes:WaitForChild("MapShare") :: RemoteEvent
+
+-- ── 팀 지도 공유: 이번 스테이지에서 팀이 밝힌 칸(행*1024+열). 스테이지를 새로 지으면 비운다 ──
+Round.explored = {} :: { [number]: boolean }
+MapShare.OnServerEvent:Connect(function(p: Player, data: any)
+	local build = Round.roundId
+	if data == "sync" then
+		-- 이 사람 지도에 지금까지 팀 기록 전부
+		local all = {}
+		for k in Round.explored do
+			table.insert(all, k)
+		end
+		MapShare:FireClient(p, { build = build, tiles = all })
+		return
+	end
+	if type(data) ~= "table" or data.build ~= build or type(data.tiles) ~= "table" then
+		return
+	end
+	local fresh = {}
+	for i = 1, math.min(#data.tiles, 800) do
+		local k = data.tiles[i]
+		if type(k) == "number" and k == math.floor(k) and k > 0 and k < 200000 and not Round.explored[k] then
+			Round.explored[k] = true
+			table.insert(fresh, k)
+		end
+	end
+	if #fresh > 0 then
+		for _, other in Players:GetPlayers() do
+			if other ~= p then
+				MapShare:FireClient(other, { build = build, tiles = fresh })
+			end
+		end
+	end
+end)
 
 local Round = {}
 Round.stageIndex = 1
@@ -186,6 +220,7 @@ local function buildLayout(layout: any, label: string)
 		end
 	end
 	Round.roundId += 1
+	table.clear(Round.explored) -- (새 스테이지: 팀 지도 기록 비우기)
 	folder:SetAttribute("PartCount", count)
 	folder:SetAttribute("BuildId", Round.roundId)
 	folder:SetAttribute("BoundsMin", info.bounds.min)
