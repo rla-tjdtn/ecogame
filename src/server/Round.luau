@@ -205,7 +205,14 @@ end
 local function nextSpawn(): CFrame
 	local info = Round.info :: Builder.StageInfo
 	spawnCursor += 1
-	return info.spawns[((spawnCursor - 1) % #info.spawns) + 1]
+	local n = #info.spawns
+	local cf = info.spawns[((spawnCursor - 1) % n) + 1]
+	-- 시작 칸보다 사람이 많으면(최대 6명, 시작 칸 4개) 같은 칸 안에서 옆으로 비켜 선다(겹치지 않게)
+	local lap = math.floor((spawnCursor - 1) / n)
+	if lap > 0 then
+		cf = cf * CFrame.new(if lap % 2 == 1 then 2.5 else -2.5, 0, 0)
+	end
+	return cf
 end
 
 function Round.spawnPlayer(p: Player)

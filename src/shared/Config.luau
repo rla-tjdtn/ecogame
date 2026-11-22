@@ -164,7 +164,7 @@ Config.Key = {
 
 -- 로비·방
 Config.Lobby = {
-	MaxPlayers = 4, -- 방 하나 최대 인원
+	MaxPlayers = 6, -- 방 하나 최대 인원(서버 최대 인원 default.project.json Players.MaxPlayers 와 같게)
 	MinPlayers = 1, -- 시작할 수 있는 최소 인원
 	LocalStart = false, -- true 면 텔레포트하지 않고 이 서버에서 시작(Studio 에서는 항상 이 서버에서)
 }

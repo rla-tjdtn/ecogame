@@ -55,6 +55,14 @@ local function label(text: string, y: number, size: number, color: Color3, h: nu
 end
 
 local title = label("로비 — 방", 14, 20, WHITE)
+-- (방 사람이 많으면(최대 6명) 이름이 다 들어가게 글자를 줄인다)
+title.TextScaled = true
+do
+	local c = Instance.new("UITextSizeConstraint")
+	c.MaxTextSize = 20
+	c.MinTextSize = 11
+	c.Parent = title
+end
 local hint = label("Tab: 메뉴 열기 (마우스)", 42, 14, GREY)
 local msg = label("", 380, 14, Color3.fromRGB(226, 75, 74), 30)
 

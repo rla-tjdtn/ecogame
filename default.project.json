@@ -31,7 +31,7 @@
       "StarterPlayerScripts": { "$path": "src/client" }
     },
     "Players": {
-      "$properties": { "CharacterAutoLoads": false, "MaxPlayers": 4 }
+      "$properties": { "CharacterAutoLoads": false, "MaxPlayers": 6 }
     },
     "Workspace": {
       "$properties": { "StreamingEnabled": false }

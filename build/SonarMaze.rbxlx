@@ -41,7 +41,7 @@
     <Properties>
       <string name="Name">Players</string>
       <bool name="CharacterAutoLoads">false</bool>
-      <int name="MaxPlayersInternal">4</int>
+      <int name="MaxPlayersInternal">6</int>
     </Properties>
   </Item>
   <Item class="ReplicatedStorage" referent="4">
@@ -256,7 +256,7 @@ Config.Key = {
 
 -- 로비·방
 Config.Lobby = {
-	MaxPlayers = 4, -- 방 하나 최대 인원
+	MaxPlayers = 6, -- 방 하나 최대 인원(서버 최대 인원 default.project.json Players.MaxPlayers 와 같게)
 	MinPlayers = 1, -- 시작할 수 있는 최소 인원
 	LocalStart = false, -- true 면 텔레포트하지 않고 이 서버에서 시작(Studio 에서는 항상 이 서버에서)
 }
@@ -4406,7 +4406,14 @@ end
 local function nextSpawn(): CFrame
 	local info = Round.info :: Builder.StageInfo
 	spawnCursor += 1
-	return info.spawns[((spawnCursor - 1) % #info.spawns) + 1]
+	local n = #info.spawns
+	local cf = info.spawns[((spawnCursor - 1) % n) + 1]
+	-- 시작 칸보다 사람이 많으면(최대 6명, 시작 칸 4개) 같은 칸 안에서 옆으로 비켜 선다(겹치지 않게)
+	local lap = math.floor((spawnCursor - 1) / n)
+	if lap > 0 then
+		cf = cf * CFrame.new(if lap % 2 == 1 then 2.5 else -2.5, 0, 0)
+	end
+	return cf
 end
 
 function Round.spawnPlayer(p: Player)
@@ -9538,6 +9545,14 @@ local function label(text: string, y: number, size: number, color: Color3, h: nu
 end
 
 local title = label("로비 — 방", 14, 20, WHITE)
+-- (방 사람이 많으면(최대 6명) 이름이 다 들어가게 글자를 줄인다)
+title.TextScaled = true
+do
+	local c = Instance.new("UITextSizeConstraint")
+	c.MaxTextSize = 20
+	c.MinTextSize = 11
+	c.Parent = title
+end
 local hint = label("Tab: 메뉴 열기 (마우스)", 42, 14, GREY)
 local msg = label("", 380, 14, Color3.fromRGB(226, 75, 74), 30)
 
