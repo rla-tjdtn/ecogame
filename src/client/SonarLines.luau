@@ -22,6 +22,7 @@ type Rec = {
 	q: number,
 	slot: number,
 	wake: number?, -- 밝기가 일정한 구간에서는 이 시각까지 계산을 건너뛴다
+	tint: Color3?, -- 이 선만의 색(괴물 이빨 등, 파트 속성 SonarColor). 없으면 Config.Sonar.LineColor
 }
 
 local folder: Folder? = nil
@@ -146,8 +147,8 @@ local function place(part: Part, a: Vector3, b: Vector3, cam: Vector3)
 	table.insert(moveCFs, CFrame.lookAt(mid, mid + dir, up))
 end
 
--- 선 하나를 보여 준다. key 가 같은 선이 이미 있으면 그 선을 갱신한다.
-function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: number?, cam: Vector3, replace: boolean?)
+-- 선 하나를 보여 준다. key 가 같은 선이 이미 있으면 그 선을 갱신한다. tint: 이 선만의 색(없으면 기본 흰색)
+function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: number?, cam: Vector3, replace: boolean?, tint: Color3?)
 	if (b - a).Magnitude < 0.03 then
 		return
 	end
@@ -160,6 +161,7 @@ function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: numb
 			rec.peak = math.max(peak, rec.peak * 0.5)
 			rec.q = -1
 			rec.wake = nil
+			rec.tint = tint
 			if replace then
 				place(rec.part, a, b, cam)
 			end
@@ -171,7 +173,7 @@ function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: numb
 		return
 	end
 	place(part, a, b, cam)
-	local rec: Rec = { part = part, t0 = now, peak = peak, key = key, q = -1, slot = #active + 1 }
+	local rec: Rec = { part = part, t0 = now, peak = peak, key = key, q = -1, slot = #active + 1, tint = tint }
 	active[rec.slot] = rec
 	table.insert(order, { rec = rec, t0 = now })
 	-- 큐 앞쪽 빈자리 정리
@@ -227,7 +229,8 @@ function Lines.update(now: number)
 			if q ~= rec.q then
 				rec.q = q
 				local v = q / QUANT
-				rec.part.Color = Color3.new(LR * v, LG * v, LB * v)
+				local c = rec.tint
+				rec.part.Color = if c then Color3.new(c.R * v, c.G * v, c.B * v) else Color3.new(LR * v, LG * v, LB * v)
 				frameColor += 1
 			end
 			i += 1

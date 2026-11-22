@@ -76,10 +76,10 @@ local function draw(shape: number)
 	local function px(x: number, y: number): Vector2
 		return Vector2.new((0.5 + (x - cx) * k) * size, (0.5 + (y - cy) * k) * size)
 	end
-	local function line(a: Vector2, b: Vector2, w: number)
+	local function line(a: Vector2, b: Vector2, w: number, color: Color3?)
 		local d = b - a
 		local fr = Instance.new("Frame")
-		fr.BackgroundColor3 = WHITE
+		fr.BackgroundColor3 = color or WHITE
 		fr.BorderSizePixel = 0
 		fr.AnchorPoint = Vector2.new(0.5, 0.5)
 		fr.Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
@@ -94,7 +94,7 @@ local function draw(shape: number)
 			local a, b = l.pts[i], l.pts[i % n + 1]
 			local ax, ay = rot(a[1], a[2])
 			local bx, by = rot(b[1], b[2])
-			line(px(ax, ay), px(bx, by), w)
+			line(px(ax, ay), px(bx, by), w, l.tint) -- 이빨은 붉은색
 		end
 	end
 	for _, e in f.circles do

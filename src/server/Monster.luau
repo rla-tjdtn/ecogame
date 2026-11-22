@@ -664,7 +664,9 @@ local function buildModel(cf: CFrame, _stage: number): Model
 	local function seg(a: Vector3, b: Vector3, r: number)
 		-- 음파에는 한 획으로: 막대는 가운데 선 하나(Line), 얇은 원판은 원 하나(Disc)
 		local shape = if (b - a).Magnitude > r * 4 then "Line" else "Disc"
-		add(Kit.cylinder(model, at(a), at(b), r, { shape = shape }))
+		local p = Kit.cylinder(model, at(a), at(b), r, { shape = shape })
+		add(p)
+		return p
 	end
 	local V3 = Vector3.new
 	-- ── 사용자 확정 디자인(노트 main-monster-bone.svg, 모든 스테이지 공통) ──
@@ -788,7 +790,10 @@ local function buildModel(cf: CFrame, _stage: number): Model
 		local n = #l.pts
 		for i = 1, (if l.closed then n else n - 1) do
 			local a, b = l.pts[i], l.pts[i % n + 1]
-			seg(hp(a[1], a[2], l.dz), hp(b[1], b[2], l.dz), l.r)
+			local p = seg(hp(a[1], a[2], l.dz), hp(b[1], b[2], l.dz), l.r)
+			if l.tint then
+				p:SetAttribute("SonarColor", l.tint) -- 붉은 바늘 이빨
+			end
 		end
 	end
 	for _, c in face.circles do

@@ -7,9 +7,11 @@
 local Faces = {}
 -- 지금 메인 괴물 머리(모든 스테이지 공통). 1~5 는 예전 스테이지별 머리(지금은 쓰지 않음)
 Faces.BONE = 6
+-- 메인 괴물 바늘 이빨 색(사용자 확정: 흰 몸 · 흰 눈 · 붉은 이빨). 음파 선(SonarColor)과 점프스케어에 같이 쓴다
+Faces.TEETH = Color3.fromRGB(255, 42, 42)
 
 export type Pt = { number }
-export type Line = { pts: { Pt }, r: number, closed: boolean, dz: number }
+export type Line = { pts: { Pt }, r: number, closed: boolean, dz: number, tint: Color3? }
 export type Circle = { u: number, v: number, rad: number, dz: number, pupil: boolean }
 export type Face = { tx: number, ty: number, deg: number, scale: number, lines: { Line }, circles: { Circle }, extra: { Line }, extraCircles: { Circle } }
 
@@ -106,6 +108,7 @@ function Faces.build(shape: number): Face
 			for _, q in list do
 				local x, y, len = q[1] - f.tx, q[2] - f.ty, q[3]
 				L({ { x - w * c, y - w * s }, { x + len * s, y - len * c }, { x + w * c, y + w * s } }, 0.012, false, -0.04)
+				f.lines[#f.lines].tint = Faces.TEETH
 			end
 		end
 		needles(170.24, { { 287.4, 108.7, 12 }, { 294.7, 107.5, 21 }, { 302.1, 106.2, 18 }, { 309.4, 104.9, 26 }, { 316.8, 103.7, 20 }, { 324.1, 102.4, 29 }, { 331.5, 101.1, 21 }, { 338.8, 99.9, 29 }, { 346.2, 98.6, 22 }, { 353.5, 97.4, 29 }, { 360.9, 96.1, 21 }, { 368.2, 94.8, 27 }, { 375.6, 93.6, 20 }, { 382.9, 92.3, 25 }, { 390.3, 91, 17 }, { 397.6, 89.8, 13 } })

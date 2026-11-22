@@ -28,6 +28,7 @@ type Pulse = {
 	dynB: { Vector3 },
 	dynM: { Vector3 },
 	dynKey: { number | false },
+	dynTint: { [number]: Color3 }, -- 나눈 선분 번호 → 색(파트 속성 SonarColor 가 있는 것만)
 	dynCell: { [number]: { number } },
 	dseen: { [number]: boolean },
 	cam: Vector3,
@@ -165,6 +166,7 @@ local function gatherDynamic(p: Pulse, exclude: Model?)
 		end
 	end
 	-- 문, 괴물, 다른 플레이어(그 순간의 모습)
+	local tints: { [number]: Color3 } = {}
 	for _, e in World.dynamicParts(p.origin, R, exclude) do
 		local part = e.part
 		local before = list.n
@@ -182,6 +184,12 @@ local function gatherDynamic(p: Pulse, exclude: Model?)
 		else
 			Geo.staticEdges(part, list, true)
 			Geo.viewEdges(part, p.cam, list)
+			local tint = part:GetAttribute("SonarColor")
+			if typeof(tint) == "Color3" then
+				for i = before + 1, list.n do
+					tints[i] = tint
+				end
+			end
 		end
 		local pid = dynId(part)
 		for i = before + 1, list.n do
@@ -207,6 +215,7 @@ local function gatherDynamic(p: Pulse, exclude: Model?)
 				local m = (pa + pb) / 2
 				p.dynM[n] = m
 				p.dynKey[-n] = if key then (key :: number) * 32 - s else false
+				p.dynTint[n] = tints[i] :: any
 				for _, idx in World.attachCells(m) do
 					local l = p.dynCell[idx]
 					if not l then
@@ -283,6 +292,7 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 		dynB = {},
 		dynM = {},
 		dynKey = {},
+		dynTint = {},
 		dynCell = {},
 		dseen = {},
 		cam = Pulses.camera(),
@@ -408,7 +418,7 @@ local function reveal(p: Pulse, id: number, arrival: number, now: number)
 	else
 		local s = -id
 		local key = p.dynKey[-s]
-		Lines.show(p.dynA[s], p.dynB[s], now, peak, if key then (key :: number) - 1e7 else nil, p.cam, true)
+		Lines.show(p.dynA[s], p.dynB[s], now, peak, if key then (key :: number) - 1e7 else nil, p.cam, true, p.dynTint[s])
 	end
 	p.revealed += 1
 	if p.trace and #p.trace < 6000 then
