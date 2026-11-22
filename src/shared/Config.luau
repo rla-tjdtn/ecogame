@@ -158,6 +158,7 @@ Config.Round = {
 -- 열쇠: 스테이지마다 상자·서랍(맵 문자 Z) 중 한 곳에 있고, 팀이 찾아야 출구가 열린다
 Config.Key = {
 	Required = true, -- false 면 열쇠 없이도 탈출(테스트용)
+	Count = 3, -- 스테이지마다 열쇠 수: 팀이 모두 찾아야 출구가 열린다(누가 찾든 팀 공유)
 	PromptDistance = 6,
 	SearchSeconds = 0.8, -- 뒤지는 시간
 	SearchNoise = 10, -- 뒤지는 소리 반경(스터드)

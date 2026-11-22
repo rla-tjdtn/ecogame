@@ -55,6 +55,7 @@ Config.SafeZone.Enabled = false -- (예전 테스트는 시작 방에서 괴물�
 Config.Flower.StartDelay = 1e6 -- (꽃괴물도 멈춰 둔다)
 Config.Doppel.StartDelay = 1e6 -- (도플갱어도 멈춰 둔다: doppel 테스트에서만 움직인다)
 Config.Key.Required = false -- (열쇠 시험은 core 에서 따로 켠다)
+Config.Key.Count = 1 -- (예전 열쇠 시험은 열쇠 하나를 전제)
 Config.Round.ResultSeconds = 2
 Config.Round.FirstStartDelay = 1
 
@@ -782,7 +783,7 @@ local function core()
 	task.wait(1.2)
 	check("exit is locked without the key", p:GetAttribute("Status") == "Alive" and ReplicatedStorage:GetAttribute("HasKey") ~= true, p:GetAttribute("Status"))
 	local kh0 = ask(p, "keyHud")
-	check("key indicator shows no key", kh0 and kh0.visible and kh0.text:find("없음", 1, true) ~= nil, kh0 and kh0.text)
+	check("key indicator shows no key", kh0 and kh0.visible and kh0.text:find("0/", 1, true) ~= nil, kh0 and kh0.text)
 	local empty = nil
 	for _, sp in spotsZ do
 		if not sp.hasKey then
@@ -838,7 +839,7 @@ local function core()
 		check("searching the right one finds the key (whole team)", r3 == "key" and ReplicatedStorage:GetAttribute("HasKey") == true, r3)
 		task.wait(0.4)
 		local kh1 = ask(p, "keyHud")
-		check("key indicator shows the key", kh1 and kh1.text:find("있음", 1, true) ~= nil, kh1 and kh1.text)
+		check("key indicator shows the key", kh1 and kh1.text:find("출구로", 1, true) ~= nil, kh1 and kh1.text)
 	end
 
 	-- 13. 출구 → 탈출 → STAGE CLEAR

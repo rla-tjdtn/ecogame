@@ -334,12 +334,19 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		UI.setStage("로비")
 		task.delay(1.5, UI.hint, if MobileUI.state().enabled then "방 메뉴 버튼 — 방 만들기·참가      음파 버튼 — 음파" else "Tab — 방 메뉴      좌클릭 — 음파      Q — 지도", 7)
 	elseif kind == "KeyFound" then
-		UI.hint((if data.userId == player.UserId then "열쇠를 찾았다" else (data.by .. " 님이 열쇠를 찾았다")) .. " — 이제 출구가 열린다", 5)
+		local who = if data.userId == player.UserId then "열쇠를 찾았다" else (data.by .. " 님이 열쇠를 찾았다")
+		local found, need = data.found or 1, data.need or 1
+		UI.hint(string.format("%s (%d/%d)", who, found, need) .. (if found >= need then " — 이제 출구가 열린다" else string.format(" — 남은 열쇠 %d개", need - found)), 5)
 	elseif kind == "SearchResult" then
 		local t = if data.result == "searching" then "뒤지는 중…" elseif data.result == "empty" then "비어 있다" else "이미 뒤진 곳이다"
 		UI.hint(t, if data.result == "searching" then 1 else 2)
+	elseif kind == "ExitFound" then
+		-- 누가 출구를 찾았다(팀 공유, 지도 Q 에도 표시된다)
+		UI.hint((if data.userId == player.UserId then "출구를 찾았다" else (data.by .. " 님이 출구를 찾았다")) .. " — 지도(Q)에 표시됨", 5)
 	elseif kind == "ExitLocked" then
-		UI.hint("출구가 잠겨 있다 — 상자나 서랍에서 열쇠를 찾아야 한다", 3)
+		local found = (ReplicatedStorage:GetAttribute("Keys") :: number?) or 0
+		local need = (ReplicatedStorage:GetAttribute("KeysNeeded") :: number?) or 1
+		UI.hint(string.format("출구가 잠겨 있다 — 열쇠 %d/%d, 상자나 서랍에서 %d개 더 찾아야 한다", found, need, need - found), 3)
 	elseif kind == "RoomMsg" then
 		LobbyUI.message(data.text)
 	elseif kind == "RoomStarting" then

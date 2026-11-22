@@ -53,7 +53,10 @@ local function refresh()
 	gui.Enabled = playing()
 	label.Visible = Config.Key.Required
 	local has = ReplicatedStorage:GetAttribute("HasKey") == true
-	label.Text = if has then "열쇠  있음 — 출구로" else "열쇠  없음"
+	local found = (ReplicatedStorage:GetAttribute("Keys") :: number?) or 0
+	local need = (ReplicatedStorage:GetAttribute("KeysNeeded") :: number?) or 1
+	-- (팀 공유: 누가 찾든 같은 수)
+	label.Text = if has then string.format("열쇠  %d/%d — 출구로", found, need) else string.format("열쇠  %d/%d", found, need)
 	label.TextColor3 = if has then Color3.fromRGB(235, 235, 235) else Color3.fromRGB(140, 140, 140)
 	-- 목숨: 남은 것은 ♥, 잃은 것은 ♡
 	local lives = (player:GetAttribute("Lives") :: number?) or Config.Lives.PerStage
@@ -100,7 +103,7 @@ function KeyHUD.state()
 	return { visible = gui.Enabled, text = label.Text, lives = livesLabel.Text, safe = safeLabel.Visible }
 end
 
-for _, a in { "HasKey", "Mode", "RoundState" } do
+for _, a in { "HasKey", "Keys", "KeysNeeded", "Mode", "RoundState" } do
 	ReplicatedStorage:GetAttributeChangedSignal(a):Connect(refresh)
 end
 player:GetAttributeChangedSignal("Lives"):Connect(refresh)

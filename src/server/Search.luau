@@ -140,8 +140,9 @@ function Search.create(parent: Instance, pos: Vector3, back: Vector3, styleName:
 	return spot
 end
 
-local function hasKey(): boolean
-	return ReplicatedStorage:GetAttribute("HasKey") == true
+-- 팀이 찾은 열쇠 수(ReplicatedStorage 속성 Keys)와 필요한 수(KeysNeeded). 다 찾으면 HasKey = true(출구가 열린다)
+local function keysFound(): number
+	return (ReplicatedStorage:GetAttribute("Keys") :: number?) or 0
 end
 
 local function move(c: Comp, toOpen: boolean)
@@ -188,9 +189,16 @@ function Search.toggle(player: Player, spot: Spot, index: number): string
 	end
 	task.wait(math.max(0, Config.Key.SearchSeconds - 0.25))
 	c.searched = true
-	if c.hasKey and not hasKey() then
-		ReplicatedStorage:SetAttribute("HasKey", true)
-		RoundEvent:FireAllClients("KeyFound", { by = player.DisplayName, userId = player.UserId })
+	if c.hasKey then
+		-- 열쇠 하나 찾음(팀 공유). 다 모으면 출구가 열린다
+		c.hasKey = false
+		local need = (ReplicatedStorage:GetAttribute("KeysNeeded") :: number?) or 1
+		local found = math.min(need, keysFound() + 1)
+		ReplicatedStorage:SetAttribute("Keys", found)
+		if found >= need then
+			ReplicatedStorage:SetAttribute("HasKey", true)
+		end
+		RoundEvent:FireAllClients("KeyFound", { by = player.DisplayName, userId = player.UserId, found = found, need = need })
 		return "key"
 	end
 	RoundEvent:FireClient(player, "SearchResult", { result = if c.hasKey then "empty" else "empty" })
@@ -221,23 +229,60 @@ SearchAction.OnServerEvent:Connect(function(player: Player, spotId: any, index: 
 	Search.toggle(player, spot, index)
 end)
 
--- 새 스테이지: 열쇠를 한 칸에 넣는다(시작에서 먼 쪽 절반의 상자 중 무작위, 그 상자의 무작위 칸)
+-- 새 스테이지: 열쇠 Config.Key.Count 개를 서로 다른 상자에 하나씩 넣는다.
+-- 시작에서 가장 가까운 상자들(3분의 1)은 빼고, 열쇠끼리는 되도록 멀리 흩어 놓는다(무작위 + 서로 먼 곳)
 function Search.assignKey(start: Vector3)
 	ReplicatedStorage:SetAttribute("HasKey", false)
+	ReplicatedStorage:SetAttribute("Keys", 0)
 	for _, s in spots do
 		for _, c in s.comps do
 			c.hasKey = false
 		end
 	end
 	if #spots == 0 then
+		ReplicatedStorage:SetAttribute("KeysNeeded", 0)
+		ReplicatedStorage:SetAttribute("HasKey", true)
 		return
 	end
 	local sorted = table.clone(spots)
 	table.sort(sorted, function(a, b)
 		return (a.front - start).Magnitude > (b.front - start).Magnitude
 	end)
-	local pick = sorted[math.random(1, math.max(1, math.ceil(#sorted / 2)))]
-	pick.comps[math.random(1, #pick.comps)].hasKey = true
+	local pool = {}
+	for i = 1, math.max(1, math.ceil(#sorted * 2 / 3)) do
+		table.insert(pool, sorted[i])
+	end
+	local need = math.min(Config.Key.Count or 1, #spots)
+	local picked: { Spot } = {}
+	while #picked < need do
+		if #pool == 0 then
+			-- (모자라면 나머지 상자에서)
+			for _, s in sorted do
+				if not table.find(picked, s) then
+					table.insert(pool, s)
+				end
+			end
+		end
+		local choice: Spot
+		if #picked == 0 then
+			choice = pool[math.random(1, #pool)]
+		else
+			-- 이미 고른 열쇠들과 가장 먼 상자 몇 개 중 무작위
+			table.sort(pool, function(a, b)
+				local da, db = math.huge, math.huge
+				for _, q in picked do
+					da = math.min(da, (a.front - q.front).Magnitude)
+					db = math.min(db, (b.front - q.front).Magnitude)
+				end
+				return da > db
+			end)
+			choice = pool[math.random(1, math.min(3, #pool))]
+		end
+		table.remove(pool, table.find(pool, choice) :: number)
+		table.insert(picked, choice)
+		choice.comps[math.random(1, #choice.comps)].hasKey = true
+	end
+	ReplicatedStorage:SetAttribute("KeysNeeded", need)
 end
 
 function Search.all(): { Spot }

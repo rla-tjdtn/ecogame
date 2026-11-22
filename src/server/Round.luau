@@ -46,6 +46,16 @@ MapShare.OnServerEvent:Connect(function(p: Player, data: any)
 			table.insert(fresh, k)
 		end
 	end
+	-- 출구 칸이 처음 밝혀졌다: 팀 전체에 알린다(지도에도 이미 공유된다)
+	local info = Round.info
+	if #fresh > 0 and not Round.exitAnnounced and info then
+		local ep = info.exitCFrame.Position
+		local exitKey = (math.floor(ep.Z / 8) + 1) * 1024 + math.floor(ep.X / 8) + 1
+		if table.find(fresh, exitKey) then
+			Round.exitAnnounced = true
+			RoundEvent:FireAllClients("ExitFound", { by = p.DisplayName, userId = p.UserId })
+		end
+	end
 	if #fresh > 0 then
 		for _, other in Players:GetPlayers() do
 			if other ~= p then
@@ -222,6 +232,7 @@ local function buildLayout(layout: any, label: string)
 	end
 	Round.roundId += 1
 	table.clear(Round.explored) -- (새 스테이지: 팀 지도 기록 비우기)
+	Round.exitAnnounced = false
 	folder:SetAttribute("PartCount", count)
 	folder:SetAttribute("BuildId", Round.roundId)
 	folder:SetAttribute("BoundsMin", info.bounds.min)
@@ -775,6 +786,7 @@ function Round.enterLobby()
 	end
 	buildLayout(require(script.Parent.Stages.Lobby) :: any, "lobby")
 	ReplicatedStorage:SetAttribute("HasKey", false)
+	ReplicatedStorage:SetAttribute("Keys", 0)
 	ReplicatedStorage:SetAttribute("StageIndex", 0)
 	ReplicatedStorage:SetAttribute("StageName", "로비")
 	ReplicatedStorage:SetAttribute("RoundId", Round.roundId)
