@@ -1523,6 +1523,48 @@ local function stages()
 	end
 end
 
+-- 스테이지마다 아무 곳 12군데에서 음파를 쏴 본다(실패하면 이유·위치)
+local function sonarAll()
+	local ps = readyPlayers(1)
+	if not ps then
+		check("player ready", false)
+		return
+	end
+	local p = ps[1]
+	for i = 1, #Config.Stages do
+		Round.startStage(i)
+		if not readyPlayers(1) then
+			check("stage " .. i .. " ready", false)
+			continue
+		end
+		waitFor(function()
+			local s = ask(p, "lastFail")
+			return s and s.ready
+		end, 20)
+		local m = Round.monsters[1]
+		local fails, lowLit = {}, {}
+		for k = 1, 12 do
+			local pos = if m then m:randomNode(nil) else Round.info.spawns[1].Position
+			place(p, pos + Vector3.new(0, 3, 0))
+			task.wait(0.35)
+			ask(p, "resetCooldown")
+			local ok = ask(p, "fire")
+			if not ok then
+				local why = ask(p, "lastFail")
+				table.insert(fails, string.format("(%.0f,%.0f,%.0f):%s", pos.X, pos.Y, pos.Z, why and tostring(why.fail or ("ready=" .. tostring(why.ready) .. " st=" .. tostring(why.status))) or "?"))
+			else
+				task.wait(1.0)
+				local s2 = ask(p, "stats")
+				if not s2 or s2.lines.lit < 30 then
+					table.insert(lowLit, string.format("(%.0f,%.0f,%.0f):lit=%s", pos.X, pos.Y, pos.Z, s2 and tostring(s2.lines.lit) or "?"))
+				end
+			end
+		end
+		check(string.format("stage %d: sonar fires at 12 random spots", i), #fails == 0, table.concat(fails, " "))
+		check(string.format("stage %d: sonar shows lines at those spots", i), #lowLit == 0, table.concat(lowLit, " "))
+	end
+end
+
 -- ─────────────────────────────── doppel ───────────────────────────────
 -- 도플갱어: 스테이지마다 한 마리(사람 모습) → 음파·가까이서 보면 들킴 → 5~10초 뒤 터지며 괴물 → 추격·잡기(도플갱어 점프스케어)
 local function doppelTest()
@@ -2069,6 +2111,8 @@ task.spawn(function()
 			multi()
 		elseif args.Test == "perf" then
 			perf()
+		elseif args.Test == "sonarall" then
+			sonarAll()
 		elseif args.Test == "stages" then
 			stages()
 		elseif args.Test == "seal" then

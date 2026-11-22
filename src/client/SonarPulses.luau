@@ -40,6 +40,7 @@ local pulses: { Pulse } = {}
 local nextId = 0
 Pulses.last = nil :: Pulse?
 Pulses.started = 0
+Pulses.lastFail = nil :: string?
 Pulses.camera = function(): Vector3
 	local cam = workspace.CurrentCamera
 	return if cam then cam.CFrame.Position else Vector3.zero
@@ -220,28 +221,41 @@ local function gatherDynamic(p: Pulse, exclude: Model?)
 end
 
 function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boolean
+	Pulses.lastFail = nil
 	if not World.ready then
+		Pulses.lastFail = "notReady"
 		return false
 	end
 	if Pulses.onStart then
 		Pulses.onStart(origin)
 	end
-	local x, y, z = World.cellOf(origin)
-	if not x then
+	-- 격자 밖이면 격자 안 가장 가까운 칸으로(맵 가장자리·높은 곳에서도 쏴지게)
+	local o, cs = World.origin, World.cs
+	local cx = math.clamp(math.floor((origin.X - o.X) / cs), 0, World.nx - 1)
+	local cy = math.clamp(math.floor((origin.Y - o.Y) / cs), 0, World.ny - 1)
+	local cz = math.clamp(math.floor((origin.Z - o.Z) / cs), 0, World.nz - 1)
+	if World.nx <= 0 or World.ny <= 0 or World.nz <= 0 then
+		Pulses.lastFail = "outOfGrid"
 		return false
 	end
-	-- 시작 복셀(막혀 있으면 가까운 빈 칸)
+	local x, y, z = cx, cy, cz
+	-- 시작 복셀(막혀 있으면 가까운 빈 칸. 좁은 곳·장식 옆이면 점점 넓게 찾는다)
 	local start, startD = nil, math.huge
-	for dz = -1, 1 do
-		for dy = -1, 1 do
-			for dx = -1, 1 do
-				local xx, yy, zz = (x :: number) + dx, (y :: number) + dy, (z :: number) + dz
-				if xx >= 0 and yy >= 0 and zz >= 0 and xx < World.nx and yy < World.ny and zz < World.nz then
-					local idx = World.index(xx, yy, zz)
-					if World.free(idx) then
-						local d = (World.cellCenter(idx) - origin).Magnitude
-						if d < startD then
-							start, startD = idx, d
+	for reach = 1, 4 do
+		if start then
+			break
+		end
+		for dz = -reach, reach do
+			for dy = -reach, reach do
+				for dx = -reach, reach do
+					local xx, yy, zz = (x :: number) + dx, (y :: number) + dy, (z :: number) + dz
+					if xx >= 0 and yy >= 0 and zz >= 0 and xx < World.nx and yy < World.ny and zz < World.nz then
+						local idx = World.index(xx, yy, zz)
+						if World.free(idx) then
+							local d = (World.cellCenter(idx) - origin).Magnitude
+							if d < startD then
+								start, startD = idx, d
+							end
 						end
 					end
 				end
@@ -249,6 +263,7 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 		end
 	end
 	if not start then
+		Pulses.lastFail = "blocked"
 		return false
 	end
 	nextId += 1
@@ -278,7 +293,12 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 	gatherDynamic(p, exclude)
 	p.dist[start] = startD
 	push(p, startD, start)
-	table.insert(pulses, p)
+	-- 내 음파를 먼저 처리한다(한 프레임 연산·선 수 한도를 팀원·도플갱어 음파보다 먼저 쓴다)
+	if p.own then
+		table.insert(pulses, 1, p)
+	else
+		table.insert(pulses, p)
+	end
 	Pulses.last = p
 	Pulses.started += 1
 	return true
@@ -365,6 +385,7 @@ end
 
 local function reveal(p: Pulse, id: number, arrival: number, now: number)
 	local peak = 1 - (1 - S.FarLevel) * math.clamp(arrival / S.Radius, 0, 1)
+	Lines.force = p.own
 	if id > 0 then
 		Lines.show(World.SA[id], World.SB[id], now, peak, id, p.cam, false)
 	else

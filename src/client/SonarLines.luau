@@ -84,6 +84,7 @@ local function release(i: number)
 end
 
 Lines.dropped = 0
+Lines.force = false -- (SonarPulses 가 내 음파를 그릴 때 켠다)
 -- (테스트) 한 프레임에 한 일의 양: 색 바꾸기, 위치·크기 바꾸기 — 가장 많았던 프레임
 local frameColor, framePlace = 0, 0
 Lines.maxColor, Lines.maxPlace = 0, 0
@@ -112,6 +113,20 @@ local function take(now: number): Part?
 			return table.remove(free)
 		else
 			break
+		end
+	end
+	-- 내 음파는 꼭 그려져야 한다: 사라지는 선이 없으면 가장 오래 켜져 있던 선(먼저 쏜 음파)을 가져온다
+	if Lines.force then
+		while head <= #order do
+			local e = order[head]
+			local r = e.rec
+			order[head] = nil :: any
+			head += 1
+			if active[r.slot] == r and r.t0 == e.t0 then
+				Lines.stolen += 1
+				release(r.slot)
+				return table.remove(free)
+			end
 		end
 	end
 	Lines.dropped += 1

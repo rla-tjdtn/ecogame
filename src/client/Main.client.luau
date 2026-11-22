@@ -488,6 +488,8 @@ task.spawn(function()
 			}
 		elseif cmd == "fire" then
 			return fire()
+		elseif cmd == "lastFail" then
+			return { fail = Pulses.lastFail, ready = World.ready, hidden = player:GetAttribute("Hidden"), status = player:GetAttribute("Status") }
 		elseif cmd == "rawFire" then
 			-- 로컬 대기시간을 무시하고 서버에 바로 요청(서버 검증 시험)
 			SonarFire:FireServer()
