@@ -357,7 +357,7 @@ end
 -- ── 괴물 상태 반응음 ──
 local monsterConns: { [Model]: { RBXScriptConnection } } = {}
 local screamAt: { [Model]: number } = {} -- 추격 중 다음 괴성 시각
-local CHASE_SCREAM_GAP = { 3.5, 6 } -- 추격 중 괴성 사이 간격(초, 범위). 괴성 하나가 약 2.4초
+local CHASE_SCREAM_GAP = { 10, 15 } -- 추격 중 괴성 사이 간격(초, 범위). 쫓기 시작할 때 한 번 지르고, 그 뒤로는 10~15초에 한 번(너무 자주 지르지 않게)
 local function watchMonster(m: Instance)
 	if not m:IsA("Model") or monsterConns[m] then
 		return
