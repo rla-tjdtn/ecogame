@@ -280,14 +280,14 @@ function JumpScare.play(scream: (() -> ())?, kind: string?)
 	end
 	busy = true
 	JumpScare.count += 1
-	local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
+
 	gui.Enabled = true
 	if kind == "doppel" then
 		drawDoppel()
 	elseif kind == "flower" then
 		drawFlower()
 	else
-		draw(((math.max(1, si) - 1) % 5) + 1)
+		draw(Faces.BONE)
 	end
 	JumpScare.lastKind = kind or "monster"
 	if scream then
