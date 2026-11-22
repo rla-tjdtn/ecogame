@@ -242,7 +242,9 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 	if isMonster then
 		if tr.acc >= 4.6 then -- 사람(4.8)과 비슷한 거리지만 괴물은 느려서 쿵… 쿵… 간격이 더 길다
 			tr.acc = 0
-			Audio.footstep("MonsterStep", root, 0.08)
+			-- 배회할 때는 조금 작게, 쫓아올 때는 크게
+			local chase = model:GetAttribute("State") == "Chase"
+			Audio.play("MonsterStep", root, 0.08, if chase then 1 else Config.Monster.StepWanderVolume)
 		end
 	else
 		local mode = (model:GetAttribute("MoveMode") :: string?) or "Walk"
@@ -354,9 +356,9 @@ function Audio.update()
 	local now = os.clock()
 	for _, m in CollectionService:GetTagged(Config.Tags.Monster) do
 		if m:IsA("Model") and m.PrimaryPart then
-			-- 평소에는 소리를 내지 않는다: 발소리·괴성 모두 쫓아올 때만
+			-- 발소리는 늘 난다(움직일 때). 괴성은 쫓아올 때만
+			stepFor(m, m.PrimaryPart, true)
 			if m:GetAttribute("State") == "Chase" then
-				stepFor(m, m.PrimaryPart, true)
 				local at = screamAt[m]
 				if at and now > at then
 					screamAt[m] = now + CHASE_SCREAM_GAP[1] + math.random() * (CHASE_SCREAM_GAP[2] - CHASE_SCREAM_GAP[1])

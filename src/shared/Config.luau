@@ -65,9 +65,9 @@ Config.Monster = {
 	WanderSpeed = 3.5, -- 아주 천천히(플레이어는 길을 찾으며 도망가야 한다)
 	InvestigateSpeed = 5.5,
 	ChaseSpeed = 8.5, -- 걷기(10)보다도 느리다: 막다른 길·정면으로 마주칠 때 잡힌다
-	SightRange = 15, -- 시야(어둠 속 감각) 거리
-	SightRangeCrouch = 7,
-	SenseRange = 4.5, -- 이 거리 안이면 시야와 상관없이 알아챈다
+	SightRange = 24, -- 시야(어둠 속 감각) 거리 (15 → 24: 더 멀리서 알아챈다)
+	SightRangeCrouch = 12, -- 웅크리면 이만큼만
+	SenseRange = 7, -- 이 거리 안이면 시야와 상관없이 알아챈다
 	CatchDistance = 3.4,
 	AlertTime = 0.8, -- 소리를 듣고 멈칫하는 시간
 	SearchTime = 9, -- 소리 난 곳 주변을 뒤지는 시간
@@ -80,6 +80,7 @@ Config.Monster = {
 	AgentHeight = 8,
 	HuntEvery = 25, -- 배회 중 이 시간(초)마다 한 번은 플레이어 근처 지점으로 간다(큰 맵에서 마주치게)
 	HuntRadius = 40, -- 그 지점이 플레이어에서 이 거리(스터드) 안
+	StepWanderVolume = 0.55, -- 배회할 때 발소리 크기(추격 때 = 1)
 	LegTiles = 8, -- 먼 길은 타일 경로를 따라 이만큼(칸)씩 나눠 경로를 계산한다
 }
 
@@ -137,7 +138,7 @@ Config.Sounds = {
 	Door = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.8, Pitch = 0.55, Range = 60 },
 	-- 괴물 발소리: 사람과 완전히 다르게 — 깊고 무거운 "쿵"(울림) + 낮게 늘인 발톱 "타닥"(Claw). 걸음 간격도 사람보다 느리고 불규칙하다
 	-- 괴물 발소리: 실제 녹음된 무거운 생물 발걸음(Pro Sound Effects). 쫓아올 때만 들린다
-	MonsterStep = { Id = "rbxassetid://9114166413", Volume = 0.9, Pitch = 0.9, Range = 120, Near = 10, Cut = 0.6 }, -- (추격 때만)
+	MonsterStep = { Id = "rbxassetid://9114166413", Volume = 0.9, Pitch = 0.9, Range = 120, Near = 10, Cut = 0.6 }, -- (늘 난다: 배회 땐 Monster.StepWanderVolume 배)
 	MonsterClaw = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.35, Pitch = 0.55, Range = 95, Steps = { { 0.03, 0.34 }, { 0.62, 0.34 } } },
 	-- MonsterIdle / MonsterAlert / MonsterChase / MonsterScream2 / MonsterWaveThud(괴성)는 아래 Config.ScreamStyles 에서 고른 시안이 채운다.
 	AmbientHum = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.18, Pitch = 0.22, Range = 0 }, -- 환풍기·배관 진동(루프)
