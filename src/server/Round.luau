@@ -431,7 +431,31 @@ function Round.pickDisguise(): (HumanoidDescription?, string?)
 	return nil, nil
 end
 
+-- 괴물끼리 한 곳에 몰려 나오지 않게: 이미 놓인 괴물들과 minD 이상 떨어진 후보 중 무작위(없으면 가장 먼 곳)
+local function spreadPick(list: { Vector3 }, placed: { Vector3 }, minD: number): Vector3
+	local ok = {}
+	local best, bestD = list[1], -1
+	for _, n in list do
+		local d = math.huge
+		for _, q in placed do
+			d = math.min(d, (n - q).Magnitude)
+		end
+		if d >= minD then
+			table.insert(ok, n)
+		end
+		if d > bestD then
+			best, bestD = n, d
+		end
+	end
+	if #ok > 0 then
+		return ok[math.random(1, #ok)]
+	end
+	return best
+end
+local MONSTER_GAP = 70 -- 괴물끼리 처음 자리 사이 최소 거리(스터드)
+
 function Round.spawnMonsters(count: number)
+	local placed: { Vector3 } = {}
 	local info = Round.info :: Builder.StageInfo
 	local spawnPos = info.spawns[1].Position
 	local candidates = {}
@@ -481,7 +505,11 @@ function Round.spawnMonsters(count: number)
 			end
 			if #inHalf > 0 then
 				-- (candidates 는 시작점에서 먼 순: 먼 쪽 3분의 1 중 무작위)
-				pick = inHalf[math.random(1, math.max(1, math.ceil(#inHalf / 3)))]
+				local far = {}
+				for i = 1, math.max(1, math.ceil(#inHalf / 3)) do
+					table.insert(far, inHalf[i])
+				end
+				pick = spreadPick(far, placed, MONSTER_GAP)
 			end
 		end
 		local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
@@ -489,6 +517,7 @@ function Round.spawnMonsters(count: number)
 		end, Round.stageIndex)
 		m.route = info.route
 		;(m :: any).territory = half
+		table.insert(placed, pick)
 		table.insert(Round.monsters, m)
 		m:run()
 	end
@@ -507,7 +536,8 @@ function Round.spawnMonsters(count: number)
 			near = candidates
 		end
 		for _ = 1, D.PerStage do
-			local pick = near[math.random(1, #near)]
+			local pick = spreadPick(near, placed, MONSTER_GAP)
+			table.insert(placed, pick)
 			local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
 				Round.kill(player, "doppel")
 			end, Round.stageIndex, "doppel")
@@ -544,7 +574,8 @@ function Round.spawnMonsters(count: number)
 			spots = candidates
 		end
 		for _ = 1, F.PerStage do
-			local pick = spots[math.random(1, #spots)]
+			local pick = spreadPick(spots, placed, MONSTER_GAP)
+			table.insert(placed, pick)
 			local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
 				Round.kill(player, "flower")
 			end, Round.stageIndex, "flower")

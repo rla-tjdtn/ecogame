@@ -22,6 +22,10 @@ Monster.__index = Monster
 Monster.isSafe = function(_pos: Vector3): boolean
 	return false
 end
+-- 살아 있는 괴물 전부(서로 몰리지 않게 거리를 본다)
+Monster.registry = {} :: { any }
+local SPREAD = 35 -- 배회 중 다른 괴물이 이 거리 안이면 반대쪽으로 간다
+local SHARE_SOUND = 25 -- 같은 소리를 이미 다른 괴물이 이 거리 안으로 조사하러 가면 따라가지 않는다
 
 export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase" | "Disguise" | "Dormant" | "Look"
 
@@ -1013,6 +1017,7 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 			table.insert(self.joints, { motor = motor, base = motor.C0, offset = if (isLeg == left) then 0 else math.pi, amp = if isLeg then 0.5 else 0.38 })
 		end
 	end
+	table.insert(Monster.registry, self)
 	return self
 end
 
@@ -1281,6 +1286,19 @@ function Monster.investigate(self: Monster, pos: Vector3)
 	if Monster.isSafe(pos) then
 		-- 안전 구역 안의 소리: 그 앞(밖)까지만 와 본다
 		pos = self:nearestOutside(pos) or pos
+	end
+	-- 같은 소리에 여러 마리가 몰려가지 않게: 이미 그 근처를 조사하러 가는(더 가까운) 괴물이 있으면 이 괴물은 가지 않는다
+	-- (소리가 아주 가까우면 예외)
+	local myD = (pos - self.root.Position).Magnitude
+	if myD > 15 and self.state ~= "Chase" then
+		for _, o in Monster.registry do
+			if o ~= self and o.alive and (o.state == "Alert" or o.state == "Investigate" or o.state == "Search" or o.state == "Chase") then
+				local og = o.goal or o.searchCenter
+				if og and (og - pos).Magnitude < SHARE_SOUND and (pos - o.root.Position).Magnitude <= myD then
+					return
+				end
+			end
+		end
 	end
 	self.searchCenter = pos
 	if self.state == "Wander" then
@@ -1582,7 +1600,21 @@ function Monster.tick(self: Monster)
 		end
 	else -- Wander
 		if #self.waypoints == 0 or self:follow() then
-			local n = self:randomNode(self.root.Position)
+			-- 다른 괴물이 가까우면 그 반대쪽으로(한 곳에 몰리지 않게)
+			local away = self.root.Position
+			local nearest, nd = nil, SPREAD
+			for _, o in Monster.registry do
+				if o ~= self and o.alive and o.root then
+					local d = (o.root.Position - self.root.Position).Magnitude
+					if d < nd then
+						nearest, nd = o, d
+					end
+				end
+			end
+			if nearest then
+				away = nearest.root.Position
+			end
+			local n = self:randomNode(away)
 			-- 넓은 맵에서 영영 마주치지 않는 일이 없게: 가끔 플레이어(숨지 않은) 근처로 배회한다
 			if now - self.lastHunt >= MC.HuntEvery then
 				self.lastHunt = now
@@ -2123,6 +2155,10 @@ end
 
 function Monster.destroy(self: Monster)
 	self.alive = false
+	local i = table.find(Monster.registry, self)
+	if i then
+		table.remove(Monster.registry, i)
+	end
 	self.model:Destroy()
 end
 
