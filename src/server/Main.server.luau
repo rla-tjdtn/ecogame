@@ -47,12 +47,15 @@ SonarFire.OnServerEvent:Connect(function(player: Player)
 	if not head then
 		return
 	end
+	-- 간격 검증(여럿이 하거나 휴대폰이라 요청이 늦게·몰려 도착해도 정상 발사는 받아 준다):
+	-- "다음 발사 허용 시각"을 쌓아 가며, 그보다 ServerTolerance 까지 일찍 온 것은 받는다. 평균으로는 Cooldown 보다 빨리 쏠 수 없다
 	local now = os.clock()
-	local last = lastPulse[player] or -math.huge
-	if now - last < Config.Sonar.Cooldown - Config.Sonar.ServerTolerance then
+	local tat = lastPulse[player] or -math.huge
+	local cd = Config.Sonar.Cooldown
+	if now < tat - Config.Sonar.ServerTolerance then
 		return -- 간격 위반: 무시(시각 효과는 그 클라이언트에만 있고 괴물·다른 플레이어에게는 없음)
 	end
-	lastPulse[player] = now
+	lastPulse[player] = math.max(tat, now) + cd
 	accepted[player] = (accepted[player] or 0) + 1
 	local origin = head.Position
 	for _, other in Players:GetPlayers() do

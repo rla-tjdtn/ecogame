@@ -15,6 +15,7 @@ if UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or not U
 	local S = Config.Sonar :: any
 	S.PoolSize = math.min(S.PoolSize, 2000)
 	S.RevealPerFrame = math.min(S.RevealPerFrame, 220)
+	S.MaxRemotePulses = 3
 end
 local World = require(script.Parent:WaitForChild("SonarWorld"))
 local Lines = require(script.Parent:WaitForChild("SonarLines"))

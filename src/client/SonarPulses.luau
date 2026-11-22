@@ -297,6 +297,23 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 	if p.own then
 		table.insert(pulses, 1, p)
 	else
+		-- 팀원·도플갱어 음파는 동시에 MaxRemotePulses 개까지만(여럿이 동시에 쏴도 렉 없이): 넘으면 가장 오래된 것부터 끝낸다
+		local remote = 0
+		for _, q in pulses do
+			if not q.own then
+				remote += 1
+			end
+		end
+		local cap = (S :: any).MaxRemotePulses or 4
+		while remote >= cap do
+			for k, q in pulses do
+				if not q.own then
+					table.remove(pulses, k)
+					break
+				end
+			end
+			remote -= 1
+		end
 		table.insert(pulses, p)
 	end
 	Pulses.last = p
