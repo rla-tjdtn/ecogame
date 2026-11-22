@@ -229,7 +229,7 @@ Config.Sounds = {
 	Door = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.8, Pitch = 0.55, Range = 60 },
 	-- 괴물 발소리: 사람과 완전히 다르게 — 깊고 무거운 "쿵"(울림) + 낮게 늘인 발톱 "타닥"(Claw). 걸음 간격도 사람보다 느리고 불규칙하다
 	-- 괴물 발소리: 실제 녹음된 무거운 생물 발걸음(Pro Sound Effects). 쫓아올 때만 들린다
-	MonsterStep = { Id = "rbxassetid://9114166413", Volume = 0.45, Pitch = 0.9, Range = 95, Cut = 0.6 },
+	MonsterStep = { Id = "rbxassetid://9114166413", Volume = 0.9, Pitch = 0.9, Range = 120, Near = 10, Cut = 0.6 }, -- (추격 때만)
 	MonsterClaw = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.35, Pitch = 0.55, Range = 95, Steps = { { 0.03, 0.34 }, { 0.62, 0.34 } } },
 	-- MonsterIdle / MonsterAlert / MonsterChase / MonsterScream2 / MonsterWaveThud(괴성)는 아래 Config.ScreamStyles 에서 고른 시안이 채운다.
 	AmbientHum = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.18, Pitch = 0.22, Range = 0 }, -- 환풍기·배관 진동(루프)
@@ -455,6 +455,10 @@ Config.RealScreams = {
 	{ Id = 9119839011, Start = 0, Dur = 3, Volume = 0.45, Name = "4번 웅웅 + 다가오는 귀신 비명", Layer = { Id = 9114572653, Start = 0.5, Dur = 2.4, Volume = 0.45, Delay = 0.4 } },
 	{ Id = 9119839011, Start = 0, Dur = 3, Volume = 0.45, Name = "4번 웅웅 + 악마 비명", Layer = { Id = 9114037660, Start = 0, Dur = 2.4, Volume = 0.4, Delay = 0.5 } },
 }
+-- 괴물 소리 크기(괴성·추격 발소리 배율), 가까이에서 줄지 않는 거리, 들리는 최대 거리
+Config.MonsterLoudness = 2.5
+Config.MonsterNear = 15
+Config.MonsterRange = 150
 Config.RealScream = 9 -- 위 목록 번호 1~12 (9~12 = 4번 웅웅 + 비명). Studio 에서 Play 중 숫자키 1~4 로 9~12번을 바로 들어 볼 수 있다 (0 = 합성 시안). 들어 보기: tools/sound-preview/real.html
 Config.ScreamGate = nil :: { number }? -- 끊기는 박자 { 켜짐초, 꺼짐초 } (nil = 끊지 않고 한 번에 지른다. 예전 끊기는 방식: { 0.2, 0.1 })
 Config.ScreamCustom = nil :: any -- 예: { src = "ouch", pitch = 1.25, fx = "ghost", gate = { 0.22, 0.14 }, dur = 2.4, air = "wind" }
@@ -572,11 +576,11 @@ do
 		local id = "rbxassetid://" .. real.Id
 		style = {
 			Sounds = {
-				MonsterChase = { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Cut = real.Dur, Fx = { { "ReverbSoundEffect", { DecayTime = 2.5, WetLevel = -8 } } } },
+				MonsterChase = { Id = id, Volume = real.Volume * Config.MonsterLoudness, Pitch = 1, Range = Config.MonsterRange, Near = Config.MonsterNear, Cut = real.Dur, Fx = { { "ReverbSoundEffect", { DecayTime = 2.5, WetLevel = -8 } } } },
 				MonsterAlert = if real.Layer
-					then { Id = "rbxassetid://" .. real.Layer.Id, Volume = real.Layer.Volume, Pitch = 1, Range = 110, Cut = real.Layer.Dur }
-					else { Id = id, Volume = real.Volume, Pitch = 1, Range = 110, Cut = real.Dur }, -- (잡힐 때 점프스케어가 2D 로 튼다: 겹친 비명이 있으면 그 비명)
-				MonsterChaseLayer = if real.Layer then { Id = "rbxassetid://" .. real.Layer.Id, Volume = real.Layer.Volume, Pitch = 1, Range = 110, Cut = real.Layer.Dur } else { Id = "", Volume = 0, Pitch = 1, Range = 0 },
+					then { Id = "rbxassetid://" .. real.Layer.Id, Volume = real.Layer.Volume * Config.MonsterLoudness, Pitch = 1, Range = Config.MonsterRange, Near = Config.MonsterNear, Cut = real.Layer.Dur }
+					else { Id = id, Volume = real.Volume * Config.MonsterLoudness, Pitch = 1, Range = Config.MonsterRange, Near = Config.MonsterNear, Cut = real.Dur }, -- (잡힐 때 점프스케어가 2D 로 튼다: 겹친 비명이 있으면 그 비명)
+				MonsterChaseLayer = if real.Layer then { Id = "rbxassetid://" .. real.Layer.Id, Volume = real.Layer.Volume * Config.MonsterLoudness, Pitch = 1, Range = Config.MonsterRange, Near = Config.MonsterNear, Cut = real.Layer.Dur } else { Id = "", Volume = 0, Pitch = 1, Range = 0 },
 				MonsterIdle = { Id = "", Volume = 0, Pitch = 1, Range = 0 }, -- 평소에는 소리를 내지 않는다
 				MonsterScream2 = { Id = "", Volume = 0, Pitch = 1, Range = 0 },
 			},
@@ -6634,7 +6638,7 @@ local function makeSound(name: string, parent: Instance, looped: boolean?): Soun
 	s.SoundGroup = master
 	if def.Range > 0 then
 		s.RollOffMode = Enum.RollOffMode.InverseTapered
-		s.RollOffMinDistance = 5
+		s.RollOffMinDistance = (def :: any).Near or 5 -- (이 거리 안에서는 소리가 줄지 않는다)
 		s.RollOffMaxDistance = def.Range
 	end
 	-- Fx = { { "SoundEffect 클래스", { 속성 = 값 } }, ... }: 소리 효과(왜곡·울림·떨림·에코·플랜저 등).
@@ -7001,9 +7005,10 @@ function Audio.previewScream(index: number)
 	if not r then
 		return
 	end
-	playClip(r.Id, r.Start, r.Dur, r.Volume)
+	local k = (Config :: any).MonsterLoudness or 1 -- (게임 속 가까이에서 듣는 크기와 같게)
+	playClip(r.Id, r.Start, r.Dur, r.Volume * k)
 	if r.Layer then
-		task.delay(r.Layer.Delay, playClip, r.Layer.Id, r.Layer.Start, r.Layer.Dur, r.Layer.Volume)
+		task.delay(r.Layer.Delay, playClip, r.Layer.Id, r.Layer.Start, r.Layer.Dur, r.Layer.Volume * k)
 	end
 end
 if game:GetService("RunService"):IsStudio() then

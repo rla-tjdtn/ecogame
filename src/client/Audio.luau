@@ -39,7 +39,7 @@ local function makeSound(name: string, parent: Instance, looped: boolean?): Soun
 	s.SoundGroup = master
 	if def.Range > 0 then
 		s.RollOffMode = Enum.RollOffMode.InverseTapered
-		s.RollOffMinDistance = 5
+		s.RollOffMinDistance = (def :: any).Near or 5 -- (이 거리 안에서는 소리가 줄지 않는다)
 		s.RollOffMaxDistance = def.Range
 	end
 	-- Fx = { { "SoundEffect 클래스", { 속성 = 값 } }, ... }: 소리 효과(왜곡·울림·떨림·에코·플랜저 등).
@@ -406,9 +406,10 @@ function Audio.previewScream(index: number)
 	if not r then
 		return
 	end
-	playClip(r.Id, r.Start, r.Dur, r.Volume)
+	local k = (Config :: any).MonsterLoudness or 1 -- (게임 속 가까이에서 듣는 크기와 같게)
+	playClip(r.Id, r.Start, r.Dur, r.Volume * k)
 	if r.Layer then
-		task.delay(r.Layer.Delay, playClip, r.Layer.Id, r.Layer.Start, r.Layer.Dur, r.Layer.Volume)
+		task.delay(r.Layer.Delay, playClip, r.Layer.Id, r.Layer.Start, r.Layer.Dur, r.Layer.Volume * k)
 	end
 end
 if game:GetService("RunService"):IsStudio() then
