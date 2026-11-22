@@ -6049,10 +6049,17 @@ KeyHint.OnServerEvent:Connect(function(player: Player)
 	if player:GetAttribute("Status") ~= "Alive" or ReplicatedStorage:GetAttribute("KeyHintPos") ~= nil then
 		return
 	end
+	-- 힌트는 목숨 1개를 쓴다(마지막 남은 목숨으로는 볼 수 없다)
+	local lives = (player:GetAttribute("Lives") :: number?) or 1
+	if lives <= 1 then
+		RoundEvent:FireClient(player, "KeyHintDenied", { lives = lives })
+		return
+	end
 	local spot = Search.keySpot()
 	if spot then
+		player:SetAttribute("Lives", lives - 1)
 		ReplicatedStorage:SetAttribute("KeyHintPos", spot.center)
-		RoundEvent:FireAllClients("KeyHintShown", { by = player.DisplayName, userId = player.UserId })
+		RoundEvent:FireAllClients("KeyHintShown", { by = player.DisplayName, userId = player.UserId, lives = lives - 1 })
 	end
 end)
 
@@ -10512,7 +10519,7 @@ end
 local function refreshHint()
 	local shown = ReplicatedStorage:GetAttribute("KeyHintPos") ~= nil and ReplicatedStorage:GetAttribute("HasKey") ~= true
 	if KeyHUD.hintAvailable() then
-		hintLabel.Text = if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then "힌트 버튼 — 마지막 열쇠 위치 보기" else "H — 마지막 열쇠 힌트 보기"
+		hintLabel.Text = if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then "힌트 버튼 — 목숨 1개로 마지막 열쇠 위치 보기" else "H — 목숨 1개로 마지막 열쇠 힌트 보기"
 		hintLabel.Visible = true
 	elseif shown and playing() then
 		hintLabel.Text = "마지막 열쇠 위치가 지도(Q)에 표시됨"
@@ -10539,6 +10546,7 @@ for _, a in { "HasKey", "Keys", "KeysNeeded", "Mode", "RoundState" } do
 	ReplicatedStorage:GetAttributeChangedSignal(a):Connect(refreshHint)
 end
 player:GetAttributeChangedSignal("Status"):Connect(refreshHint)
+player:GetAttributeChangedSignal("Lives"):Connect(refreshHint)
 refreshHint()
 player:GetAttributeChangedSignal("Lives"):Connect(refresh)
 refresh()
@@ -11202,7 +11210,9 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		local t = if data.result == "searching" then "뒤지는 중…" elseif data.result == "empty" then "비어 있다" else "이미 뒤진 곳이다"
 		UI.hint(t, if data.result == "searching" then 1 else 2)
 	elseif kind == "KeyHintShown" then
-		UI.hint((if data.userId == player.UserId then "힌트를 봤다" else (data.by .. " 님이 힌트를 봤다")) .. " — 마지막 열쇠 위치가 지도(Q)에 표시됨", 5)
+		UI.hint((if data.userId == player.UserId then string.format("목숨 1개를 써서 힌트를 봤다(남은 목숨 %d)", data.lives or 0) else (data.by .. " 님이 목숨 1개를 써서 힌트를 봤다")) .. " — 마지막 열쇠 위치가 지도(Q)에 표시됨", 5)
+	elseif kind == "KeyHintDenied" then
+		UI.hint("목숨이 1개뿐이라 힌트를 볼 수 없다(목숨 1개를 쓴다)", 3)
 	elseif kind == "ExitFound" then
 		-- 누가 출구를 찾았다(팀 공유, 지도 Q 에도 표시된다)
 		UI.hint((if data.userId == player.UserId then "출구를 찾았다" else (data.by .. " 님이 출구를 찾았다")) .. " — 지도(Q)에 표시됨", 5)

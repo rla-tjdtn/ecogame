@@ -120,7 +120,7 @@ end
 local function refreshHint()
 	local shown = ReplicatedStorage:GetAttribute("KeyHintPos") ~= nil and ReplicatedStorage:GetAttribute("HasKey") ~= true
 	if KeyHUD.hintAvailable() then
-		hintLabel.Text = if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then "힌트 버튼 — 마지막 열쇠 위치 보기" else "H — 마지막 열쇠 힌트 보기"
+		hintLabel.Text = if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then "힌트 버튼 — 목숨 1개로 마지막 열쇠 위치 보기" else "H — 목숨 1개로 마지막 열쇠 힌트 보기"
 		hintLabel.Visible = true
 	elseif shown and playing() then
 		hintLabel.Text = "마지막 열쇠 위치가 지도(Q)에 표시됨"
@@ -147,6 +147,7 @@ for _, a in { "HasKey", "Keys", "KeysNeeded", "Mode", "RoundState" } do
 	ReplicatedStorage:GetAttributeChangedSignal(a):Connect(refreshHint)
 end
 player:GetAttributeChangedSignal("Status"):Connect(refreshHint)
+player:GetAttributeChangedSignal("Lives"):Connect(refreshHint)
 refreshHint()
 player:GetAttributeChangedSignal("Lives"):Connect(refresh)
 refresh()

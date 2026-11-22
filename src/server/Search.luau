@@ -316,10 +316,17 @@ KeyHint.OnServerEvent:Connect(function(player: Player)
 	if player:GetAttribute("Status") ~= "Alive" or ReplicatedStorage:GetAttribute("KeyHintPos") ~= nil then
 		return
 	end
+	-- 힌트는 목숨 1개를 쓴다(마지막 남은 목숨으로는 볼 수 없다)
+	local lives = (player:GetAttribute("Lives") :: number?) or 1
+	if lives <= 1 then
+		RoundEvent:FireClient(player, "KeyHintDenied", { lives = lives })
+		return
+	end
 	local spot = Search.keySpot()
 	if spot then
+		player:SetAttribute("Lives", lives - 1)
 		ReplicatedStorage:SetAttribute("KeyHintPos", spot.center)
-		RoundEvent:FireAllClients("KeyHintShown", { by = player.DisplayName, userId = player.UserId })
+		RoundEvent:FireAllClients("KeyHintShown", { by = player.DisplayName, userId = player.UserId, lives = lives - 1 })
 	end
 end)
 

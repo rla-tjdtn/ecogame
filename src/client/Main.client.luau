@@ -343,7 +343,9 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		local t = if data.result == "searching" then "뒤지는 중…" elseif data.result == "empty" then "비어 있다" else "이미 뒤진 곳이다"
 		UI.hint(t, if data.result == "searching" then 1 else 2)
 	elseif kind == "KeyHintShown" then
-		UI.hint((if data.userId == player.UserId then "힌트를 봤다" else (data.by .. " 님이 힌트를 봤다")) .. " — 마지막 열쇠 위치가 지도(Q)에 표시됨", 5)
+		UI.hint((if data.userId == player.UserId then string.format("목숨 1개를 써서 힌트를 봤다(남은 목숨 %d)", data.lives or 0) else (data.by .. " 님이 목숨 1개를 써서 힌트를 봤다")) .. " — 마지막 열쇠 위치가 지도(Q)에 표시됨", 5)
+	elseif kind == "KeyHintDenied" then
+		UI.hint("목숨이 1개뿐이라 힌트를 볼 수 없다(목숨 1개를 쓴다)", 3)
 	elseif kind == "ExitFound" then
 		-- 누가 출구를 찾았다(팀 공유, 지도 Q 에도 표시된다)
 		UI.hint((if data.userId == player.UserId then "출구를 찾았다" else (data.by .. " 님이 출구를 찾았다")) .. " — 지도(Q)에 표시됨", 5)
