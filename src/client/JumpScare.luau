@@ -1,10 +1,11 @@
 --!strict
 -- 괴물에게 잡혔을 때: 그 스테이지 괴물의 얼굴(흰 선)이 화면 가득 확 튀어나오며 흔들린다(점프스케어). 약 0.9초 뒤 YOU DIED.
--- 머리 모양은 괴물(Monster.luau HeadSpec)과 같다: 1 삼각형 · 2 사각형 · 3 원 · 4 별 · 5 육각형.
+-- 메인 괴물 얼굴은 괴물 머리와 같은 공용 모양(Shared/MonsterFaces, 3차 시안): 1 삼각 · 2 사각 · 3 원 · 4 별 · 5 육각.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Faces = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("MonsterFaces"))
 
 local JumpScare = {}
 JumpScare.count = 0
@@ -13,15 +14,6 @@ JumpScare.lastKind = "monster"
 
 local player = Players.LocalPlayer
 
--- 머리 좌표(가운데 0, 위가 +y). eye = {x, y, 반지름}, mouth = {반폭, 윗입술 y, 깊이}
-type Spec = { eye: { number }, mouth: { number }, verts: { { number } }?, circle: number?, star: { number }?, hex: number? }
-local SPECS: { Spec } = {
-	{ eye = { 0.2, 0.0, 0.08 }, mouth = { 0.5, -0.25, 0.35 }, verts = { { -0.85, -0.75 }, { 0.85, -0.75 }, { 0, 0.75 } } },
-	{ eye = { 0.28, 0.2, 0.09 }, mouth = { 0.5, -0.1, 0.4 }, verts = { { -0.8, -0.65 }, { 0.8, -0.65 }, { 0.8, 0.65 }, { -0.8, 0.65 } } },
-	{ eye = { 0.22, 0.12, 0.09 }, mouth = { 0.45, -0.2, 0.4 }, circle = 0.6 },
-	{ eye = { 0.16, 0.12, 0.065 }, mouth = { 0.3, -0.12, 0.25 }, star = { 1.0, 0.48 } },
-	{ eye = { 0.26, 0.15, 0.09 }, mouth = { 0.5, -0.12, 0.38 }, hex = 0.72 },
-}
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "JumpScare"
@@ -53,7 +45,8 @@ gui.Parent = player:WaitForChild("PlayerGui")
 
 local WHITE = Color3.new(1, 1, 1)
 
-local function draw(spec: Spec)
+-- 메인 괴물: 괴물 머리와 똑같은 얼굴(공용 MonsterFaces). 기울어진 그대로 화면을 거의 채운다
+local function draw(shape: number)
 	for _, c in face:GetChildren() do
 		if c:IsA("Frame") then
 			c:Destroy()
@@ -63,89 +56,70 @@ local function draw(spec: Spec)
 	if size < 10 then
 		size = math.min(back.AbsoluteSize.X, back.AbsoluteSize.Y) * 0.95
 	end
-	local ext = spec.circle or (spec.star and spec.star[1]) or spec.hex or 0.85
-	local k = 0.46 / ext -- 머리가 화면을 거의 채운다
+	local f = Faces.build(shape)
+	local c, s = math.cos(math.rad(f.deg)), math.sin(math.rad(f.deg))
+	local function rot(u: number, v: number): (number, number)
+		u, v = u * f.scale, v * f.scale
+		return u * c - v * s, u * s + v * c
+	end
+	-- 얼굴 전체가 들어가는 크기(혀·침까지)
+	local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
+	for _, l in f.lines do
+		for _, q in l.pts do
+			local x, y = rot(q[1], q[2])
+			minX, minY, maxX, maxY = math.min(minX, x), math.min(minY, y), math.max(maxX, x), math.max(maxY, y)
+		end
+	end
+	local cx, cy = (minX + maxX) / 2, (minY + maxY) / 2
+	local k = 0.9 / math.max(maxX - minX, maxY - minY)
 	local thick = math.max(4, size * 0.012)
 	local function px(x: number, y: number): Vector2
-		return Vector2.new((0.5 + x * k) * size, (0.5 - y * k) * size)
+		return Vector2.new((0.5 + (x - cx) * k) * size, (0.5 + (y - cy) * k) * size)
 	end
-	local function line(ax: number, ay: number, bx: number, by: number, w: number?)
-		local a, b = px(ax, ay), px(bx, by)
+	local function line(a: Vector2, b: Vector2, w: number)
 		local d = b - a
-		local f = Instance.new("Frame")
-		f.BackgroundColor3 = WHITE
-		f.BorderSizePixel = 0
-		f.AnchorPoint = Vector2.new(0.5, 0.5)
-		f.Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
-		f.Size = UDim2.fromOffset(d.Magnitude + (w or thick), w or thick)
-		f.Rotation = math.deg(math.atan2(d.Y, d.X))
-		f.Parent = face
+		local fr = Instance.new("Frame")
+		fr.BackgroundColor3 = WHITE
+		fr.BorderSizePixel = 0
+		fr.AnchorPoint = Vector2.new(0.5, 0.5)
+		fr.Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
+		fr.Size = UDim2.fromOffset(d.Magnitude + w, w)
+		fr.Rotation = math.deg(math.atan2(d.Y, d.X))
+		fr.Parent = face
 	end
-	local function ring(cx: number, cy: number, r: number, w: number?)
-		local c = px(cx, cy)
-		local f = Instance.new("Frame")
-		f.BackgroundTransparency = 1
-		f.AnchorPoint = Vector2.new(0.5, 0.5)
-		f.Position = UDim2.fromOffset(c.X, c.Y)
-		f.Size = UDim2.fromOffset(r * k * size * 2, r * k * size * 2)
+	for _, l in f.lines do
+		local w = thick * math.clamp(l.r / 0.03, 0.4, 1)
+		local n = #l.pts
+		for i = 1, (if l.closed then n else n - 1) do
+			local a, b = l.pts[i], l.pts[i % n + 1]
+			local ax, ay = rot(a[1], a[2])
+			local bx, by = rot(b[1], b[2])
+			line(px(ax, ay), px(bx, by), w)
+		end
+	end
+	for _, e in f.circles do
+		local x, y = rot(e.u, e.v)
+		local p = px(x, y)
+		local d = math.max(e.rad * f.scale * k * size * 2, thick * 1.5)
+		local fr = Instance.new("Frame")
+		fr.AnchorPoint = Vector2.new(0.5, 0.5)
+		fr.Position = UDim2.fromOffset(p.X, p.Y)
+		fr.Size = UDim2.fromOffset(d, d)
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(1, 0)
-		corner.Parent = f
-		local st = Instance.new("UIStroke")
-		st.Color = WHITE
-		st.Thickness = w or thick
-		st.Parent = f
-		f.Parent = face
-	end
-	local function poly(pts: { { number } })
-		for i, a in pts do
-			local b = pts[i % #pts + 1]
-			line(a[1], a[2], b[1], b[2])
+		corner.Parent = fr
+		if e.pupil then
+			-- 눈동자: 꽉 찬 점
+			fr.BackgroundColor3 = WHITE
+			fr.BorderSizePixel = 0
+		else
+			fr.BackgroundTransparency = 1
+			local st = Instance.new("UIStroke")
+			st.Color = WHITE
+			st.Thickness = thick * 0.8
+			st.Parent = fr
 		end
-	end
-	-- 머리
-	if spec.verts then
-		poly(spec.verts)
-	elseif spec.circle then
-		ring(0, 0, spec.circle)
-	elseif spec.star then
-		local pts = {}
-		for i = 0, 9 do
-			local r = if i % 2 == 0 then spec.star[1] else spec.star[2]
-			local a = math.pi / 2 + i * math.pi / 5
-			table.insert(pts, { math.cos(a) * r, math.sin(a) * r })
-		end
-		poly(pts)
-	elseif spec.hex then
-		local pts = {}
-		for i = 0, 5 do
-			local a = i * math.pi / 3
-			table.insert(pts, { math.cos(a) * spec.hex, math.sin(a) * spec.hex })
-		end
-		poly(pts)
-	end
-	-- 눈(크게 뜬 원 + 작은 눈동자)
-	local ex, ey, er = spec.eye[1], spec.eye[2], spec.eye[3]
-	for _, s in { -1, 1 } do
-		ring(s * ex, ey, er * 1.25)
-		ring(s * ex, ey, er * 0.35, thick * 0.8)
-	end
-	-- 이빨 드러낸 입
-	local mw, my, mh = spec.mouth[1], spec.mouth[2], spec.mouth[3]
-	local function arcY(x: number): number
-		return my - mh * (1 - (x / mw) ^ 2) * 0.35 - mh * 0.65
-	end
-	line(-mw, my, mw, my)
-	local prevX, prevY = -mw, my
-	for i = 1, 12 do
-		local x = -mw + 2 * mw * i / 12
-		local y = if i == 12 then my else arcY(x)
-		line(prevX, prevY, x, y)
-		prevX, prevY = x, y
-	end
-	for i = 1, 9 do
-		local x = -mw * 0.9 + 1.8 * mw * i / 10
-		line(x, my, x, arcY(x), thick * 0.6)
+		fr.Parent = face
 	end
 end
 
@@ -313,7 +287,7 @@ function JumpScare.play(scream: (() -> ())?, kind: string?)
 	elseif kind == "flower" then
 		drawFlower()
 	else
-		draw(SPECS[((math.max(1, si) - 1) % #SPECS) + 1])
+		draw(((math.max(1, si) - 1) % 5) + 1)
 	end
 	JumpScare.lastKind = kind or "monster"
 	if scream then

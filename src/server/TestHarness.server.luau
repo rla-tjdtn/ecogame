@@ -259,7 +259,9 @@ local function monsterTests(p)
 		ask(p, "fire")
 		task.wait(1.0)
 		local n = ask(p, "linesNear", { mpos, 4.5 }) or 0
-		check("monster appears in the sonar as lines", n >= 15, n)
+		-- (음파에 맞은 괴물은 굳은 선 대신 지금 모습 그대로 보인다: Reveal)
+		local shown = ask(p, "reveal") or 0
+		check("monster appears in the sonar as lines", n >= 15 or shown >= 1, string.format("lines %d, shown %d", n, shown))
 	end
 	-- 배회하다가 가끔 플레이어 근처로 온다
 	m.model:PivotTo(CFrame.new(Round.info.exitCFrame.Position + Vector3.new(0, 1.2, 0)))
@@ -1321,6 +1323,102 @@ local function dense()
 	R.info.dense = out
 end
 
+-- ─────────────────────────────── chase ───────────────────────────────
+-- 스테이지마다: 메인 괴물이 쫓아올 때 그 스테이지 동작(팔 자세·튀어나가기)으로 실제로 다가오는가
+local function chaseMotion()
+	local ps = readyPlayers(1)
+	if not ps then
+		check("ready", false)
+		return
+	end
+	local p = ps[1]
+	-- 쫓아올 때 팔 각도가 이만큼은 돼야 그 동작이다(1 머리 위로 휘젓기, 2 원으로 휘두르기, 3·5 앞으로 짚기, 4 팔 늘어짐 + 무릎 높이)
+	local armMin = { 1.8, 1.5, 0.6, 0, 0.5 }
+	for i = 1, 5 do
+		-- (앞 스테이지에서 잡혔으면 되살아날 때까지 기다린 뒤 다음 스테이지)
+		waitFor(function()
+			return Round.state == "Playing" and p:GetAttribute("Status") == "Alive"
+		end, 20)
+		Round.startStage(i)
+		readyPlayers(1)
+		waitFor(function()
+			return p:GetAttribute("Status") == "Alive"
+		end, 15)
+		task.wait(1)
+		ask(p, "anim", "all")
+		waitFor(function()
+			local s = ask(p, "anim")
+			return s and (s.bodies or 0) >= #Round.monsters
+		end, 8)
+		local m = Round.monsters[1]
+		local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if not m or not root then
+			check(string.format("stage %d: monster and player ready", i), false)
+			continue
+		end
+		-- 안전 구역 밖에서 20~35스터드 떨어진 두 지점
+		local pPos, mPos
+		for _, a in m.nodes do
+			if not Monster.isSafe(a) then
+				for _, b in m.nodes do
+					local d = (a - b).Magnitude
+					if d > 20 and d < 35 and not Monster.isSafe(b) then
+						pPos, mPos = a, b
+						break
+					end
+				end
+			end
+			if pPos then
+				break
+			end
+		end
+		if not pPos or not mPos then
+			check(string.format("stage %d: found a spot to test the chase", i), false)
+			continue
+		end
+		place(p, pPos + Vector3.new(0, 3, 0), mPos)
+		m.model:PivotTo(CFrame.lookAt(mPos + Vector3.new(0, 5, 0), pPos + Vector3.new(0, 5, 0)))
+		m.waypoints = {}
+		m.startAt = 0
+		task.wait(0.3)
+		ask(p, "anim", "all")
+		m:startChase(p, root.Position)
+		local d0 = (m.root.Position - root.Position).Magnitude
+		local armMax, legMax, sMin, sMax = 0, 0, math.huge, 0
+		local caught = false
+		for _ = 1, 35 do
+			task.wait(0.1)
+			for _, j in m.joints do
+				local _, ang = (j.base:Inverse() * j.motor.C0):ToAxisAngle()
+				if j.amp > 0.4 then
+					legMax = math.max(legMax, math.abs(ang))
+				else
+					armMax = math.max(armMax, math.abs(ang))
+				end
+			end
+			sMin, sMax = math.min(sMin, m.hum.WalkSpeed), math.max(sMax, m.hum.WalkSpeed)
+			if p:GetAttribute("Status") ~= "Alive" then
+				caught = true
+				break
+			end
+		end
+		local r2 = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		local d1 = if r2 then (m.root.Position - r2.Position).Magnitude else 0
+		check(string.format("stage %d: chasing monster closes in (%s)", i, m.state), caught or d1 < d0 - 6, string.format("%.0f -> %.0f studs%s", d0, d1, if caught then ", caught" else ""))
+		-- 전신 동작(클라이언트 측정): 1 팔을 머리 위로, 2 줄에 당겨지듯 몸이 크게 오르내림, 3·5 상체를 숙이고 손으로 땅을 짚음, 4 무릎을 높이 듦
+		local a = ask(p, "anim") or {}
+		local own = if i == 1 then (a.arm or 0) > 1.6
+			elseif i == 2 then (a.pelvisRange or 0) > 0.12
+			elseif i == 4 then (a.lift or 0) > 0.3
+			else (a.lean or 0) > 0.7 and (a.handSteps or 0) > 0
+		check(string.format("stage %d: chase uses its own full-body motion", i), own and (a.steps or 0) >= 2, string.format("arm %.2f lean %.2f lift %.2f pelvis %.2f handSteps %s steps %s", a.arm or 0, a.lean or 0, a.lift or 0, a.pelvisRange or 0, tostring(a.handSteps), tostring(a.steps)))
+		check(string.format("stage %d: feet stay planted while chasing", i), (a.slip or 99) < 0.25, string.format("max %.3f studs", a.slip or -1))
+		local _ = armMin[i] + armMax + legMax
+		local lunge = i == 1 or i == 3 or i == 4
+		check(string.format("stage %d: chase speed %s", i, if lunge then "lunges and pauses" else "steady"), if lunge then (sMax > Config.Monster.ChaseSpeed * 1.2 and sMin < Config.Monster.ChaseSpeed * 0.7) else math.abs(sMax - Config.Monster.ChaseSpeed) < 0.01, string.format("%.1f ~ %.1f", sMin, sMax))
+	end
+end
+
 -- ─────────────────────────────── walk ───────────────────────────────
 -- 괴물이 실제로 돌아다니는가: 60초 동안 1초마다 위치를 재서 이동 거리·멈춰 있던 시간을 본다(플레이어는 숨겨 둔다)
 local function walk()
@@ -1347,6 +1445,7 @@ local function walk()
 	for k, m in Round.monsters do
 		track[k] = { last = m.root.Position, dist = 0, still = 0, states = {}, swing = 0 }
 	end
+	ask(p, "anim", "all")
 	for _ = 1, seconds do
 		task.wait(1)
 		for k, m in Round.monsters do
@@ -1375,8 +1474,17 @@ local function walk()
 		end
 		table.insert(out, { dist = math.floor(t.dist), still = t.still, states = table.concat(st, " "), log = table.concat(m.log, " | "):sub(-400) })
 		check(string.format("monster %d keeps moving (%ds)", k, seconds), t.dist > seconds * Config.Monster.WanderSpeed * 0.4 and t.still < seconds * 0.35, string.format("%d studs, still %ds", math.floor(t.dist), t.still))
-		check(string.format("monster %d swings its legs while walking", k), t.swing > 0.15, string.format("max %.2f rad", t.swing))
 	end
+	-- 전신 움직임(클라이언트): 발을 디디고 걷는다(디딘 발은 미끄러지지 않는다), 골반이 오르내리고 척추가 비틀린다, 발소리는 발이 닿을 때
+	local a = ask(p, "anim") or {}
+	local n = #Round.monsters
+	check("monsters are animated with the full-body rig", (a.bodies or 0) >= n, tostring(a.bodies))
+	check("monsters take real steps (feet lift and land)", (a.steps or 0) >= n * seconds * 0.6, string.format("%s steps", tostring(a.steps)))
+	check("planted feet do not slide", (a.slip or 99) < 0.2, string.format("max %.3f studs", a.slip or -1))
+	check("pelvis rises and falls with each step (weight)", (a.pelvisRange or 0) > 0.08, string.format("%.2f studs", a.pelvisRange or 0))
+	check("spine twists against the pelvis while walking", (a.chestYaw or 0) > 0.02, string.format("%.3f rad", a.chestYaw or 0))
+	check("monster footstep sounds play when a foot lands", (a.footSounds or 0) > 0, tostring(a.footSounds))
+	R.info.anim = a
 	R.info.walk = out
 end
 
@@ -1502,12 +1610,23 @@ local function doppelTest()
 	end
 	check("transforms into the monster (player body gone, beast body with 2 eyes)", turned ~= nil and d.model:FindFirstChild("Disguise") == nil and beast ~= nil and eyes == 2, string.format("form=%s eyes=%d lines=%d", d.form, eyes, lineParts))
 	check("the player body bursts into flying pieces on screen", fx1 and fx0 and fx1.bursts == fx0.bursts + 1 and fx1.shards >= 50, fx1 and string.format("bursts %d->%d shards=%d", fx0 and fx0.bursts or -1, fx1.bursts, fx1.shards))
+	check("bursting plays the doppelganger's own burst sound (flesh rip + bone crack)", fx1 and fx0 and fx1.sounds == fx0.sounds + 1, fx1 and string.format("sounds %s->%s", tostring(fx0 and fx0.sounds), tostring(fx1.sounds)))
+	do
+		local near = false
+		for _, e in Players:GetPlayers() do
+			local r = e.Character and e.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if r and (r.Position - d.root.Position).Magnitude <= D.TransformNear + 3 then
+				near = true
+			end
+		end
+		check(string.format("transforms only with a player within %d studs", D.TransformNear), turned ~= nil and near, tostring(near))
+	end
 	check("monster body is drawn with single strokes (lines and discs)", lineParts > 60 and lineParts < 160, lineParts)
 	local chasing = waitFor(function()
 		return d.state == "Chase" and d.target == p
 	end, D.BurstPause + 2)
 	check("after bursting it chases the player who found it", chasing ~= nil, d.state)
-	check("doppelganger monster is smaller than the main monster", d.hum.HipHeight < 4 and d.cfg.ChaseSpeed > Config.Monster.ChaseSpeed, string.format("hip %.1f speed %.1f", d.hum.HipHeight, d.cfg.ChaseSpeed))
+	check("doppelganger monster is smaller than the main monster", d.hum.HipHeight < 4 and d.cfg.ChaseSpeed == Config.Doppel.ChaseSpeed, string.format("hip %.1f speed %.1f", d.hum.HipHeight, d.cfg.ChaseSpeed))
 	-- 음파에 맞으면 눈이 빛난다(선보다 조금 더 오래)
 	putDoppel(tile(4, 4, 3))
 	d.startAt = os.clock() + 4 -- (잠깐 세워 둔다)
@@ -1937,6 +2056,8 @@ task.spawn(function()
 			seal()
 		elseif args.Test == "doppel" then
 			doppelTest()
+		elseif args.Test == "chase" then
+			chaseMotion()
 		elseif args.Test == "lives" then
 			livesTest()
 		elseif args.Test == "reveal" then

@@ -245,6 +245,35 @@ end
 local function voiceOf(m: Model, kind: string): string?
 	return Audio.voiceName(m:GetAttribute("Voice") :: string?, kind)
 end
+-- 괴물 발이 땅에 닿는 순간(MonsterAnim): 그 괴물 자기 걸음 소리. hit = 착지 세기(무게·속도, 약 0.3~1.6)
+Audio.monsterSteps = 0 -- (테스트)
+function Audio.monsterFoot(model: Model, at: Vector3, hit: number)
+	Audio.monsterSteps += 1
+	local chase = model:GetAttribute("State") == "Chase"
+	local vol = (if chase then 1 else Config.Monster.StepWanderVolume) * math.clamp(0.6 + hit * 0.35, 0.6, 1.3)
+	local own = Audio.voiceName(model:GetAttribute("Voice") :: string?, "Steps")
+	if own then
+		Audio.play(own, at, 0.06, vol, if model:GetAttribute("Voice") == "Flower" then 0.75 else nil)
+	else
+		Audio.play("MonsterStep", at, 0.08, vol)
+	end
+end
+
+-- 도플갱어의 사람 모습이 터질 때(서버 RoundEvent "DoppelBurst"): 살 찢어짐 + 뼈 우두둑(없으면 낮게 꺾이는 소리)
+Audio.bursts = 0 -- (테스트) 터지는 소리를 낸 횟수
+function Audio.doppelBurst(at: Vector3)
+	Audio.bursts += 1
+	local def = (Config :: any).MonsterVoices and (Config :: any).MonsterVoices.Doppel
+	if def and def.Burst then
+		for k = 1, #def.Burst do
+			Audio.play("Voice_Doppel_Burst_" .. k, at, 0.03)
+		end
+	else
+		Audio.play("Door", at, 0.04, 1.4, 0.45)
+		Audio.play("FootRun", at, 0.1, 1.2, 0.5)
+	end
+end
+
 -- 쫓아올 때 괴성: 그 괴물 자기 괴성(없으면 공통 괴성)
 local function chaseScream(m: Model, root: BasePart)
 	local n = voiceOf(m, "Scream")
@@ -279,6 +308,9 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 			tr.acc = 0
 			Audio.footstep("FootWalk", root, 0)
 		end
+	elseif isMonster and model:GetAttribute("Rig") == 2 then
+		-- 전신 뼈대 괴물: 발이 실제로 땅에 닿는 순간 MonsterAnim 이 Audio.monsterFoot 을 부른다
+		tr.acc = 0
 	elseif isMonster then
 		if tr.acc >= 4.6 then -- 사람(4.8)과 비슷한 거리지만 괴물은 느려서 쿵… 쿵… 간격이 더 길다
 			tr.acc = 0
@@ -366,18 +398,8 @@ local function watchMonster(m: Instance)
 				end
 			end
 		end
-		if root and model:GetAttribute("Form") == "Bursting" then
-			-- 도플갱어 자기 소리: 살 찢어짐 + 뼈 우두둑(없으면 낮게 꺾이는 소리)
-			local def = (Config :: any).MonsterVoices and (Config :: any).MonsterVoices[model:GetAttribute("Voice")]
-			if def and def.Burst then
-				for k = 1, #def.Burst do
-					Audio.play("Voice_" .. tostring(model:GetAttribute("Voice")) .. "_Burst_" .. k, root, 0.03)
-				end
-			else
-				Audio.play("Door", root, 0.04, 1.4, 0.45)
-				Audio.play("FootRun", root, 0.1, 1.2, 0.5)
-			end
-		end
+		-- (도플갱어가 터지는 소리는 Form 속성이 아니라 DoppelBurst 이벤트에서 낸다: 서버가 Bursting → Beast 를
+		-- 같은 프레임에 바꿔서 클라이언트에는 Bursting 이 도착하지 않는다. Audio.doppelBurst 참고)
 	end))
 	monsterConns[model] = conns
 	

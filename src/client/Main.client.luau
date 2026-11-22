@@ -29,6 +29,11 @@ local KeyHUD = require(script.Parent:WaitForChild("KeyHUD"))
 local JumpScare = require(script.Parent:WaitForChild("JumpScare"))
 local SearchLook = require(script.Parent:WaitForChild("SearchLook"))
 local DoppelFx = require(script.Parent:WaitForChild("DoppelFx"))
+-- 괴물 전신 움직임(발 고정 IK·무게중심·관성). 발이 땅에 닿는 순간 발소리
+local MonsterAnim = require(script.Parent:WaitForChild("MonsterAnim"))
+MonsterAnim.onStep = function(model: Model, at: Vector3, hit: number)
+	Audio.monsterFoot(model, at, hit)
+end
 local Reveal = require(script.Parent:WaitForChild("Reveal"))
 local MobileUI = require(script.Parent:WaitForChild("MobileUI"))
 Pulses.onReach = MapView.onReach
@@ -270,6 +275,7 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	elseif kind == "DoppelBurst" then
 		-- 도플갱어의 사람 모습이 터진다(조각이 흩날림)
 		DoppelFx.burst(data)
+		Audio.doppelBurst(data.at)
 	elseif kind == "LifeLost" then
 		-- 잡혔지만 목숨이 남았다: 점프스케어 → 잠깐 검은 화면 → 시작 방에서 다시(캐릭터가 생기면 화면이 걷힌다)
 		if data.userId == player.UserId then
@@ -553,8 +559,20 @@ task.spawn(function()
 			return MobileUI.state()
 		elseif cmd == "reveal" then
 			return Reveal.count()
+		elseif cmd == "anim" then
+			-- (테스트) 괴물 몸 움직임 측정: 디딘 발 미끄러짐, 걸음 수, 골반 오르내림, 척추 비틀림, 머리 지연, 실제 발소리 수
+			local s = MonsterAnim.summary()
+			s.footSounds = Audio.monsterSteps
+			if arg == "reset" or arg == "all" then
+				if arg == "all" then
+					MonsterAnim.range = 1e9 -- (테스트) 멀리 있는 괴물도 계산
+				end
+				MonsterAnim.reset()
+				Audio.monsterSteps = 0
+			end
+			return s
 		elseif cmd == "doppelFx" then
-			return { bursts = DoppelFx.bursts, shards = DoppelFx.lastShards, eyes = DoppelFx.litEyeCount() }
+			return { bursts = DoppelFx.bursts, shards = DoppelFx.lastShards, eyes = DoppelFx.litEyeCount(), sounds = Audio.bursts }
 		elseif cmd == "jump" then
 			local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 			if h then

@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Kit = require(script.Parent.MapKit)
+local Faces = require(ReplicatedStorage.Shared.MonsterFaces)
 local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
 local Hiding = require(script.Parent.Hiding)
@@ -24,15 +25,7 @@ end
 
 export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase" | "Disguise" | "Dormant" | "Look"
 
--- ── 챕터별 머리 도형: 1 삼각형 · 2 사각형 · 3 원 · 4 별 · 5 육각형 (그 이후는 처음부터 반복) ──
--- cy: 머리 중심 높이, eye = {x, y, 반지름}, mouth = {반폭, 윗입술 y, 깊이}, 좌표는 머리 중심 기준
-local HeadSpec: { { cy: number, eye: { number }, mouth: { number }, verts: { { number } }?, circle: number?, star: { number }?, hex: number? } } = {
-	{ cy = 4.5, eye = { 0.2, 0.0, 0.08 }, mouth = { 0.5, -0.25, 0.35 }, verts = { { -0.85, -0.75 }, { 0.85, -0.75 }, { 0, 0.75 } } },
-	{ cy = 4.4, eye = { 0.28, 0.2, 0.09 }, mouth = { 0.5, -0.1, 0.4 }, verts = { { -0.8, -0.65 }, { 0.8, -0.65 }, { 0.8, 0.65 }, { -0.8, 0.65 } } },
-	{ cy = 4.35, eye = { 0.22, 0.12, 0.09 }, mouth = { 0.45, -0.2, 0.4 }, circle = 0.6 },
-	{ cy = 4.55, eye = { 0.16, 0.12, 0.065 }, mouth = { 0.3, -0.12, 0.25 }, star = { 1.0, 0.48 } },
-	{ cy = 4.35, eye = { 0.26, 0.15, 0.09 }, mouth = { 0.5, -0.12, 0.38 }, hex = 0.72 },
-}
+-- ── 챕터별 머리: 1 삼각형 · 2 사각형 · 3 원 · 4 별 · 5 육각형 (그 이후는 처음부터 반복). 모양은 buildModel 안 ──
 
 -- ── 몸 조립 공통: 팔·다리 묶음은 관절(Motor6D)에, 나머지는 루트에 붙인다. 몸은 완전히 투명(음파에만 드러난다) ──
 -- prefix: 관절 이름 앞부분(같은 모델에 몸이 둘일 때 구분), holder: 관절 받침 파트를 둘 곳
@@ -89,6 +82,127 @@ local function rig(model: Model, root: BasePart, cf: CFrame, parts: { BasePart }
 			w.Parent = p
 		end
 	end
+end
+
+-- ── 전신 뼈대(Rig 2): 골반 → 허리(가슴) → 목 → 머리, 가슴 → 어깨 → 위팔 → (가운데 마디) → 아래팔 → 손,
+-- 골반 → 허벅지 → 정강이 → 발. 뼈마다 투명한 작은 파트 + Motor6D(이름 "B_<뼈>").
+-- 그림 선(parts)은 가장 가까운 뼈에 붙는다(팔 묶음 "Arm±1" 은 그쪽 팔 뼈 중에서, 다리 묶음은 그쪽 다리 뼈 중에서).
+-- 움직임은 클라이언트(MonsterAnim)가 매 프레임 Motor6D.Transform 으로 만든다(발 고정 IK, 무게중심, 관성).
+-- 뼈 파트 속성 Tip = 그 뼈 끝(발끝·손끝·머리 끝)의 위치(뼈 기준). 모델 속성 FloorY = 루트 기준 바닥 높이, Rig = 2.
+export type Limb = { Vector3 }
+export type Skeleton = {
+	pelvis: Vector3,
+	waist: Vector3,
+	neck: Vector3,
+	head: Vector3,
+	headEnd: Vector3,
+	legs: { [number]: { hip: Vector3, knee: Vector3, ankle: Vector3, toe: Vector3 } },
+	arms: { [number]: { shoulder: Vector3, elbow: Vector3, mid: Vector3?, wrist: Vector3, tip: Vector3 } },
+	floorY: number,
+	mass: number, -- 무게(착지 충격·둔중함), 1 = 메인 괴물
+}
+local function skeleton(model: Model, root: BasePart, cf: CFrame, parts: { BasePart }, groupParts: { [string]: { BasePart } }, sk: Skeleton, holder: Instance?)
+	type Bone = { name: string, parent: string?, joint: Vector3, tip: Vector3, part: BasePart? }
+	local bones: { [string]: Bone } = {}
+	local order: { string } = {}
+	local function bone(name: string, parent: string?, joint: Vector3, tip: Vector3)
+		bones[name] = { name = name, parent = parent, joint = joint, tip = tip }
+		table.insert(order, name)
+	end
+	bone("Pelvis", nil, sk.pelvis, sk.waist)
+	bone("Chest", "Pelvis", sk.waist, sk.neck)
+	bone("Neck", "Chest", sk.neck, sk.head)
+	bone("Head", "Neck", sk.head, sk.headEnd)
+	for _, s in { -1, 1 } do
+		local L = sk.legs[s]
+		bone("Thigh" .. s, "Pelvis", L.hip, L.knee)
+		bone("Shin" .. s, "Thigh" .. s, L.knee, L.ankle)
+		bone("Foot" .. s, "Shin" .. s, L.ankle, L.toe)
+		local A = sk.arms[s]
+		bone("Upper" .. s, "Chest", A.shoulder, A.elbow)
+		local last = "Upper" .. s
+		local from = A.elbow
+		if A.mid then
+			bone("Mid" .. s, last, A.elbow, A.mid)
+			last, from = "Mid" .. s, A.mid
+		end
+		bone("Fore" .. s, last, from, A.wrist)
+		bone("Hand" .. s, "Fore" .. s, A.wrist, A.tip)
+	end
+	-- 뼈 파트 + 관절
+	for _, name in order do
+		local b = bones[name]
+		local pv = Instance.new("Part")
+		pv.Name = "Bone_" .. name
+		pv.Size = Vector3.new(0.2, 0.2, 0.2)
+		pv.Transparency = 1
+		pv.CanCollide = false
+		pv.CanQuery = false
+		pv.CanTouch = false
+		pv.Massless = true
+		pv.CastShadow = false
+		pv:SetAttribute("SonarShape", "None")
+		pv:SetAttribute("Tip", b.tip - b.joint)
+		pv.CFrame = cf * CFrame.new(b.joint)
+		pv.Parent = holder or model
+		b.part = pv
+		local parentPart: BasePart = if b.parent then (bones[b.parent].part :: BasePart) else root
+		local parentJoint = if b.parent then bones[b.parent].joint else Vector3.zero
+		local motor = Instance.new("Motor6D")
+		motor.Name = "B_" .. name
+		motor.Part0 = parentPart
+		motor.Part1 = pv
+		motor.C0 = CFrame.new(b.joint - parentJoint)
+		motor.C1 = CFrame.identity
+		motor.Parent = pv
+	end
+	local function segDist(p: Vector3, a: Vector3, b: Vector3): number
+		local ab = b - a
+		local t = if ab.Magnitude < 1e-4 then 0 else math.clamp((p - a):Dot(ab) / ab:Dot(ab), 0, 1)
+		return (a + ab * t - p).Magnitude
+	end
+	local candidates: { [string]: { string } } = {
+		["Leg-1"] = { "Thigh-1", "Shin-1", "Foot-1" },
+		["Leg1"] = { "Thigh1", "Shin1", "Foot1" },
+		["Arm-1"] = { "Upper-1", "Mid-1", "Fore-1", "Hand-1" },
+		["Arm1"] = { "Upper1", "Mid1", "Fore1", "Hand1" },
+	}
+	local groupOf: { [BasePart]: string } = {}
+	for g, list in groupParts do
+		for _, p in list do
+			groupOf[p] = g
+		end
+	end
+	local core = { "Pelvis", "Chest", "Neck", "Head" }
+	for _, p in parts do
+		if p.Name == "Part" then
+			p.Name = "Body"
+		end
+		p.Transparency = 1
+		p.CastShadow = false
+		p.Anchored = false
+		p.CanCollide = false
+		p.CanQuery = false
+		p.Massless = true
+		local local_ = cf:PointToObjectSpace(p.Position)
+		local best, bestD = "Chest", math.huge
+		for _, name in candidates[groupOf[p] or ""] or core do
+			local b = bones[name]
+			if b then
+				local d = segDist(local_, b.joint, b.tip)
+				if d < bestD then
+					best, bestD = name, d
+				end
+			end
+		end
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = bones[best].part
+		w.Part1 = p
+		w.Parent = p
+	end
+	model:SetAttribute("Rig", 2)
+	model:SetAttribute("FloorY", sk.floorY)
+	model:SetAttribute("Mass", sk.mass)
 end
 
 local function makeHumanoid(model: Model, hip: number, speed: number): Humanoid
@@ -281,12 +395,24 @@ local function buildBeast(model: Model, root: BasePart, cf: CFrame)
 	bez(144, 362, 146, 374, 148, 384, 150, 392, 2, legZ)
 	poly({ 146, 394, 178, 394 }, legZ)
 	group = nil
-	rig(model, root, cf, parts, groups, {
-		["Arm-1"] = P(84, 232, -0.45),
-		["Arm1"] = P(176, 232, -0.45),
-		["Leg-1"] = P(116, 318, -0.25),
-		["Leg1"] = P(144, 318, -0.25),
-	}, "Joint", folder)
+	-- 전신 뼈대(작고 가벼운 몸: 빠르고 날카롭게 반응)
+	skeleton(model, root, cf, parts, groups, {
+		pelvis = P(130, 318, -0.25),
+		waist = P(130, 280, -0.45),
+		neck = P(130, 216, -0.75),
+		head = P(130, 204, -0.9),
+		headEnd = P(130, 150, -1.05),
+		legs = {
+			[-1] = { hip = P(116, 318, -0.25), knee = P(104, 362, legZ(362)), ankle = P(96, 392, legZ(392)), toe = P(96, 394, -0.6) },
+			[1] = { hip = P(144, 318, -0.25), knee = P(160, 362, legZ(362)), ankle = P(174, 392, legZ(392)), toe = P(174, 394, -0.6) },
+		},
+		arms = {
+			[-1] = { shoulder = P(84, 232, armZ(232)), elbow = P(74, 298, armZ(298)), wrist = P(70, 356, armZ(356)), tip = P(76, 394, armZ(394)) },
+			[1] = { shoulder = P(176, 232, armZ(232)), elbow = P(186, 298, armZ(298)), wrist = P(190, 356, armZ(356)), tip = P(184, 394, armZ(394)) },
+		},
+		floorY = -3,
+		mass = 0.55,
+	}, folder)
 end
 
 -- ── 꽃괴물 ──
@@ -451,12 +577,24 @@ local function buildFlower(cf: CFrame): Model
 		seg(P(hx + e[1], hy + e[2], -1.0), P(hx + e[1], hy + e[2], -1.06), e[3], "FEye")
 	end
 	mark = nil
-	rig(model, root, cf, parts, groups, {
-		["Arm-1"] = P(138, 250, -0.25),
-		["Arm1"] = P(222, 250, -0.25),
-		["Leg-1"] = P(168, 318, -0.2),
-		["Leg1"] = P(192, 318, -0.2),
-	}, "Joint", folder)
+	-- 전신 뼈대(키 크고 가는 몸: 긴 목·긴 팔의 휘청임)
+	skeleton(model, root, cf, parts, groups, {
+		pelvis = P(180, 318, -0.2),
+		waist = P(180, 280, -0.2),
+		neck = P(180, 236, -0.2),
+		head = P(180, 198, -0.35),
+		headEnd = P(196, 132, -0.9),
+		legs = {
+			[-1] = { hip = P(168, 318, -0.2), knee = P(174, 360, legZ(360)), ankle = P(152, 392, legZ(392)), toe = P(138, 395, -0.6) },
+			[1] = { hip = P(192, 318, -0.2), knee = P(186, 360, legZ(360)), ankle = P(208, 392, legZ(392)), toe = P(222, 395, -0.6) },
+		},
+		arms = {
+			[-1] = { shoulder = P(138, 250, armZ(250)), elbow = P(120, 330, armZ(330)), wrist = P(114, 372, armZ(372)), tip = P(114, 396, armZ(396)) },
+			[1] = { shoulder = P(222, 250, armZ(250)), elbow = P(240, 330, armZ(330)), wrist = P(246, 372, armZ(372)), tip = P(246, 396, armZ(396)) },
+		},
+		floorY = -4,
+		mass = 0.7,
+	}, folder)
 	makeHumanoid(model, FLOWER_HIP, 0)
 	CollectionService:AddTag(model, Config.Tags.Monster)
 	CollectionService:AddTag(model, Config.Tags.Flower)
@@ -550,100 +688,178 @@ local function buildModel(cf: CFrame, stage: number): Model
 		end
 	end
 	local V3 = Vector3.new
-	-- 몸통: 사다리꼴 네 선 + 어깨에서 가슴으로 겹치는 두 선
-	ink(V3(-0.9, 2.6, -0.35), V3(-0.65, 0.5, 0), 0.03)
-	ink(V3(0.9, 2.6, -0.35), V3(0.65, 0.5, 0), 0.03)
-	ink(V3(-0.9, 2.6, -0.35), V3(0.9, 2.6, -0.35), 0.03)
-	ink(V3(-0.65, 0.5, 0), V3(0.65, 0.5, 0), 0.03)
-	ink(V3(-0.9, 2.5, -0.35), V3(-0.15, 1.5, -0.1), 0.025)
-	ink(V3(0.9, 2.5, -0.35), V3(0.15, 1.5, -0.1), 0.025)
-	-- 짧은 목
-	ink(V3(-0.2, 3.75, -0.65), V3(-0.3, 2.6, -0.4), 0.03)
-	ink(V3(0.2, 3.75, -0.65), V3(0.3, 2.6, -0.4), 0.03)
-	-- 머리(챕터별 도형): 눈 = 작은 동그라미 + 점, 입 = 가로로 넓고 세로 이빨선
-	local spec = HeadSpec[((stage - 1) % #HeadSpec) + 1]
-	local cy, zf = spec.cy, -1.0
-	local function P(x: number, y: number, z: number): Vector3
-		return Vector3.new(x, cy + y, z)
+	-- ── 기괴한 3차 시안(사용자 확정, 노트 main-monster-v3.svg) ──
+	-- 시안 좌표(px): 발바닥 y = 0, 위로 갈수록 -, 26px = 1스터드. 바닥 y = -5, 앞 = -Z
+	local PX = 26
+	type Pt = { number }
+	local function S(x: number, y: number, z: number): Vector3
+		return V3(x / PX, -5 - y / PX, z)
 	end
-	local verts: { { number } } = spec.verts or {}
-	if spec.star then
-		for i = 0, 9 do
-			local r = if i % 2 == 0 then spec.star[1] else spec.star[2]
-			local ang = math.pi / 2 + i * math.pi / 5
-			table.insert(verts, { r * math.cos(ang), r * math.sin(ang) })
+	-- 몸 깊이: 위로 갈수록 앞으로 숙인다(엉덩이 0 → 어깨 -0.35 → 목 끝 -0.8)
+	local function bodyZ(y: number): number
+		local h = -y
+		if h <= 143 then
+			return 0
+		elseif h <= 196 then
+			return -0.35 * (h - 143) / 53
 		end
-	elseif spec.hex then
-		for i = 0, 5 do
-			local ang = i * math.pi / 3
-			table.insert(verts, { spec.hex * math.cos(ang), spec.hex * math.sin(ang) })
+		return -0.35 - 0.45 * math.min(1, (h - 196) / 38)
+	end
+	-- 몸 선(손그림처럼 흔들림): 시안 점들을 잇는다
+	local function bodyLine(pts: { Pt }, r: number, closed: boolean?)
+		local n = #pts
+		for i = 1, (if closed then n else n - 1) do
+			local a, b = pts[i], pts[i % n + 1]
+			ink(S(a[1], a[2], bodyZ(a[2])), S(b[1], b[2], bodyZ(b[2])), r)
 		end
 	end
-	if spec.circle then
-		seg(P(0, 0, zf), P(0, 0, zf + 0.06), spec.circle)
-	else
-		for i, a in verts do
-			local b = verts[i % #verts + 1]
-			ink(P(a[1], a[2], zf), P(b[1], b[2], zf), 0.03)
+	-- 가는 선(흔들림 없이 한 토막: 선 수를 아낀다)
+	local function thin(pts: { Pt }, r: number, zf: (number) -> number)
+		for i = 1, #pts - 1 do
+			local a, b = pts[i], pts[i + 1]
+			seg(S(a[1], a[2], zf(a[2])), S(b[1], b[2], zf(b[2])), r)
 		end
 	end
-	local ex, ey, er = spec.eye[1], spec.eye[2], spec.eye[3]
+	local function disc(x: number, y: number, z: number, radPx: number)
+		local p = S(x, y, z)
+		seg(p, p + V3(0, 0, -0.02), radPx / PX)
+	end
+
+	-- 몸통: 사다리꼴 + 어깨에서 가슴으로 겹치는 선 + 안쪽 갈비뼈 3쌍 + 점선 척추
+	bodyLine({ { -23, -196 }, { -21, -180 }, { -19, -162 }, { -17, -143 } }, 0.03)
+	bodyLine({ { 23, -196 }, { 21, -179 }, { 19, -161 }, { 17, -143 } }, 0.03)
+	bodyLine({ { -25, -196 }, { -8, -198 }, { 8, -195 }, { 25, -197 } }, 0.03)
+	bodyLine({ { -18, -143 }, { 0, -141 }, { 18, -144 } }, 0.03)
+	bodyLine({ { -23, -193 }, { -12, -182 }, { -4, -170 } }, 0.025)
+	bodyLine({ { 23, -193 }, { 13, -181 }, { 4, -170 } }, 0.025)
+	for _, rib in { { -176, -175 }, { -164, -163 }, { -153, -152 } } do
+		for _, s in { -1, 1 } do
+			thin({ { 15 * s, rib[1] }, { 8 * s, rib[1] + 4 }, { 2 * s, rib[2] } }, 0.018, bodyZ)
+		end
+	end
+	for _, sp in { { 0, -190, 1, -184 }, { 1, -178, -1, -172 }, { -1, -165, 1, -159 }, { 1, -153, 0, -148 } } do
+		thin({ { sp[1], sp[2] }, { sp[3], sp[4] } }, 0.016, bodyZ)
+	end
+	-- 길고 지그재그로 꺾인 목
+	bodyLine({ { -5, -196 }, { -9, -206 }, { -4, -214 }, { -9, -224 }, { -6, -232 } }, 0.028)
+	bodyLine({ { 5, -196 }, { 2, -208 }, { 8, -216 }, { 3, -226 }, { 6, -234 } }, 0.028)
+
+	-- 팔: 마디 3개, 손목이 바닥 가까이. 양팔 길이가 조금 다르다. 관절 = 작은 원. 발톱 5개는 바닥을 긁는다
+	local function armZ(y: number): number
+		return -0.35 - 0.65 * math.clamp((-194 - y) / 154, 0, 1)
+	end
+	local ARMS = {
+		[-1] = { pts = { { -23, -194 }, { -34, -168 }, { -46, -140 }, { -48, -115 }, { -52, -90 }, { -57, -65 }, { -62, -40 } }, knobs = { { -46, -140 }, { -52, -90 } }, claws = { { -70, -22, -88, -2 }, { -67, -18, -75, -2 }, { -62, -16, -60, -2 }, { -56, -18, -48, -2 }, { -52, -24, -38, -4 } } },
+		[1] = { pts = { { 23, -194 }, { 37, -170 }, { 50, -146 }, { 51, -120 }, { 54, -96 }, { 60, -72 }, { 66, -48 } }, knobs = { { 50, -146 }, { 54, -96 } }, claws = { { 74, -30, 92, -2 }, { 70, -26, 78, -2 }, { 66, -24, 64, -2 }, { 60, -26, 52, -2 }, { 56, -32, 42, -8 } } },
+	}
+	-- 다리: 오른 다리는 무릎이 뒤로 꺾여 짧다(절뚝임). 작은 삼각 발
+	local LEGS = {
+		[-1] = { pts = { { -10, -143 }, { -14, -110 }, { -18, -78 }, { -13, -42 }, { -9, -6 } }, foot = { { -9, -6 }, { -21, 0 }, { -4, 0 } }, knob = { 0, 0 } },
+		[1] = { pts = { { 10, -143 }, { 19, -114 }, { 25, -86 }, { 12, -50 }, { 12, -8 } }, foot = { { 12, -8 }, { 24, -1 }, { 7, -1 } }, knob = { 25, -86 } },
+	}
+	local function legZ(y: number): number
+		return if y > -100 and y < -60 then 0.15 else 0
+	end
+	local hexArms = ((stage - 1) % 5) + 1 == 5
 	for _, s in { -1, 1 } do
-		seg(P(s * ex, ey, zf - 0.03), P(s * ex, ey, zf - 0.06), er)
-		seg(P(s * ex, ey, zf - 0.06), P(s * ex, ey, zf - 0.09), 0.025)
-	end
-	local mw, my, mh = spec.mouth[1], spec.mouth[2], spec.mouth[3]
-	local function arcY(x: number): number
-		return my - mh * (1 - (x / mw) ^ 2) * 0.35 - mh * 0.65
-	end
-	local zm = zf - 0.04
-	seg(P(-mw, my, zm), P(mw, my, zm), 0.025)
-	seg(P(-mw, my, zm), P(-mw * 0.9, arcY(-mw * 0.9), zm), 0.025)
-	seg(P(mw, my, zm), P(mw * 0.9, arcY(mw * 0.9), zm), 0.025)
-	for i = 0, 5 do
-		local x0 = -mw * 0.9 + 1.8 * mw * i / 6
-		local x1 = -mw * 0.9 + 1.8 * mw * (i + 1) / 6
-		seg(P(x0, arcY(x0), zm), P(x1, arcY(x1), zm), 0.025)
-	end
-	for i = 1, 8 do
-		local x = -mw * 0.9 + 1.8 * mw * i / 9
-		seg(P(x, my, zm), P(x, arcY(x), zm), 0.018)
-	end
-	for _, s in { -1, 1 } do
-		-- 긴 팔: 한 줄, 어깨 → 팔꿈치 → 손목, V자로 벌어짐
 		group = "Arm" .. s
-		local sh = V3(0.9 * s, 2.55, -0.35)
-		local el = V3(1.55 * s, 0.15, -0.85)
-		local wr = V3(2.1 * s, -2.1, -1.0)
-		ink(sh, el, 0.03)
-		ink(el, wr, 0.03)
-		-- 부채꼴로 퍼지는 긴 발톱 5개
-		for k = -2, 2 do
-			local mid = wr + V3(k * 0.16 + 0.05 * s, -0.8, -0.12)
-			local tip = wr + V3(k * 0.3 + 0.12 * s, -1.55, -0.35 + 0.05 * k)
-			seg(wr + V3(k * 0.07, 0, 0), mid, 0.018)
-			seg(mid, tip, 0.014)
+		local A = ARMS[s]
+		for i = 1, #A.pts - 1 do
+			local a, b = A.pts[i], A.pts[i + 1]
+			ink(S(a[1], a[2], armZ(a[2])), S(b[1], b[2], armZ(b[2])), 0.03)
 		end
-		-- 길고 곧은 다리: 한 줄 + 무릎 꺾임, 작은 발
+		for _, k in A.knobs do
+			disc(k[1], k[2], armZ(k[2]) - 0.03, 2.2)
+		end
+		local w = A.pts[#A.pts]
+		local wz = armZ(w[2])
+		for _, c in A.claws do
+			thin({ w, { c[1], c[2] }, { c[3], c[4] } }, 0.016, function(y: number): number
+				return wz - 0.1 * math.clamp((y - w[2]) / 40, 0, 1)
+			end)
+		end
+		if hexArms then
+			-- 5 육각: 어깨 아래에서 짧은 팔이 한 쌍 더(발톱 3개). 가슴에 붙는다(팔 뼈가 아니라)
+			group = nil
+			local e = { { 20 * s, -178 }, { 34 * s, -158 }, { 40 * s, -132 }, { 46 * s, -112 } }
+			thin(e, 0.025, function(y: number): number
+				return -0.4 - 0.3 * math.clamp((-178 - y) / 66, 0, 1)
+			end)
+			local h = e[4]
+			for _, dx in { -6, 0, 6 } do
+				thin({ h, { h[1] + dx * s, h[2] + 14 } }, 0.014, function(_y: number): number
+					return -0.7
+				end)
+			end
+		end
 		group = "Leg" .. s
-		for _, e in { 0.4 } do
-			local x0, xk, xa = e * s, (e + 0.06) * s, (e + 0.08) * s
-			ink(V3(x0, 0.5, 0), V3(xk, -2.3, -0.2), 0.03)
-			ink(V3(xk, -2.3, -0.2), V3(xa, -4.75, 0.1), 0.03)
+		local L = LEGS[s]
+		for i = 1, #L.pts - 1 do
+			local a, b = L.pts[i], L.pts[i + 1]
+			ink(S(a[1], a[2], legZ(a[2])), S(b[1], b[2], legZ(b[2])), 0.03)
 		end
-		local xc = 0.48 * s
-		ink(V3(xc, -4.75, 0.1), V3(xc, -4.97, -0.8), 0.03)
-		ink(V3(xc, -4.97, 0.35), V3(xc, -4.97, -0.8), 0.03)
-		ink(V3(xc, -4.75, 0.1), V3(xc, -4.97, 0.35), 0.03)
+		if L.knob[1] ~= 0 then
+			disc(L.knob[1], L.knob[2], 0.12, 2)
+		end
+		local f = L.foot
+		for i = 1, 3 do
+			local a, b = f[i], f[i % 3 + 1]
+			seg(S(a[1], a[2], if i == 2 then -0.45 else 0.1), S(b[1], b[2], if i == 1 then -0.45 else 0.1), 0.025)
+		end
 	end
 	group = nil
-	local JOINTS: { [string]: Vector3 } = {
-		["Arm-1"] = Vector3.new(-0.9, 2.55, -0.35),
-		["Arm1"] = Vector3.new(0.9, 2.55, -0.35),
-		["Leg-1"] = Vector3.new(-0.4, 0.5, 0),
-		["Leg1"] = Vector3.new(0.4, 0.5, 0),
-	}
-	rig(model, root, cf, parts, groupParts, JOINTS, "Joint")
+
+	-- ── 머리: 공용 모양(MonsterFaces, 점프스케어 얼굴과 같다). 시안 좌표 변환 translate → rotate → scale ──
+	type Map = (number, number) -> (number, number)
+	local function T(tx: number, ty: number, deg: number, sc: number): Map
+		local c, s = math.cos(math.rad(deg)), math.sin(math.rad(deg))
+		return function(u: number, v: number): (number, number)
+			u, v = u * sc, v * sc
+			return tx + u * c - v * s, ty + u * s + v * c
+		end
+	end
+	local HZ = -1.0 -- 머리 면의 깊이(앞으로 나와 있다)
+	local function drawFace(M: Map, MS: number, lines: { Faces.Line }, circles: { Faces.Circle })
+		local function hp(u: number, v: number, dz: number): Vector3
+			local x, y = M(u, v)
+			return S(x, y, HZ + dz)
+		end
+		for _, l in lines do
+			local n = #l.pts
+			for i = 1, (if l.closed then n else n - 1) do
+				local a, b = l.pts[i], l.pts[i % n + 1]
+				seg(hp(a[1], a[2], l.dz), hp(b[1], b[2], l.dz), l.r)
+			end
+		end
+		for _, c in circles do
+			local p = hp(c.u, c.v, c.dz)
+			seg(p, p + V3(0, 0, -0.02), c.rad * MS / PX)
+		end
+	end
+	local face = Faces.build(((stage - 1) % 5) + 1)
+	drawFace(T(face.tx, face.ty, face.deg, face.scale), face.scale, face.lines, face.circles)
+	drawFace(T(0, 0, 0, 1), 1, face.extra, face.extraCircles)
+	-- 전신 뼈대: 관절 위치는 시안 좌표 그대로(팔은 마디 3개, 오른 다리는 무릎이 뒤로 꺾여 짧다)
+	local function armJ(x: number, y: number): Vector3
+		return S(x, y, armZ(y))
+	end
+	skeleton(model, root, cf, parts, groupParts, {
+		pelvis = S(0, -143, 0),
+		waist = S(0, -170, bodyZ(-170)),
+		neck = S(0, -196, -0.35),
+		head = S(0, -232, -0.8),
+		headEnd = S(face.tx, face.ty, HZ),
+		legs = {
+			[-1] = { hip = S(-10, -143, 0), knee = S(-18, -78, 0.15), ankle = S(-9, -6, 0), toe = S(-21, 0, -0.45) },
+			[1] = { hip = S(10, -143, 0), knee = S(25, -86, 0.15), ankle = S(12, -8, 0), toe = S(24, -1, -0.45) },
+		},
+		arms = {
+			[-1] = { shoulder = armJ(-23, -194), elbow = armJ(-46, -140), mid = armJ(-52, -90), wrist = armJ(-62, -40), tip = S(-62, -2, armZ(-40) - 0.1) },
+			[1] = { shoulder = armJ(23, -194), elbow = armJ(50, -146), mid = armJ(54, -96), wrist = armJ(66, -48), tip = S(66, -2, armZ(-48) - 0.1) },
+		},
+		floorY = -5,
+		mass = 1,
+	})
 	makeHumanoid(model, 4.0, MC.WanderSpeed)
 	CollectionService:AddTag(model, Config.Tags.Monster)
 	return model
@@ -800,7 +1016,11 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 	return self
 end
 
--- 걷는 모습: 속도만큼 팔다리를 흔든다(초당 10번만 바꿔 네트워크 부담을 줄인다. 음파는 순간 모습만 보여 준다)
+-- 쫓아올 때 확 튀어나갔다 멈칫하는 괴물(머리 모양 번호): 1 삼각 · 3 원 · 4 별. 평균 속도는 ChaseSpeed 그대로
+-- (몸 동작은 서버가 아니라 클라이언트 MonsterAnim 이 매 프레임 만든다: 전신 뼈대 Rig 2)
+local LUNGE: { [number]: boolean } = { [1] = true, [3] = true, [4] = true }
+
+-- 서버 쪽 움직임: 쫓아올 때 속도 리듬만. 예전 몸(관절 4개, Rig 2 가 아닌 것)은 팔다리를 흔든다
 function Monster.animate(self: Monster, dt: number)
 	local tracks = self.tracks
 	if tracks then
@@ -819,6 +1039,12 @@ function Monster.animate(self: Monster, dt: number)
 		end
 		return
 	end
+	local shape = if self.kind == "main" then tonumber(self.model:GetAttribute("Voice")) else nil
+	if shape and LUNGE[shape] and self.state == "Chase" then
+		-- 확 튀어나갔다 멈칫(0.4초 × 1.35배 + 0.3초 × 0.55배 = 평균 ChaseSpeed)
+		local cyc = (os.clock() - self.stateChanged) % 0.7
+		self.hum.WalkSpeed = self.cfg.ChaseSpeed * (if cyc < 0.4 then 1.35 else 0.55)
+	end
 	self.animT += dt
 	if self.animT < 0.1 or #self.joints == 0 then
 		return
@@ -828,7 +1054,7 @@ function Monster.animate(self: Monster, dt: number)
 	local v = self.root.AssemblyLinearVelocity
 	local speed = Vector3.new(v.X, 0, v.Z).Magnitude
 	self.phase = (self.phase + step * speed * 0.55) % (math.pi * 2)
-	local amt = math.clamp(speed / 3, 0, 1) -- (느리게 걸어도 팔다리가 크게 흔들려야 음파에 걷는 모습이 보인다)
+	local amt = math.clamp(speed / 3, 0, 1)
 	for _, j in self.joints do
 		j.motor.C0 = j.base * CFrame.Angles(math.sin(self.phase + j.offset) * j.amp * amt, 0, 0)
 	end
@@ -1081,6 +1307,9 @@ function Monster.hear(self: Monster, pos: Vector3, radius: number, source: Playe
 	if not SoundBus.canHear(pos, self.root.Position, radius) then
 		return
 	end
+	-- (클라이언트 몸 동작: 소리 난 쪽으로 움찔하며 고개를 돌린다)
+	self.model:SetAttribute("Focus", pos)
+	self.model:SetAttribute("Heard", os.clock())
 	if self.state == "Chase" then
 		if source and source == self.target then
 			self.lastKnown = pos
@@ -1384,7 +1613,7 @@ local function roundEvent(): RemoteEvent?
 	return RoundEvent
 end
 
--- 들켰다: 변신 시각을 정한다(5~10초 뒤)
+-- 들켰다: 변신 시각을 정한다(Config.Doppel.TransformDelay: 10~30초 뒤, 그때 플레이어가 가까이 있어야 변신)
 function Monster.discover(self: Monster, p: Player)
 	if self.discoveredBy or self.form ~= "Disguise" then
 		return
@@ -1420,8 +1649,18 @@ function Monster.disguiseTick(self: Monster, now: number)
 	local who = self.discoveredBy
 	if who then
 		if now >= self.transformAt then
-			self:transform()
-			return
+			-- 시간이 됐어도 플레이어가 가까이(TransformNear) 있을 때만 변신한다. 멀면 가까워질 때까지 사람 모습으로 기다린다
+			local near = false
+			for _, e in alivePlayers() do
+				if (e.root.Position - my).Magnitude <= (cfg.TransformNear or 20) then
+					near = true
+					break
+				end
+			end
+			if near then
+				self:transform()
+				return
+			end
 		end
 		-- 변신 전: 발견한 플레이어를 바라보며 아주 천천히 다가온다(멀면 그 자리에 서서 바라본다)
 		local char = who.Character

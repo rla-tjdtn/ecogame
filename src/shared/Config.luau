@@ -63,9 +63,9 @@ Config.Noise = {
 
 -- ─────────────────────────────── 괴물 ───────────────────────────────
 Config.Monster = {
-	WanderSpeed = 3.5, -- 아주 천천히(플레이어는 길을 찾으며 도망가야 한다)
-	InvestigateSpeed = 5.5,
-	ChaseSpeed = 8.5, -- 걷기(10)보다도 느리다: 막다른 길·정면으로 마주칠 때 잡힌다
+	WanderSpeed = 6, -- 돌아다니기(플레이어 걷기 10)
+	InvestigateSpeed = 10, -- 소리 듣고 조사하러 갈 때
+	ChaseSpeed = 12, -- 쫓아올 때: 걷기(10)보다 빠르고 달리기(18)보다 느리다
 	SightRange = 24, -- 시야(어둠 속 감각) 거리 (15 → 24: 더 멀리서 알아챈다)
 	SightRangeCrouch = 12, -- 웅크리면 이만큼만
 	SenseRange = 7, -- 이 거리 안이면 시야와 상관없이 알아챈다
@@ -111,13 +111,14 @@ Config.Doppel = {
 	SpawnDistance = { 45, 120 }, -- 시작점에서 이 거리 사이에 등장
 	SeeRange = 14, -- 이 거리 안에서 플레이어가 보면(벽 없이) 들킨다
 	SonarRange = 35, -- 이 거리 안에서 음파를 쏘면(벽 1장 이하) 들킨다(음파에 모습이 드러났으니)
-	TransformDelay = { 5, 10 }, -- 들킨 뒤 변신까지(초)
+	TransformDelay = { 10, 30 }, -- 들킨 뒤 변신까지(초). 이 시간이 지나도 플레이어가 TransformNear 안에 있어야 변신한다
+	TransformNear = 20, -- 변신할 때 살아 있는 플레이어가 이 거리(스터드) 안에 있어야 한다(멀면 가까워질 때까지 기다린다)
 	StalkSpeed = 3, -- 들킨 뒤 변신 전: 발견한 플레이어를 바라보며 아주 천천히 다가온다
 	BurstPause = 0.8, -- 터지며 변신하는 동안 멈춤
-	-- 변신 뒤(괴물): 메인 괴물보다 작고 조금 빠르다
-	WanderSpeed = 4.5,
-	InvestigateSpeed = 6.5,
-	ChaseSpeed = 9.5, -- 메인 괴물 8.5, 플레이어 걷기 10
+	-- 변신 뒤(괴물): 메인 괴물보다 작다
+	WanderSpeed = 6,
+	InvestigateSpeed = 8,
+	ChaseSpeed = 10, -- 메인 괴물 12, 플레이어 걷기 10
 	CatchDistance = 3.0,
 	AgentRadius = 1.3,
 	AgentHeight = 6.5,
@@ -135,7 +136,7 @@ Config.Flower = {
 	StartDelay = 6,
 	SpawnDistance = { 40, 120 }, -- 시작점에서 이 거리 사이
 	WakeTime = 0.8, -- 꽃잎이 펼쳐지는 동안(멈춰 있음)
-	ChaseSpeed = 16, -- 음파 쏜 곳으로 달려가는 속도(걷기 10 < 16 < 달리기 18)
+	ChaseSpeed = 14, -- 음파 쏜 곳으로 달려가는 속도(걷기 10 < 14 < 달리기 18)
 	WanderSpeed = 0, -- (돌아다니지 않는다)
 	InvestigateSpeed = 0,
 	LookAround = { 2, 3 }, -- 도착 뒤 두리번거리는 시간(초)
@@ -578,7 +579,7 @@ Config.MonsterVoices = {
 	["3"] = { Name = "원", Scream = { 116389741993620 }, Steps = { 134919568490352 }, Special = { 83953676554672 } }, -- 손톱 톡톡, 머리로 씹기
 	["4"] = { Name = "별", Scream = { 78248585425234 }, Steps = { 137748804042134 } }, -- 쿵 걸음
 	["5"] = { Name = "육각", Scream = { 123342966944903 }, Steps = { 119059498928351 } }, -- 곤충 걸음
-	Doppel = { Name = "도플갱어", Scream = { 102508063645161 }, Burst = { 85832788832876, 74039555089610 } }, -- 지직거리는 괴성 / 살 찢어짐 + 뼈 우두둑
+	Doppel = { Name = "도플갱어", Scream = { 111740849904916 }, Burst = { 85832788832876, 74039555089610 } }, -- 일그러진 비명(지직 괴성 102508063645161 은 로블록스 검토 거절) / 살 찢어짐 + 뼈 우두둑
 	-- 꽃괴물: 깨어날 때 쉿(Special), 꽃잎 펼칠 때 뼈·살(Unfold), 다 펼치면 질척(Squelch, 닫을 때도 낮게), 달려갈 때 괴성, 걸음은 손톱 톡톡을 낮게
 	Flower = { Name = "꽃괴물", Scream = { 74933650585675 }, Special = { 132007379899903 }, Unfold = { 103473951609932 }, Squelch = { 125203001018778 }, Steps = { 134919568490352 } },
 }
@@ -591,12 +592,15 @@ Config.VoiceMix = {
 	Unfold = { Volume = 1.0, Cut = 1.3 },
 	Squelch = { Volume = 1.0, Cut = 1.0 },
 }
+-- 메인 괴물(Voice "1"~"5")의 소리만 이만큼 더 크게(괴성·걸음·특수 동작 모두). 서브 괴물(도플갱어·꽃괴물)은 그대로
+Config.MainVoiceBoost = 1.4
 for v, def in Config.MonsterVoices do
+	local boost = if tonumber(v) ~= nil then Config.MainVoiceBoost else 1
 	for kind, mix in Config.VoiceMix do
 		local ids = (def :: any)[kind]
 		if ids then
 			for k, id in ids do
-				local loud = if kind == "Scream" or kind == "Burst" or kind == "Unfold" then Config.MonsterLoudness else 1
+				local loud = (if kind == "Scream" or kind == "Burst" or kind == "Unfold" then Config.MonsterLoudness else 1) * boost
 				;(Config.Sounds :: any)["Voice_" .. v .. "_" .. kind .. "_" .. k] = {
 					Id = "rbxassetid://" .. id,
 					Volume = mix.Volume * loud,
