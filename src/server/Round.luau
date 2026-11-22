@@ -12,6 +12,7 @@ local Builder = require(script.Parent.StageBuilder)
 local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
 local Monster = require(script.Parent.Monster)
+local Rejoin = require(script.Parent.Rejoin)
 local Hiding = require(script.Parent.Hiding)
 local Search = require(script.Parent.Search)
 
@@ -543,6 +544,9 @@ function Round.finish(): string
 		RoundEvent:FireAllClients("Clear", { stage = i, nextStage = nextI, nextName = stageDef(nextI).Name, allClear = allClear, toLobby = Round.returnToLobby, seconds = Config.Round.ResultSeconds })
 		Round.stageIndex = nextI
 		Round.lastAllClear = allClear
+		if allClear then
+			Rejoin.gameOver() -- (다 깼다: 끊긴 사람을 이 게임으로 다시 끌어오지 않는다)
+		end
 	else
 		outcome = "Failed"
 		RoundEvent:FireAllClients("Failed", { stage = i, nextName = stageDef(i).Name, seconds = Config.Round.ResultSeconds })
@@ -647,17 +651,36 @@ Hiding.onHide(function(p, spot)
 	end
 end)
 
+-- 끊겼다 다시 들어온 사람: 같은 스테이지면 남은 목숨·상태를 그대로(끊겼다고 목숨이 다시 차지 않게)
+local saved: { [number]: { lives: number?, status: string, rid: number } } = {}
+
 Players.PlayerAdded:Connect(function(p)
 	setStatus(p, "Waiting")
 	if Round.state == "Lobby" then
 		task.defer(Round.spawnPlayer, p)
 	elseif Round.state == "Playing" and not Round.members then
-		-- 늦게 들어온 플레이어도 시작 지점에서 함께 한다(방에서 시작한 게임은 그 방 사람만)
+		-- 늦게 들어온(또는 끊겼다 돌아온) 플레이어도 시작 지점에서 함께 한다(방에서 시작한 게임은 그 방 사람만)
+		local sv = saved[p.UserId]
+		saved[p.UserId] = nil
+		if sv and sv.rid == Round.roundId then
+			p:SetAttribute("Lives", sv.lives or Config.Lives.PerStage)
+			if sv.status == "Dead" or sv.status == "Escaped" or (sv.lives or 1) <= 0 then
+				setStatus(p, sv.status == "Escaped" and "Escaped" or "Dead") -- (관전)
+				note("rejoined " .. p.Name .. " as " .. Round.status(p))
+				return
+			end
+			note("rejoined " .. p.Name .. " lives " .. tostring(sv.lives))
+		else
+			p:SetAttribute("Lives", Config.Lives.PerStage)
+		end
 		task.defer(Round.spawnPlayer, p)
 	end
 end)
 
 Players.PlayerRemoving:Connect(function(p)
+	if Round.state == "Playing" then
+		saved[p.UserId] = { lives = p:GetAttribute("Lives") :: number?, status = Round.status(p), rid = Round.roundId }
+	end
 	if Round.members then
 		Round.members[p] = nil
 	end

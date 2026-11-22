@@ -9,6 +9,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Config = require(ReplicatedStorage.Shared.Config)
+-- 휴대폰·태블릿 가벼운 모드: 메모리·처리량이 작아 부하가 크면 연결이 먼저 끊긴다(오류 277).
+-- 음파 선 파트 수와 한 프레임에 새로 보이는 선 수를 줄인다(보이는 범위·시간은 같고, 아주 빽빽한 곳에서 먼 선이 조금 덜 그려진다)
+if UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or not UserInputService.KeyboardEnabled) then
+	local S = Config.Sonar :: any
+	S.PoolSize = math.min(S.PoolSize, 2000)
+	S.RevealPerFrame = math.min(S.RevealPerFrame, 220)
+end
 local World = require(script.Parent:WaitForChild("SonarWorld"))
 local Lines = require(script.Parent:WaitForChild("SonarLines"))
 local Pulses = require(script.Parent:WaitForChild("SonarPulses"))
@@ -342,6 +349,9 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 end)
 
 -- ── 매 프레임 ──
+-- 관전 카메라 보간 상태
+local specCF: CFrame? = nil
+local specTarget: Player? = nil
 RunService.RenderStepped:Connect(function(dt)
 	local now = os.clock()
 	-- 마우스 커서: 1인칭에서는 숨긴다(조준점만). 로비 메뉴(Tab)를 열었을 때만 보인다
@@ -368,10 +378,20 @@ RunService.RenderStepped:Connect(function(dt)
 		local targets = spectateTargets()
 		if #targets > 0 then
 			local t = targets[((spectateIndex - 1) % #targets) + 1]
-			local head = t.Character and t.Character:FindFirstChild("Head") :: BasePart?
+			-- (머리는 걷는 애니메이션으로 흔들리고 네트워크로 계단처럼 움직여 떨렸다:
+			--  몸 가운데(루트)의 눈높이를 따라가며 부드럽게 보간한다. 대상이 바뀌면 바로 그 자리로)
+			local troot = t.Character and t.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local head = troot
 			if head then
 				cam.CameraType = Enum.CameraType.Scriptable
-				cam.CFrame = head.CFrame * CFrame.new(0, 0.3, 0)
+				local want = head.CFrame * CFrame.new(0, 1.6, 0)
+				if specTarget ~= t or not specCF or (specCF.Position - want.Position).Magnitude > 12 then
+					specCF = want
+					specTarget = t
+				else
+					specCF = (specCF :: CFrame):Lerp(want, 1 - math.exp(-dt * 10))
+				end
+				cam.CFrame = specCF :: CFrame
 				UI.setSpectate("관전 중: " .. t.DisplayName .. "   (좌클릭: 대상 변경)")
 			end
 		else

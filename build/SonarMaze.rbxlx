@@ -1459,6 +1459,7 @@ local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Round = require(script.Parent.Round)
+local Rejoin = require(script.Parent.Rejoin)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoomAction = Remotes:WaitForChild("RoomAction") :: RemoteEvent
@@ -1566,7 +1567,7 @@ local function startTeleport(r: Room)
 		local code = TeleportService:ReserveServer(game.PlaceId)
 		local options = Instance.new("TeleportOptions")
 		options.ReservedServerAccessCode = code
-		options:SetTeleportData({ room = r.id })
+		options:SetTeleportData({ room = r.id, code = code }) -- (code: 끊긴 사람이 다시 돌아오게 게임 서버가 기억한다)
 		TeleportService:TeleportAsync(game.PlaceId, r.members, options)
 	end)
 	if not ok then
@@ -1659,9 +1660,40 @@ function Lobby.boot()
 	local mode = if force == "Game" or force == "Lobby" then force elseif Lobby.isGameServer() then "Game" else "Lobby"
 	if mode == "Game" then
 		ReplicatedStorage:SetAttribute("Mode", "Game")
+		-- 끊긴 사람이 다시 켜면 이 게임으로 돌아오게: 들어온 사람마다 기록, 30초마다 갱신
+		for _, p in Players:GetPlayers() do
+			Rejoin.arrived(p)
+		end
+		Players.PlayerAdded:Connect(Rejoin.arrived)
+		Rejoin.startHeartbeat()
 		Round.loop()
 	else
 		publish()
+		-- 진행 중인 게임에서 끊겼던 사람은 그 게임(예약 서버)으로 바로 돌려보낸다
+		local function tryRejoin(p: Player)
+			local code = Rejoin.lookup(p.UserId)
+			if not code then
+				return
+			end
+			message(p, "진행 중이던 게임으로 다시 연결합니다…")
+			local ok, err = pcall(function()
+				local options = Instance.new("TeleportOptions")
+				options.ReservedServerAccessCode = code
+				options:SetTeleportData({ room = 0, code = code, rejoin = true })
+				TeleportService:TeleportAsync(game.PlaceId, { p }, options)
+			end)
+			if not ok then
+				Rejoin.forget(p.UserId)
+				message(p, "다시 연결하지 못했습니다. 새 방을 만들어 주세요")
+				warn("[Lobby] rejoin failed: " .. tostring(err))
+			end
+		end
+		for _, p in Players:GetPlayers() do
+			task.spawn(tryRejoin, p)
+		end
+		Players.PlayerAdded:Connect(function(p)
+			task.spawn(tryRejoin, p)
+		end)
 		Round.enterLobby()
 	end
 end
@@ -4198,6 +4230,120 @@ return Props
       </Item>
       <Item class="ModuleScript" referent="24">
         <Properties>
+          <string name="Name">Rejoin</string>
+          <string name="Source"><![CDATA[--!strict
+-- 끊겼을 때 진행 중이던 게임으로 다시 들어가기.
+-- 방에서 시작한 게임은 예약(비공개) 서버라서, 연결이 끊기면(휴대폰 오류 277 등) 친구 따라가기로도 못 들어온다.
+--  · 게임 서버: 로비가 넘겨준 예약 서버 접속 코드를 기억하고, 이 게임에 참가한 사람마다 "살아 있음"을 30초마다 적는다(MemoryStore).
+--  · 로비 서버: 들어온 사람에게 최근(90초 안) 살아 있는 게임 기록이 있으면 그 예약 서버로 바로 보낸다.
+--  · 게임이 끝나면(마지막 스테이지 클리어) 기록을 지운다. 서버가 닫히면 기록이 갱신되지 않아 90초 뒤 저절로 무시된다.
+-- Studio·API 꺼짐 등 MemoryStore 를 못 쓰면 조용히 아무것도 하지 않는다.
+
+local MemoryStoreService = game:GetService("MemoryStoreService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Rejoin = {}
+Rejoin.FRESH = 90 -- 이 초 안에 갱신된 기록만 "진행 중"
+Rejoin.TTL = 15 * 60 -- 기록 보관(초)
+Rejoin.code = nil :: string? -- (게임 서버) 이 예약 서버의 접속 코드
+Rejoin.roster = {} :: { [number]: boolean } -- (게임 서버) 이 게임에 들어왔던 사람(끊겨도 남는다)
+
+local map: MemoryStoreSortedMap? = nil
+local function store(): MemoryStoreSortedMap?
+	if RunService:IsStudio() then
+		return nil
+	end
+	if not map then
+		local ok, m = pcall(function()
+			return MemoryStoreService:GetSortedMap("SonarRejoin")
+		end)
+		map = if ok then m else nil
+	end
+	return map
+end
+
+local function write(userId: number)
+	local m = store()
+	if not m or not Rejoin.code then
+		return
+	end
+	pcall(function()
+		m:SetAsync(tostring(userId), { code = Rejoin.code, at = os.time() }, Rejoin.TTL)
+	end)
+end
+
+function Rejoin.forget(userId: number)
+	local m = store()
+	if not m then
+		return
+	end
+	pcall(function()
+		m:RemoveAsync(tostring(userId))
+	end)
+end
+
+-- (로비 서버) 이 사람이 돌아갈 진행 중인 게임의 접속 코드
+function Rejoin.lookup(userId: number): string?
+	local m = store()
+	if not m then
+		return nil
+	end
+	local ok, data = pcall(function()
+		return m:GetAsync(tostring(userId))
+	end)
+	if ok and type(data) == "table" and type(data.code) == "string" and type(data.at) == "number" and os.time() - data.at <= Rejoin.FRESH then
+		return data.code
+	end
+	return nil
+end
+
+-- (게임 서버) 들어온 사람의 접속 코드를 기억하고 명단에 넣는다
+function Rejoin.arrived(p: Player)
+	local ok, jd = pcall(function()
+		return p:GetJoinData()
+	end)
+	local td = ok and jd and (jd :: any).TeleportData
+	if type(td) == "table" and type(td.code) == "string" and not Rejoin.code then
+		Rejoin.code = td.code
+	end
+	Rejoin.roster[p.UserId] = true
+	write(p.UserId)
+end
+
+-- (게임 서버) 게임이 끝났다: 기록을 지워 다시 끌려오지 않게
+local ended = false
+function Rejoin.gameOver()
+	ended = true
+	for userId in Rejoin.roster do
+		Rejoin.forget(userId)
+	end
+end
+
+-- (게임 서버) 30초마다 명단 전원의 "진행 중" 갱신(끊긴 사람도 돌아올 수 있게)
+function Rejoin.startHeartbeat()
+	task.spawn(function()
+		while not ended do
+			if Rejoin.code then
+				for userId in Rejoin.roster do
+					write(userId)
+				end
+			end
+			task.wait(30)
+		end
+	end)
+end
+
+Players.PlayerRemoving:Connect(function(_p)
+	-- (기록은 남겨 둔다: 끊긴 사람이 다시 켜면 돌아올 수 있게. 게임이 끝나거나 서버가 닫히면 무시된다)
+end)
+
+return Rejoin
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="25">
+        <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[--!strict
 -- 라운드(스테이지) 진행: 스테이지 짓기 → 플레이어 배치 → 괴물 → 탈출/사망 판정 → 다음 스테이지 또는 재시작.
@@ -4213,6 +4359,7 @@ local Builder = require(script.Parent.StageBuilder)
 local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
 local Monster = require(script.Parent.Monster)
+local Rejoin = require(script.Parent.Rejoin)
 local Hiding = require(script.Parent.Hiding)
 local Search = require(script.Parent.Search)
 
@@ -4744,6 +4891,9 @@ function Round.finish(): string
 		RoundEvent:FireAllClients("Clear", { stage = i, nextStage = nextI, nextName = stageDef(nextI).Name, allClear = allClear, toLobby = Round.returnToLobby, seconds = Config.Round.ResultSeconds })
 		Round.stageIndex = nextI
 		Round.lastAllClear = allClear
+		if allClear then
+			Rejoin.gameOver() -- (다 깼다: 끊긴 사람을 이 게임으로 다시 끌어오지 않는다)
+		end
 	else
 		outcome = "Failed"
 		RoundEvent:FireAllClients("Failed", { stage = i, nextName = stageDef(i).Name, seconds = Config.Round.ResultSeconds })
@@ -4848,17 +4998,36 @@ Hiding.onHide(function(p, spot)
 	end
 end)
 
+-- 끊겼다 다시 들어온 사람: 같은 스테이지면 남은 목숨·상태를 그대로(끊겼다고 목숨이 다시 차지 않게)
+local saved: { [number]: { lives: number?, status: string, rid: number } } = {}
+
 Players.PlayerAdded:Connect(function(p)
 	setStatus(p, "Waiting")
 	if Round.state == "Lobby" then
 		task.defer(Round.spawnPlayer, p)
 	elseif Round.state == "Playing" and not Round.members then
-		-- 늦게 들어온 플레이어도 시작 지점에서 함께 한다(방에서 시작한 게임은 그 방 사람만)
+		-- 늦게 들어온(또는 끊겼다 돌아온) 플레이어도 시작 지점에서 함께 한다(방에서 시작한 게임은 그 방 사람만)
+		local sv = saved[p.UserId]
+		saved[p.UserId] = nil
+		if sv and sv.rid == Round.roundId then
+			p:SetAttribute("Lives", sv.lives or Config.Lives.PerStage)
+			if sv.status == "Dead" or sv.status == "Escaped" or (sv.lives or 1) <= 0 then
+				setStatus(p, sv.status == "Escaped" and "Escaped" or "Dead") -- (관전)
+				note("rejoined " .. p.Name .. " as " .. Round.status(p))
+				return
+			end
+			note("rejoined " .. p.Name .. " lives " .. tostring(sv.lives))
+		else
+			p:SetAttribute("Lives", Config.Lives.PerStage)
+		end
 		task.defer(Round.spawnPlayer, p)
 	end
 end)
 
 Players.PlayerRemoving:Connect(function(p)
+	if Round.state == "Playing" then
+		saved[p.UserId] = { lives = p:GetAttribute("Lives") :: number?, status = Round.status(p), rid = Round.roundId }
+	end
 	if Round.members then
 		Round.members[p] = nil
 	end
@@ -4926,7 +5095,7 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">Search</string>
           <string name="Source"><![CDATA[--!strict
@@ -5191,7 +5360,7 @@ return Search
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="26">
+      <Item class="ModuleScript" referent="27">
         <Properties>
           <string name="Name">SoundBus</string>
           <string name="Source"><![CDATA[--!strict
@@ -5288,7 +5457,7 @@ return SoundBus
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="27">
+      <Item class="ModuleScript" referent="28">
         <Properties>
           <string name="Name">StageBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -5939,11 +6108,11 @@ return Builder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="28">
+      <Item class="Folder" referent="29">
         <Properties>
           <string name="Name">Stages</string>
         </Properties>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">Lobby</string>
             <string name="Source"><![CDATA[--!strict
@@ -5966,7 +6135,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">Stage1</string>
             <string name="Source"><![CDATA[--!strict
@@ -6027,7 +6196,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">Stage2</string>
             <string name="Source"><![CDATA[--!strict
@@ -6088,7 +6257,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">Stage3</string>
             <string name="Source"><![CDATA[--!strict
@@ -6151,7 +6320,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">Stage4</string>
             <string name="Source"><![CDATA[--!strict
@@ -6213,7 +6382,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">Stage5</string>
             <string name="Source"><![CDATA[--!strict
@@ -6293,7 +6462,7 @@ return {
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="35">
+      <Item class="Script" referent="36">
         <Properties>
           <string name="Name">TestHarness</string>
           <token name="RunContext">0</token>
@@ -8259,13 +8428,13 @@ end)
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="36">
+  <Item class="SoundService" referent="37">
     <Properties>
       <string name="Name">SoundService</string>
       <token name="AmbientReverb">11</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="37">
+  <Item class="StarterPlayer" referent="38">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -8277,11 +8446,11 @@ end)
       <float name="CharacterWalkSpeed">10</float>
       <bool name="EnableMouseLockOption">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="38">
+    <Item class="StarterPlayerScripts" referent="39">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="ModuleScript" referent="39">
+      <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">Audio</string>
           <string name="Source"><![CDATA[--!strict
@@ -8811,7 +8980,7 @@ return Audio
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="40">
+      <Item class="ModuleScript" referent="41">
         <Properties>
           <string name="Name">DoppelFx</string>
           <string name="Source"><![CDATA[--!strict
@@ -9019,7 +9188,7 @@ return DoppelFx
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="41">
+      <Item class="ModuleScript" referent="42">
         <Properties>
           <string name="Name">JumpScare</string>
           <string name="Source"><![CDATA[--!strict
@@ -9370,7 +9539,7 @@ return JumpScare
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="42">
+      <Item class="ModuleScript" referent="43">
         <Properties>
           <string name="Name">KeyHUD</string>
           <string name="Source"><![CDATA[--!strict
@@ -9485,7 +9654,7 @@ return KeyHUD
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="43">
+      <Item class="ModuleScript" referent="44">
         <Properties>
           <string name="Name">LobbyUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -9792,7 +9961,7 @@ return LobbyUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="44">
+      <Item class="LocalScript" referent="45">
         <Properties>
           <string name="Name">Main</string>
           <string name="Source"><![CDATA[--!strict
@@ -9806,6 +9975,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Config = require(ReplicatedStorage.Shared.Config)
+-- 휴대폰·태블릿 가벼운 모드: 메모리·처리량이 작아 부하가 크면 연결이 먼저 끊긴다(오류 277).
+-- 음파 선 파트 수와 한 프레임에 새로 보이는 선 수를 줄인다(보이는 범위·시간은 같고, 아주 빽빽한 곳에서 먼 선이 조금 덜 그려진다)
+if UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or not UserInputService.KeyboardEnabled) then
+	local S = Config.Sonar :: any
+	S.PoolSize = math.min(S.PoolSize, 2000)
+	S.RevealPerFrame = math.min(S.RevealPerFrame, 220)
+end
 local World = require(script.Parent:WaitForChild("SonarWorld"))
 local Lines = require(script.Parent:WaitForChild("SonarLines"))
 local Pulses = require(script.Parent:WaitForChild("SonarPulses"))
@@ -10139,6 +10315,9 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 end)
 
 -- ── 매 프레임 ──
+-- 관전 카메라 보간 상태
+local specCF: CFrame? = nil
+local specTarget: Player? = nil
 RunService.RenderStepped:Connect(function(dt)
 	local now = os.clock()
 	-- 마우스 커서: 1인칭에서는 숨긴다(조준점만). 로비 메뉴(Tab)를 열었을 때만 보인다
@@ -10165,10 +10344,20 @@ RunService.RenderStepped:Connect(function(dt)
 		local targets = spectateTargets()
 		if #targets > 0 then
 			local t = targets[((spectateIndex - 1) % #targets) + 1]
-			local head = t.Character and t.Character:FindFirstChild("Head") :: BasePart?
+			-- (머리는 걷는 애니메이션으로 흔들리고 네트워크로 계단처럼 움직여 떨렸다:
+			--  몸 가운데(루트)의 눈높이를 따라가며 부드럽게 보간한다. 대상이 바뀌면 바로 그 자리로)
+			local troot = t.Character and t.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local head = troot
 			if head then
 				cam.CameraType = Enum.CameraType.Scriptable
-				cam.CFrame = head.CFrame * CFrame.new(0, 0.3, 0)
+				local want = head.CFrame * CFrame.new(0, 1.6, 0)
+				if specTarget ~= t or not specCF or (specCF.Position - want.Position).Magnitude > 12 then
+					specCF = want
+					specTarget = t
+				else
+					specCF = (specCF :: CFrame):Lerp(want, 1 - math.exp(-dt * 10))
+				end
+				cam.CFrame = specCF :: CFrame
 				UI.setSpectate("관전 중: " .. t.DisplayName .. "   (좌클릭: 대상 변경)")
 			end
 		else
@@ -10394,7 +10583,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="45">
+      <Item class="ModuleScript" referent="46">
         <Properties>
           <string name="Name">MapView</string>
           <string name="Source"><![CDATA[--!strict
@@ -10639,7 +10828,7 @@ return Map
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="46">
+      <Item class="ModuleScript" referent="47">
         <Properties>
           <string name="Name">Mates</string>
           <string name="Source"><![CDATA[--!strict
@@ -10707,7 +10896,7 @@ return Mates
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="47">
+      <Item class="ModuleScript" referent="48">
         <Properties>
           <string name="Name">MobileUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -10898,7 +11087,7 @@ return MobileUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="48">
+      <Item class="ModuleScript" referent="49">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
@@ -11000,7 +11189,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="49">
+      <Item class="LocalScript" referent="50">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -11008,7 +11197,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="50">
+      <Item class="ModuleScript" referent="51">
         <Properties>
           <string name="Name">Reveal</string>
           <string name="Source"><![CDATA[--!strict
@@ -11225,7 +11414,7 @@ return Reveal
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="51">
+      <Item class="ModuleScript" referent="52">
         <Properties>
           <string name="Name">SearchLook</string>
           <string name="Source"><![CDATA[--!strict
@@ -11317,7 +11506,7 @@ return SearchLook
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="52">
+      <Item class="ModuleScript" referent="53">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -11613,7 +11802,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="53">
+      <Item class="ModuleScript" referent="54">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -12060,7 +12249,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="54">
+      <Item class="ModuleScript" referent="55">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -12639,7 +12828,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="55">
+      <Item class="ModuleScript" referent="56">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -12852,7 +13041,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="56">
+  <Item class="Workspace" referent="57">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

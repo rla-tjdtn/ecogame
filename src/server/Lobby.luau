@@ -14,6 +14,7 @@ local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Round = require(script.Parent.Round)
+local Rejoin = require(script.Parent.Rejoin)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoomAction = Remotes:WaitForChild("RoomAction") :: RemoteEvent
@@ -121,7 +122,7 @@ local function startTeleport(r: Room)
 		local code = TeleportService:ReserveServer(game.PlaceId)
 		local options = Instance.new("TeleportOptions")
 		options.ReservedServerAccessCode = code
-		options:SetTeleportData({ room = r.id })
+		options:SetTeleportData({ room = r.id, code = code }) -- (code: 끊긴 사람이 다시 돌아오게 게임 서버가 기억한다)
 		TeleportService:TeleportAsync(game.PlaceId, r.members, options)
 	end)
 	if not ok then
@@ -214,9 +215,40 @@ function Lobby.boot()
 	local mode = if force == "Game" or force == "Lobby" then force elseif Lobby.isGameServer() then "Game" else "Lobby"
 	if mode == "Game" then
 		ReplicatedStorage:SetAttribute("Mode", "Game")
+		-- 끊긴 사람이 다시 켜면 이 게임으로 돌아오게: 들어온 사람마다 기록, 30초마다 갱신
+		for _, p in Players:GetPlayers() do
+			Rejoin.arrived(p)
+		end
+		Players.PlayerAdded:Connect(Rejoin.arrived)
+		Rejoin.startHeartbeat()
 		Round.loop()
 	else
 		publish()
+		-- 진행 중인 게임에서 끊겼던 사람은 그 게임(예약 서버)으로 바로 돌려보낸다
+		local function tryRejoin(p: Player)
+			local code = Rejoin.lookup(p.UserId)
+			if not code then
+				return
+			end
+			message(p, "진행 중이던 게임으로 다시 연결합니다…")
+			local ok, err = pcall(function()
+				local options = Instance.new("TeleportOptions")
+				options.ReservedServerAccessCode = code
+				options:SetTeleportData({ room = 0, code = code, rejoin = true })
+				TeleportService:TeleportAsync(game.PlaceId, { p }, options)
+			end)
+			if not ok then
+				Rejoin.forget(p.UserId)
+				message(p, "다시 연결하지 못했습니다. 새 방을 만들어 주세요")
+				warn("[Lobby] rejoin failed: " .. tostring(err))
+			end
+		end
+		for _, p in Players:GetPlayers() do
+			task.spawn(tryRejoin, p)
+		end
+		Players.PlayerAdded:Connect(function(p)
+			task.spawn(tryRejoin, p)
+		end)
 		Round.enterLobby()
 	end
 end
