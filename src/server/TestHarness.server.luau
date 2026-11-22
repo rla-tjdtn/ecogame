@@ -1428,18 +1428,25 @@ local function doppelTest()
 		Round.startStage(i)
 		readyPlayers(1)
 		local d = Round.doppels[1]
-		local disguise = d and d.model:FindFirstChild("Disguise")
 		local boxes = 0
-		if disguise then
-			for _, c in disguise:GetChildren() do
-				if c:IsA("BasePart") and CollectionService:HasTag(c, Config.Tags.Renderable) then
+		if d then
+			for _, c in d.model:GetDescendants() do
+				if c:IsA("BasePart") and CollectionService:HasTag(c, Config.Tags.Renderable) and (c:FindFirstAncestor("Disguise") or c:GetAttribute("DisguisePart") or (c.Parent and c.Parent:GetAttribute("DisguisePart"))) then
 					boxes += 1
 				end
 			end
 		end
 		local dist = d and (d.root.Position - Round.info.spawns[1].Position).Magnitude or -1
-		check(string.format("stage %d: one doppelganger in player form (main monsters still %d)", i, Config.Stages[i].Monsters), #Round.doppels == D.PerStage and d ~= nil and d.form == "Disguise" and boxes == 6 and #Round.monsters == Config.Stages[i].Monsters and CollectionService:HasTag(d.model, Config.Tags.Doppel), string.format("doppels=%d form=%s boxes=%d monsters=%d", #Round.doppels, d and d.form or "-", boxes, #Round.monsters))
+		check(string.format("stage %d: one doppelganger in player form (main monsters still %d)", i, Config.Stages[i].Monsters), #Round.doppels == D.PerStage and d ~= nil and d.form == "Disguise" and boxes >= 6 and #Round.monsters == Config.Stages[i].Monsters and CollectionService:HasTag(d.model, Config.Tags.Doppel), string.format("doppels=%d form=%s boxes=%d monsters=%d", #Round.doppels, d and d.form or "-", boxes, #Round.monsters))
 		check(string.format("stage %d: doppelganger spawns %d~%d studs from the start", i, D.SpawnDistance[1], D.SpawnDistance[2]), dist >= D.SpawnDistance[1] - 6 and dist <= D.SpawnDistance[2] + 6, string.format("%.0f", dist))
+	end
+	-- 진짜 사람(친구 또는 플레이어)의 아바타로 갈아입는다
+	do
+		local dd = Round.doppels[1]
+		local dressed = dd and waitFor(function()
+			return dd.model:GetAttribute("AvatarOf") ~= nil
+		end, 12)
+		check("doppelganger wears a real avatar (a friend, or a player)", dressed ~= nil and dd.tracks ~= nil, dd and tostring(dd.model:GetAttribute("AvatarOf")))
 	end
 	-- 1스테이지 시작 방에서: 플레이어 tile(2,2), 도플갱어 tile(4,4) (약 23스터드: 보이는 거리 밖, 음파 거리 안)
 	Round.startStage(1)
@@ -1469,8 +1476,8 @@ local function doppelTest()
 	check("sonar reveals the doppelganger: discovered", found ~= nil and d.discoveredBy == p, tostring(d.discoveredBy))
 	check(string.format("transforms %d~%d s after being discovered", D.TransformDelay[1], D.TransformDelay[2]), wait0 > D.TransformDelay[1] - 1.5 and wait0 <= D.TransformDelay[2] + 0.1, string.format("%.1f s", wait0))
 	task.wait(1.2)
-	local lines = ask(p, "linesNear", { d.root.Position, 5 })
-	check("player-shaped doppelganger shows as outlines in the sonar", lines and lines > 6, lines)
+	local shownNow = ask(p, "reveal")
+	check("sonar hit: the player-shaped doppelganger stays visible as it is (no frozen afterimage)", shownNow and shownNow >= 1, shownNow)
 	local fx0 = ask(p, "doppelFx")
 	-- 변신: 사람 모습이 터지고(조각) 괴물 몸으로
 	local turned = waitFor(function()
@@ -1669,17 +1676,16 @@ local function revealTest()
 		return (ask(p, "reveal") or 0) >= 1
 	end, 3)
 	check("sonar hit: the monster becomes visible", shown ~= nil, ask(p, "reveal"))
-	task.wait(Config.Sonar.Hold + 1.5)
-	m:startChase(p, pPos)
-	check("still visible after the sonar lines fade, while it is aggroed", (ask(p, "reveal") or 0) >= 1 and m.state ~= "Wander", string.format("%s %s", tostring(ask(p, "reveal")), m.state))
-	-- 어그로가 풀리면(배회) 안 보인다
+	-- 음파 선이 사라진 뒤에도(배회해도) 10초 동안은 지금 모습 그대로 보인다
 	m.startAt = 1e9
 	m.target = nil
 	m:setState("Wander")
+	task.wait(Config.Sonar.Hold + 2.5)
+	check("still visible (live) after the sonar lines fade, within 10 s", (ask(p, "reveal") or 0) >= 1, ask(p, "reveal"))
 	local hidden = waitFor(function()
 		return ask(p, "reveal") == 0
-	end, 3)
-	check("aggro gone (wandering again) -> invisible again", hidden ~= nil, ask(p, "reveal"))
+	end, Config.Sonar.MonsterRevealSeconds)
+	check("invisible again about 10 s after the hit", hidden ~= nil, ask(p, "reveal"))
 	-- 음파 범위 밖의 괴물은 드러나지 않는다
 	m.model:PivotTo(CFrame.new(tile(30, 30, 5.2)))
 	m.startAt = 0

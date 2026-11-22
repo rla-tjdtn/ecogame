@@ -102,6 +102,7 @@ Config.Sonar = {
 	Cooldown = 1.5, -- 발사 간격(초) — 서버가 같은 값으로 검증한다
 	ServerTolerance = 0.12, -- 네트워크 지연 허용치(초)
 	WaveSpeed = 40, -- 파동 전진 속도(스터드/초): 35스터드 끝까지 약 0.9초
+	MonsterRevealSeconds = 10, -- 음파에 맞은 괴물은 이 시간 동안 지금 모습 그대로(움직이는 그대로) 보인다(Reveal.luau)
 	Hold = 3.5, -- 선이 나타난 뒤 완전히 사라질 때까지(초)
 	FadeTime = 1.2, -- Hold 끝부분에서 서서히 사라지는 구간(초)
 	FlashTime = 0.15, -- 파동이 지나가는 순간 살짝 더 밝은 구간(초)
@@ -639,6 +640,44 @@ do
 end
 
 -- 태그 이름
+-- ─────────────────────────────── 괴물마다 자기 소리 ───────────────────────────────
+-- 모든 괴물은 각자의 소리가 있다. 괴물 모델의 Voice 속성(메인 괴물 = 머리 모양 번호 "1"~"5", 도플갱어 = "Doppel")으로 고른다.
+-- Freesound 의 CC0(자유 사용) 소리를 계정에 올린 에셋. 목록에 여러 개면 매번 그중 하나.
+--   Scream = 쫓아올 때 괴성, Steps = 걸음, Special = 소리를 듣고 멈칫할 때(머리 돌리기·상체 꺾기·씹기), Burst = 도플갱어가 터지며 변신할 때
+Config.MonsterVoices = {
+	["1"] = { Name = "삼각", Scream = { 120058293974831 }, Steps = { 76678088411883 }, Special = { 76493509944508 } }, -- 발 끌기, 머리 돌 때 뼈 소리
+	["2"] = { Name = "사각", Scream = { 105287149316706 }, Steps = { 79801539256457, 128595779168447 }, Special = { 114002785847325 } }, -- 나무 딱딱·삐걱, 상체가 꺾일 때 와르르
+	["3"] = { Name = "원", Scream = { 116389741993620 }, Steps = { 134919568490352 }, Special = { 83953676554672 } }, -- 손톱 톡톡, 머리로 씹기
+	["4"] = { Name = "별", Scream = { 78248585425234 }, Steps = { 137748804042134 } }, -- 쿵 걸음
+	["5"] = { Name = "육각", Scream = { 123342966944903 }, Steps = { 119059498928351 } }, -- 곤충 걸음
+	Doppel = { Name = "도플갱어", Scream = { 102508063645161 }, Burst = { 85832788832876, 74039555089610 } }, -- 지직거리는 괴성 / 살 찢어짐 + 뼈 우두둑
+}
+-- 소리 종류별 크기(괴성은 Config.MonsterLoudness 배)·자르는 길이(초)
+Config.VoiceMix = {
+	Scream = { Volume = 1.0, Cut = 3.5 },
+	Steps = { Volume = 0.7, Cut = 1.2 },
+	Special = { Volume = 0.9, Cut = 2.5 },
+	Burst = { Volume = 1.2, Cut = 2.5 },
+}
+for v, def in Config.MonsterVoices do
+	for kind, mix in Config.VoiceMix do
+		local ids = (def :: any)[kind]
+		if ids then
+			for k, id in ids do
+				local loud = if kind == "Scream" or kind == "Burst" then Config.MonsterLoudness else 1
+				;(Config.Sounds :: any)["Voice_" .. v .. "_" .. kind .. "_" .. k] = {
+					Id = "rbxassetid://" .. id,
+					Volume = mix.Volume * loud,
+					Pitch = 1,
+					Range = if kind == "Steps" then 120 else Config.MonsterRange,
+					Near = if kind == "Steps" then 10 else Config.MonsterNear,
+					Cut = mix.Cut,
+				}
+			end
+		end
+	end
+end
+
 Config.Tags = {
 	Renderable = "SonarRenderable", -- 이 태그가 붙은 파트(또는 모델 안 파트)는 음파 윤곽선 대상
 	Dynamic = "SonarDynamic", -- 움직이는 대상(문, 괴물): 음파가 닿는 순간의 모습으로 선을 만든다
@@ -2533,6 +2572,7 @@ export type Monster = typeof(setmetatable({} :: {
 	nextPause: number,
 	nextPing: number,
 	mawOpen: boolean,
+	tracks: { walk: AnimationTrack, idle: AnimationTrack }?, -- 도플갱어가 진짜 아바타로 걷는 애니메이션
 }, Monster))
 
 local function between(r: { number }): number
@@ -2613,7 +2653,10 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 		nextPause = os.clock() + between(Config.Doppel.PauseEvery),
 		nextPing = os.clock() + between(Config.Doppel.FakePingEvery),
 		mawOpen = false,
+		tracks = nil,
 	}, Monster)
+	-- 괴물마다 자기 소리(Config.MonsterVoices): 메인 괴물은 스테이지(머리 모양) 번호, 도플갱어는 "Doppel"
+	model:SetAttribute("Voice", if isDoppel then "Doppel" else tostring(((stage or 1) - 1) % 5 + 1))
 	if isDoppel then
 		self:setState("Disguise")
 	end
@@ -2631,6 +2674,23 @@ end
 
 -- 걷는 모습: 속도만큼 팔다리를 흔든다(초당 10번만 바꿔 네트워크 부담을 줄인다. 음파는 순간 모습만 보여 준다)
 function Monster.animate(self: Monster, dt: number)
+	local tracks = self.tracks
+	if tracks then
+		-- 진짜 아바타 모습: 움직이면 걷기, 서 있으면 숨쉬기(플레이어와 같은 기본 애니메이션)
+		local v = self.root.AssemblyLinearVelocity
+		local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+		if speed > 0.6 then
+			if not tracks.walk.IsPlaying then
+				tracks.idle:Stop(0.2)
+				tracks.walk:Play(0.2)
+			end
+			tracks.walk:AdjustSpeed(math.clamp(speed / 12, 0.4, 1.4))
+		elseif not tracks.idle.IsPlaying then
+			tracks.walk:Stop(0.2)
+			tracks.idle:Play(0.2)
+		end
+		return
+	end
 	self.animT += dt
 	if self.animT < 0.1 or #self.joints == 0 then
 		return
@@ -3271,6 +3331,104 @@ function Monster.disguiseTick(self: Monster, now: number)
 	self:checkStuck(true)
 end
 
+-- 도플갱어를 진짜 아바타로 입힌다(친구 목록의 사람, 없으면 지금 플레이어 중 한 명 — 혼자면 내 모습).
+-- 아바타 몸(R15 파트·장신구)을 모델 바로 아래로 옮기고(속성 DisguisePart), 관절을 우리 루트에 잇는다.
+-- 몸은 투명(음파에만 상자 선으로 보이고, 들키면 클라이언트가 팀원처럼 아바타 윤곽선으로 계속 보여 준다)
+local WALK_ANIM = "rbxassetid://507777826" -- 로블록스 기본 R15 걷기
+local IDLE_ANIM = "rbxassetid://507766388" -- 로블록스 기본 R15 서 있기
+function Monster.applyAvatar(self: Monster, desc: HumanoidDescription, who: string): boolean
+	if self.form ~= "Disguise" or not self.alive or not self.model.Parent then
+		return false
+	end
+	local ok, av = pcall(function()
+		return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+	if not ok or not av then
+		warn("[Doppel] avatar build failed: " .. tostring(av))
+		return false
+	end
+	local avatar = av :: Model
+	local avRoot = avatar:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local avHum = avatar:FindFirstChildOfClass("Humanoid")
+	if not avRoot or not avHum or self.form ~= "Disguise" then
+		avatar:Destroy()
+		return false
+	end
+	avatar:PivotTo(self.root.CFrame)
+	-- 예전 상자 몸 치우기
+	for _, j in self.root:GetChildren() do
+		if j:IsA("Motor6D") and j.Name:find("^DJoint") then
+			j:Destroy()
+		end
+	end
+	local old = self.model:FindFirstChild("Disguise")
+	if old then
+		old:Destroy()
+	end
+	self.joints = {}
+	local tag = Config.Tags.Renderable
+	for _, c in avatar:GetChildren() do
+		if c ~= avRoot and not c:IsA("Humanoid") and not c:IsA("BaseScript") then
+			c:SetAttribute("DisguisePart", true)
+			c.Parent = self.model
+			local list: { Instance } = c:GetDescendants()
+			table.insert(list, c)
+			for _, d in list do
+				if d:IsA("JointInstance") then
+					local jd = d :: any
+					if jd.Part0 == avRoot then
+						jd.Part0 = self.root
+					end
+					if jd.Part1 == avRoot then
+						jd.Part1 = self.root
+					end
+				elseif d:IsA("WeldConstraint") then
+					if d.Part0 == avRoot then
+						d.Part0 = self.root
+					end
+					if d.Part1 == avRoot then
+						d.Part1 = self.root
+					end
+				elseif d:IsA("BasePart") then
+					d.Anchored = false
+					d.Massless = true
+					d.CanCollide = false
+					d.CanQuery = false
+					d.CanTouch = false
+					d.CastShadow = false
+					d.Transparency = 1
+					CollectionService:AddTag(d, tag)
+				elseif d:IsA("Decal") then
+					d.Transparency = 1
+				end
+			end
+		end
+	end
+	self.hum.HipHeight = avHum.HipHeight
+	avatar:Destroy()
+	-- 플레이어와 같은 걷기·서 있기 애니메이션
+	local animator = self.hum:FindFirstChildOfClass("Animator")
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = self.hum
+	end
+	local function load(id: string, fallback: string): AnimationTrack
+		local a = Instance.new("Animation")
+		a.AnimationId = if id ~= "" and id ~= "rbxassetid://0" then id else fallback
+		local tr = (animator :: Animator):LoadAnimation(a)
+		tr.Looped = true
+		return tr
+	end
+	self.tracks = {
+		walk = load(if desc.WalkAnimation ~= 0 then "rbxassetid://" .. desc.WalkAnimation else "", WALK_ANIM),
+		idle = load(if desc.IdleAnimation ~= 0 then "rbxassetid://" .. desc.IdleAnimation else "", IDLE_ANIM),
+	}
+	self.model:SetAttribute("AvatarOf", who)
+	self.model:SetAttribute("BodyVersion", ((self.model:GetAttribute("BodyVersion") :: number?) or 1) + 1)
+	self:note("dressed as " .. who)
+	return true
+end
+
 -- 사람 모습이 터지고(클라이언트가 조각을 흩날린다) 그 자리에서 괴물이 나온다
 function Monster.transform(self: Monster)
 	if self.form ~= "Disguise" then
@@ -3289,6 +3447,25 @@ function Monster.transform(self: Monster)
 			end
 		end
 	end
+	-- 진짜 아바타 모습이면 그 몸 파트들(장신구 포함)이 터진다
+	local avatarParts: { Instance } = {}
+	for _, c in self.model:GetChildren() do
+		if c:GetAttribute("DisguisePart") then
+			table.insert(avatarParts, c)
+			local list: { Instance } = c:GetDescendants()
+			table.insert(list, c)
+			for _, d in list do
+				if d:IsA("BasePart") and #boxes < 40 then
+					table.insert(boxes, { cf = d.CFrame, size = d.Size })
+				end
+			end
+		end
+	end
+	if self.tracks then
+		self.tracks.walk:Stop(0)
+		self.tracks.idle:Stop(0)
+		self.tracks = nil
+	end
 	local ev = roundEvent()
 	if ev then
 		ev:FireAllClients("DoppelBurst", { at = self.root.Position, boxes = boxes })
@@ -3302,6 +3479,10 @@ function Monster.transform(self: Monster)
 	if disguise then
 		disguise:Destroy()
 	end
+	for _, c in avatarParts do
+		c:Destroy()
+	end
+	self.hum.HipHeight = DOPPEL_HIP
 	buildBeast(self.model, self.root, self.root.CFrame)
 	self.joints = {}
 	for _, name in { "Leg-1", "Leg1", "Arm-1", "Arm1" } do
@@ -3987,6 +4168,46 @@ local function clearMonsters()
 	monsterFolder:ClearAllChildren()
 end
 
+-- 도플갱어가 흉내 낼 사람: 참가자들의 친구 목록에서 한 명(진짜 아바타). 친구를 못 가져오면 지금 플레이어 중 한 명(혼자면 내 모습)
+function Round.pickDisguise(): (HumanoidDescription?, string?)
+	local friends: { { id: number, name: string } } = {}
+	for _, p in Round.participants() do
+		if p.UserId > 0 then
+			local ok, pages = pcall(function()
+				return Players:GetFriendsAsync(p.UserId)
+			end)
+			if ok and pages then
+				for _, fr in (pages :: FriendPages):GetCurrentPage() do
+					table.insert(friends, { id = fr.Id, name = fr.DisplayName or fr.Username })
+				end
+			end
+		end
+	end
+	for _ = 1, math.min(4, #friends) do
+		local fr = table.remove(friends, math.random(1, #friends)) :: { id: number, name: string }
+		local ok, desc = pcall(function()
+			return Players:GetHumanoidDescriptionFromUserId(fr.id)
+		end)
+		if ok and desc then
+			return desc, fr.name
+		end
+	end
+	local ps = Round.participants()
+	for _ = 1, #ps do
+		local p = ps[math.random(1, #ps)]
+		local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			local ok, desc = pcall(function()
+				return hum:GetAppliedDescription()
+			end)
+			if ok and desc then
+				return desc, p.DisplayName
+			end
+		end
+	end
+	return nil, nil
+end
+
 function Round.spawnMonsters(count: number)
 	local info = Round.info :: Builder.StageInfo
 	local spawnPos = info.spawns[1].Position
@@ -4034,6 +4255,19 @@ function Round.spawnMonsters(count: number)
 			m.route = info.route
 			table.insert(Round.doppels, m)
 			m:run()
+			-- 진짜 사람(친구 또는 플레이어)의 아바타로 갈아입힌다(가져오는 데 잠깐 걸린다)
+			task.spawn(function()
+				for _ = 1, 20 do
+					local desc, who = Round.pickDisguise()
+					if desc and who then
+						if m:applyAvatar(desc, who) then
+							note("doppel looks like " .. who)
+						end
+						return
+					end
+					task.wait(0.5) -- (플레이어 캐릭터가 아직 안 생겼다)
+				end
+			end)
 		end
 		note("doppels " .. D.PerStage)
 	end
@@ -7086,18 +7320,25 @@ local function doppelTest()
 		Round.startStage(i)
 		readyPlayers(1)
 		local d = Round.doppels[1]
-		local disguise = d and d.model:FindFirstChild("Disguise")
 		local boxes = 0
-		if disguise then
-			for _, c in disguise:GetChildren() do
-				if c:IsA("BasePart") and CollectionService:HasTag(c, Config.Tags.Renderable) then
+		if d then
+			for _, c in d.model:GetDescendants() do
+				if c:IsA("BasePart") and CollectionService:HasTag(c, Config.Tags.Renderable) and (c:FindFirstAncestor("Disguise") or c:GetAttribute("DisguisePart") or (c.Parent and c.Parent:GetAttribute("DisguisePart"))) then
 					boxes += 1
 				end
 			end
 		end
 		local dist = d and (d.root.Position - Round.info.spawns[1].Position).Magnitude or -1
-		check(string.format("stage %d: one doppelganger in player form (main monsters still %d)", i, Config.Stages[i].Monsters), #Round.doppels == D.PerStage and d ~= nil and d.form == "Disguise" and boxes == 6 and #Round.monsters == Config.Stages[i].Monsters and CollectionService:HasTag(d.model, Config.Tags.Doppel), string.format("doppels=%d form=%s boxes=%d monsters=%d", #Round.doppels, d and d.form or "-", boxes, #Round.monsters))
+		check(string.format("stage %d: one doppelganger in player form (main monsters still %d)", i, Config.Stages[i].Monsters), #Round.doppels == D.PerStage and d ~= nil and d.form == "Disguise" and boxes >= 6 and #Round.monsters == Config.Stages[i].Monsters and CollectionService:HasTag(d.model, Config.Tags.Doppel), string.format("doppels=%d form=%s boxes=%d monsters=%d", #Round.doppels, d and d.form or "-", boxes, #Round.monsters))
 		check(string.format("stage %d: doppelganger spawns %d~%d studs from the start", i, D.SpawnDistance[1], D.SpawnDistance[2]), dist >= D.SpawnDistance[1] - 6 and dist <= D.SpawnDistance[2] + 6, string.format("%.0f", dist))
+	end
+	-- 진짜 사람(친구 또는 플레이어)의 아바타로 갈아입는다
+	do
+		local dd = Round.doppels[1]
+		local dressed = dd and waitFor(function()
+			return dd.model:GetAttribute("AvatarOf") ~= nil
+		end, 12)
+		check("doppelganger wears a real avatar (a friend, or a player)", dressed ~= nil and dd.tracks ~= nil, dd and tostring(dd.model:GetAttribute("AvatarOf")))
 	end
 	-- 1스테이지 시작 방에서: 플레이어 tile(2,2), 도플갱어 tile(4,4) (약 23스터드: 보이는 거리 밖, 음파 거리 안)
 	Round.startStage(1)
@@ -7127,8 +7368,8 @@ local function doppelTest()
 	check("sonar reveals the doppelganger: discovered", found ~= nil and d.discoveredBy == p, tostring(d.discoveredBy))
 	check(string.format("transforms %d~%d s after being discovered", D.TransformDelay[1], D.TransformDelay[2]), wait0 > D.TransformDelay[1] - 1.5 and wait0 <= D.TransformDelay[2] + 0.1, string.format("%.1f s", wait0))
 	task.wait(1.2)
-	local lines = ask(p, "linesNear", { d.root.Position, 5 })
-	check("player-shaped doppelganger shows as outlines in the sonar", lines and lines > 6, lines)
+	local shownNow = ask(p, "reveal")
+	check("sonar hit: the player-shaped doppelganger stays visible as it is (no frozen afterimage)", shownNow and shownNow >= 1, shownNow)
 	local fx0 = ask(p, "doppelFx")
 	-- 변신: 사람 모습이 터지고(조각) 괴물 몸으로
 	local turned = waitFor(function()
@@ -7327,17 +7568,16 @@ local function revealTest()
 		return (ask(p, "reveal") or 0) >= 1
 	end, 3)
 	check("sonar hit: the monster becomes visible", shown ~= nil, ask(p, "reveal"))
-	task.wait(Config.Sonar.Hold + 1.5)
-	m:startChase(p, pPos)
-	check("still visible after the sonar lines fade, while it is aggroed", (ask(p, "reveal") or 0) >= 1 and m.state ~= "Wander", string.format("%s %s", tostring(ask(p, "reveal")), m.state))
-	-- 어그로가 풀리면(배회) 안 보인다
+	-- 음파 선이 사라진 뒤에도(배회해도) 10초 동안은 지금 모습 그대로 보인다
 	m.startAt = 1e9
 	m.target = nil
 	m:setState("Wander")
+	task.wait(Config.Sonar.Hold + 2.5)
+	check("still visible (live) after the sonar lines fade, within 10 s", (ask(p, "reveal") or 0) >= 1, ask(p, "reveal"))
 	local hidden = waitFor(function()
 		return ask(p, "reveal") == 0
-	end, 3)
-	check("aggro gone (wandering again) -> invisible again", hidden ~= nil, ask(p, "reveal"))
+	end, Config.Sonar.MonsterRevealSeconds)
+	check("invisible again about 10 s after the hit", hidden ~= nil, ask(p, "reveal"))
 	-- 음파 범위 밖의 괴물은 드러나지 않는다
 	m.model:PivotTo(CFrame.new(tile(30, 30, 5.2)))
 	m.startAt = 0
@@ -7835,6 +8075,39 @@ end
 
 -- ── 발소리(캐릭터마다 이동 거리 누적) ──
 type Tracker = { last: Vector3, acc: number, root: BasePart, foot: number }
+-- ── 괴물마다 자기 소리(Config.MonsterVoices) ──
+-- voice: "1"~"5"(메인 괴물 머리 모양) / "Doppel". kind: Scream / Steps / Special / Burst. 없으면 nil
+local lastVoicePick: { [string]: number } = {}
+function Audio.voiceName(voice: string?, kind: string): string?
+	if not voice then
+		return nil
+	end
+	local def = (Config :: any).MonsterVoices and (Config :: any).MonsterVoices[voice]
+	local ids = def and def[kind]
+	if not ids or #ids == 0 then
+		return nil
+	end
+	local key = voice .. kind
+	local k = math.random(1, #ids)
+	if #ids > 1 and k == lastVoicePick[key] then
+		k = k % #ids + 1
+	end
+	lastVoicePick[key] = k
+	return "Voice_" .. voice .. "_" .. kind .. "_" .. k
+end
+local function voiceOf(m: Model, kind: string): string?
+	return Audio.voiceName(m:GetAttribute("Voice") :: string?, kind)
+end
+-- 쫓아올 때 괴성: 그 괴물 자기 괴성(없으면 공통 괴성)
+local function chaseScream(m: Model, root: BasePart)
+	local n = voiceOf(m, "Scream")
+	if n then
+		Audio.play(n, root, 0.03)
+	else
+		Audio.scream("Chase", root)
+	end
+end
+
 local trackers: { [Model]: Tracker } = {}
 -- 한 발짝 거리(스터드): 걷기 10/초면 초당 약 2발, 달리기 18/초면 약 2.8발, 웅크리기 5/초면 약 1.7발
 local STRIDE = { Walk = 4.8, Run = 6.5, Crouch = 3.0 }
@@ -7864,8 +8137,15 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 			tr.acc = 0
 			-- 배회할 때는 조금 작게, 쫓아올 때는 크게. 도플갱어(작은 괴물)는 조금 높고 가벼운 발소리
 			local chase = model:GetAttribute("State") == "Chase"
-			local small = model:GetAttribute("Form") ~= nil
-			Audio.play("MonsterStep", root, 0.08, (if chase then 1 else Config.Monster.StepWanderVolume) * (if small then 0.85 else 1), if small then 1.25 else nil)
+			local vol = if chase then 1 else Config.Monster.StepWanderVolume
+			local own = voiceOf(model, "Steps")
+			if own then
+				-- 그 괴물 자기 걸음 소리(발 끌기·나무 딱딱·손톱 톡톡·쿵·곤충 걸음)
+				Audio.play(own, root, 0.06, vol)
+			else
+				local small = model:GetAttribute("Form") ~= nil
+				Audio.play("MonsterStep", root, 0.08, vol * (if small then 0.85 else 1), if small then 1.25 else nil)
+			end
 		end
 	else
 		local mode = (model:GetAttribute("MoveMode") :: string?) or "Walk"
@@ -7899,8 +8179,14 @@ local function watchMonster(m: Instance)
 		end
 		-- 괴성은 플레이어를 발견해 쫓기 시작할 때만(배회·조사·수색·경계에는 지르지 않는다). 발소리는 평소에도 난다
 			if st == "Chase" then
-				Audio.scream("Chase", root)
+				chaseScream(model, root)
 				screamAt[model] = os.clock() + CHASE_SCREAM_GAP[1] + math.random() * (CHASE_SCREAM_GAP[2] - CHASE_SCREAM_GAP[1])
+			elseif st == "Alert" then
+				-- 소리를 듣고 멈칫: 그 괴물의 특수 소리(머리 돌리는 뼈 소리, 상체 꺾이는 와르르, 씹는 소리)
+				local sp = voiceOf(model, "Special")
+				if sp then
+					Audio.play(sp, root, 0.04)
+				end
 			end
 	end))
 	-- 도플갱어: 가짜 음파 소리, 사람 모습이 터질 때 소리
@@ -7913,8 +8199,16 @@ local function watchMonster(m: Instance)
 	table.insert(conns, model:GetAttributeChangedSignal("Form"):Connect(function()
 		local root = model.PrimaryPart
 		if root and model:GetAttribute("Form") == "Bursting" then
-			Audio.play("Door", root, 0.04, 1.4, 0.45) -- 뚝 꺾이고 찢어지는 소리(낮게)
-			Audio.play("FootRun", root, 0.1, 1.2, 0.5)
+			-- 도플갱어 자기 소리: 살 찢어짐 + 뼈 우두둑(없으면 낮게 꺾이는 소리)
+			local def = (Config :: any).MonsterVoices and (Config :: any).MonsterVoices[model:GetAttribute("Voice")]
+			if def and def.Burst then
+				for k = 1, #def.Burst do
+					Audio.play("Voice_" .. tostring(model:GetAttribute("Voice")) .. "_Burst_" .. k, root, 0.03)
+				end
+			else
+				Audio.play("Door", root, 0.04, 1.4, 0.45)
+				Audio.play("FootRun", root, 0.1, 1.2, 0.5)
+			end
 		end
 	end))
 	monsterConns[model] = conns
@@ -7997,7 +8291,7 @@ function Audio.update()
 				local at = screamAt[m]
 				if at and now > at then
 					screamAt[m] = now + CHASE_SCREAM_GAP[1] + math.random() * (CHASE_SCREAM_GAP[2] - CHASE_SCREAM_GAP[1])
-					Audio.scream("Chase", m.PrimaryPart)
+					chaseScream(m, m.PrimaryPart)
 				end
 			end
 		end
@@ -8178,7 +8472,9 @@ function DoppelFx.onPulse(origin: Vector3)
 		if m:IsA("Model") and m.PrimaryPart and m:GetAttribute("Form") == "Beast" then
 			local d = (m.PrimaryPart.Position - origin).Magnitude
 			if d <= S.Radius + 2 then
-				eyeUntil[m] = { from = now + math.min(1, d / 60), to = now + S.Hold + Config.Doppel.EyeLinger }
+				local from = now + math.min(1, d / 60)
+				-- (몸이 보이는 10초 동안 눈도 빛난다)
+				eyeUntil[m] = { from = from, to = from + ((S :: any).MonsterRevealSeconds or (S.Hold + Config.Doppel.EyeLinger)) }
 			end
 		end
 	end
@@ -8991,7 +9287,8 @@ local SearchLook = require(script.Parent:WaitForChild("SearchLook"))
 local DoppelFx = require(script.Parent:WaitForChild("DoppelFx"))
 local Reveal = require(script.Parent:WaitForChild("Reveal"))
 Pulses.onReach = MapView.onReach
--- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 어그로가 풀릴 때까지 계속 보이게
+-- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 10초 동안 지금 모습 그대로 보이게(굳은 잔상 선은 그리지 않는다)
+World.skipMonster = Reveal.has
 Pulses.onStart = function(origin: Vector3)
 	DoppelFx.onPulse(origin)
 	Reveal.onPulse(origin)
@@ -9200,7 +9497,10 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		if data.userId == player.UserId then
 			if data.why == "monster" or data.why == "doppel" then
 				JumpScare.play(function()
-					Audio.play("MonsterAlert", nil, 0.03, 0.8)
+					-- 잡은 괴물의 자기 괴성(도플갱어 / 그 스테이지 메인 괴물)
+					local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
+					local voice = if data.why == "doppel" then "Doppel" else tostring((math.max(1, si) - 1) % 5 + 1)
+					Audio.play(Audio.voiceName(voice, "Scream") or "MonsterAlert", nil, 0.03, 0.8)
 				end, data.why)
 				task.wait(JumpScare.Duration)
 			end
@@ -9215,7 +9515,10 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		if data.userId == player.UserId and (data.why == "monster" or data.why == "doppel") then
 			-- 점프스케어: 괴물 얼굴이 확 뜬 뒤 YOU DIED (도플갱어는 머리~배가 세로로 벌어진 입)
 			JumpScare.play(function()
-				Audio.play("MonsterAlert", nil, 0.03, 0.8)
+				-- 잡은 괴물의 자기 괴성(도플갱어 / 그 스테이지 메인 괴물)
+				local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
+				local voice = if data.why == "doppel" then "Doppel" else tostring((math.max(1, si) - 1) % 5 + 1)
+				Audio.play(Audio.voiceName(voice, "Scream") or "MonsterAlert", nil, 0.03, 0.8)
 			end, data.why)
 			task.wait(JumpScare.Duration)
 		end
@@ -9943,11 +10246,12 @@ return Movement
         <Properties>
           <string name="Name">Reveal</string>
           <string name="Source"><![CDATA[--!strict
--- 음파에 맞은 괴물은 어그로가 풀릴 때까지 모습이 계속 보인다(이 클라이언트에서만, 팀원 음파도 포함).
---  · 음파(내 것·팀원 것)가 괴물에 닿으면(반경 안, 벽 1장 이하) "드러남"
---  · 드러난 동안 몸의 선(음파 대상 파트)을 흰 네온으로 켜 두어, 움직이는 모습이 계속 보인다
---    (도플갱어 사람 모습의 상자는 상자 윤곽선 SelectionBox)
---  · 어그로가 풀리면(메인 괴물: 다시 배회 Wander, 도플갱어 사람 모습: 들키지 않음) 다시 안 보인다
+-- 음파에 맞은 괴물은 10초 동안(Config.Sonar.MonsterRevealSeconds) 지금 모습 그대로(움직이는 그대로) 보인다.
+-- 잔상(그 순간 모습으로 굳은 음파 선)이 아니라 실제 몸을 켜 둔다. 이 클라이언트에서만, 팀원 음파도 포함. 다시 맞으면 10초가 다시 시작.
+--  · 음파 반경 안, 벽 1장 이하면 맞은 것(괴물 소리 판정과 같은 기준)
+--  · 메인 괴물·도플갱어 괴물: 몸의 선(원통)을 흰 네온으로
+--  · 도플갱어 사람 모습: 진짜 아바타면 팀원처럼 윤곽선(Highlight), 상자 몸이면 상자 윤곽선(SelectionBox)
+--  · 보이는 동안 음파는 그 괴물의 굳은 선(잔상)을 따로 그리지 않는다(SonarWorld.skipMonster)
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -9957,20 +10261,11 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Reveal = {}
 local S = Config.Sonar
 local TAGS = Config.Tags
+local SECONDS = (S :: any).MonsterRevealSeconds or 10
 
-type Entry = { from: number, since: number, parts: { BasePart }, boxes: { SelectionBox }, ver: number, on: boolean }
+type Entry = { from: number, to: number, parts: { BasePart }, boxes: { SelectionBox }, hl: Highlight?, ver: number, on: boolean }
 local revealed: { [Model]: Entry } = {}
 
--- 어그로 중인가: 배회(Wander)가 아니면 어그로. 도플갱어 사람 모습은 들켰을 때만
-local function aggro(m: Model): boolean
-	local st = m:GetAttribute("State")
-	if m:GetAttribute("Form") == "Disguise" then
-		return m:GetAttribute("Discovered") == true
-	end
-	return st ~= nil and st ~= "Wander"
-end
-
--- 음파 시작점에서 괴물까지 벽이 1장 이하인가(괴물 소리 판정과 같은 기준)
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Include
 local function wallsBetween(a: Vector3, b: Vector3): number
@@ -9981,17 +10276,18 @@ local function wallsBetween(a: Vector3, b: Vector3): number
 	rayParams.FilterDescendantsInstances = { stage }
 	local n = 0
 	local from = a
-	local dir = b - a
 	for _ = 1, 3 do
+		local dir = b - from
+		if dir.Magnitude < 0.5 then
+			break
+		end
 		local hit = workspace:Raycast(from, dir, rayParams)
 		if not hit then
 			break
 		end
 		n += 1
-		local step = dir.Unit * 0.6
-		from = hit.Position + step
-		dir = b - from
-		if dir.Magnitude < 0.5 or dir:Dot(b - a) <= 0 then
+		from = hit.Position + dir.Unit * 0.6
+		if (b - from):Dot(b - a) <= 0 then
 			break
 		end
 	end
@@ -10006,55 +10302,25 @@ function Reveal.onPulse(origin: Vector3)
 			local p = m.PrimaryPart.Position
 			local d = (p - origin).Magnitude
 			if d <= S.Radius + 3 and wallsBetween(origin, p) <= 1 then
-				local e = revealed[m]
 				local from = now + math.min(1, d / 60) -- 파동이 닿을 즈음부터
+				local e = revealed[m]
 				if e then
-					e.since = math.min(e.since, now)
+					e.from = math.min(e.from, from)
+					e.to = math.max(e.to, from + SECONDS)
 				else
-					revealed[m] = { from = from, since = now, parts = {}, boxes = {}, ver = -1, on = false }
+					revealed[m] = { from = from, to = from + SECONDS, parts = {}, boxes = {}, hl = nil, ver = -1, on = false }
 				end
 			end
 		end
 	end
 end
 
-local WHITE = Color3.new(S.LineColor.R, S.LineColor.G, S.LineColor.B)
-local LEVEL = S.BaseLevel
-
-local function collect(m: Model, e: Entry)
-	-- 이전에 켠 것 정리
-	for _, p in e.parts do
-		if p.Parent then
-			p.Transparency = 1
-		end
-	end
-	for _, b in e.boxes do
-		b:Destroy()
-	end
-	table.clear(e.parts)
-	table.clear(e.boxes)
-	for _, d in m:GetDescendants() do
-		if d:IsA("BasePart") and CollectionService:HasTag(d, TAGS.Renderable) then
-			if d.Shape == Enum.PartType.Cylinder then
-				table.insert(e.parts, d)
-			else
-				-- 상자(도플갱어 사람 모습): 모서리 윤곽선
-				local sb = Instance.new("SelectionBox")
-				sb.Name = "RevealBox"
-				sb.Adornee = d
-				sb.Color3 = WHITE
-				sb.LineThickness = 0.04
-				sb.SurfaceTransparency = 1
-				sb.Transparency = 1 - LEVEL
-				sb.Visible = false
-				sb.Parent = d
-				table.insert(e.boxes, sb)
-			end
-		end
-	end
-	e.ver = (m:GetAttribute("BodyVersion") :: number?) or 0
-	e.on = false
+-- 음파가 이 괴물의 굳은 선(잔상)을 그리지 않아도 되는가(지금 보이는 중이거나 곧 보일 것)
+function Reveal.has(m: Model): boolean
+	return revealed[m] ~= nil
 end
+
+local LINE = Color3.new(S.LineColor.R * S.BaseLevel, S.LineColor.G * S.BaseLevel, S.LineColor.B * S.BaseLevel)
 
 local function show(e: Entry, on: boolean)
 	if e.on == on then
@@ -10062,10 +10328,10 @@ local function show(e: Entry, on: boolean)
 	end
 	e.on = on
 	for _, p in e.parts do
-		if p.Parent and p.Name ~= "Eye" then -- (눈은 DoppelFx 가 따로 빛나게 한다)
+		if p.Parent and p.Name ~= "Eye" then -- (도플갱어 눈은 DoppelFx 가 따로 빛나게 한다)
 			if on then
 				p.Material = Enum.Material.Neon
-				p.Color = Color3.new(WHITE.R * LEVEL, WHITE.G * LEVEL, WHITE.B * LEVEL)
+				p.Color = LINE
 				p.Transparency = 0
 			else
 				p.Transparency = 1
@@ -10075,9 +10341,79 @@ local function show(e: Entry, on: boolean)
 	for _, b in e.boxes do
 		b.Visible = on
 	end
+	if e.hl then
+		e.hl.Enabled = on
+	end
 end
 
--- (테스트) 지금 계속 보이는 괴물 수
+local function release(e: Entry)
+	show(e, false)
+	for _, b in e.boxes do
+		b:Destroy()
+	end
+	if e.hl then
+		e.hl:Destroy()
+	end
+	table.clear(e.parts)
+	table.clear(e.boxes)
+	e.hl = nil
+end
+
+local function collect(m: Model, e: Entry)
+	local wasOn = e.on
+	release(e)
+	local avatar = m:GetAttribute("Form") == "Disguise" and m:GetAttribute("AvatarOf") ~= nil
+	if avatar then
+		-- 진짜 아바타 모습: 몸을 보이게 하고 팀원과 같은 흰 윤곽선
+		for _, d in m:GetDescendants() do
+			if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
+				local top: Instance? = d
+				while top and top.Parent ~= m do
+					top = top.Parent
+				end
+				if top and top:GetAttribute("DisguisePart") then
+					table.insert(e.parts, d)
+				end
+			end
+		end
+		local hl = Instance.new("Highlight")
+		hl.Name = "RevealOutline"
+		hl.Adornee = m
+		hl.FillTransparency = 1
+		hl.OutlineColor = Color3.new(1, 1, 1)
+		hl.OutlineTransparency = 0.3
+		hl.DepthMode = Enum.HighlightDepthMode.Occluded
+		hl.Enabled = false
+		hl.Parent = m
+		e.hl = hl
+	else
+		for _, d in m:GetDescendants() do
+			if d:IsA("BasePart") and CollectionService:HasTag(d, TAGS.Renderable) then
+				if d.Shape == Enum.PartType.Cylinder then
+					table.insert(e.parts, d)
+				else
+					local sb = Instance.new("SelectionBox")
+					sb.Name = "RevealBox"
+					sb.Adornee = d
+					sb.Color3 = Color3.new(1, 1, 1)
+					sb.LineThickness = 0.04
+					sb.SurfaceTransparency = 1
+					sb.Transparency = 1 - S.BaseLevel
+					sb.Visible = false
+					sb.Parent = d
+					table.insert(e.boxes, sb)
+				end
+			end
+		end
+	end
+	e.ver = (m:GetAttribute("BodyVersion") :: number?) or 0
+	e.on = false
+	if wasOn then
+		show(e, true)
+	end
+end
+
+-- (테스트) 지금 보이는 괴물 수
 function Reveal.count(): number
 	local n = 0
 	for m, e in revealed do
@@ -10091,42 +10427,30 @@ end
 local acc = 0
 RunService.Heartbeat:Connect(function(dt)
 	acc += dt
-	if acc < 0.1 then
+	if acc < 0.05 then
 		return
 	end
 	acc = 0
 	local now = os.clock()
 	for m, e in revealed do
-		if not m.Parent then
+		if not m.Parent or now > e.to then
+			release(e)
 			revealed[m] = nil
 			continue
 		end
 		local ver = (m:GetAttribute("BodyVersion") :: number?) or 0
 		if ver ~= e.ver then
-			collect(m, e)
+			collect(m, e) -- (도플갱어가 옷을 갈아입거나 변신하거나 입을 벌리면 다시 모은다)
 		end
-		if now < e.from then
-			continue
-		end
-		if aggro(m) then
+		if now >= e.from then
 			show(e, true)
-		elseif now - e.since > 1.2 then
-			-- (음파를 듣고 멈칫하기까지 잠깐 기다린 뒤에도) 어그로가 아니면 끝
-			show(e, false)
-			for _, b in e.boxes do
-				b:Destroy()
-			end
-			revealed[m] = nil
 		end
 	end
 end)
 
 function Reveal.clear()
 	for m, e in revealed do
-		show(e, false)
-		for _, b in e.boxes do
-			b:Destroy()
-		end
+		release(e)
 		revealed[m] = nil
 	end
 end
@@ -11232,6 +11556,11 @@ local function partsOfMonster(m: Model): { BasePart }
 	return l
 end
 
+-- 굳은 선을 그리지 않을 괴물(Main 이 Reveal.has 로 채운다)
+World.skipMonster = function(_m: Model): boolean
+	return false
+end
+
 function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { { part: BasePart, char: boolean } }
 	local out = {}
 	local function consider(p: BasePart, isChar: boolean)
@@ -11245,6 +11574,10 @@ function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { {
 		end
 	end
 	for _, m in CollectionService:GetTagged(TAGS.Monster) do
+		-- (음파에 맞아 지금 모습 그대로 보이는 괴물은 굳은 선(잔상)을 따로 그리지 않는다)
+		if m:IsA("Model") and World.skipMonster(m :: Model) then
+			continue
+		end
 		if m:IsA("Model") and m.Parent and m ~= exclude and m.PrimaryPart and (m.PrimaryPart.Position - near).Magnitude <= radius + 12 then
 			for _, p in partsOfMonster(m) do
 				consider(p, false)

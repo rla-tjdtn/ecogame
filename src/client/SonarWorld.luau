@@ -257,6 +257,11 @@ local function partsOfMonster(m: Model): { BasePart }
 	return l
 end
 
+-- 굳은 선을 그리지 않을 괴물(Main 이 Reveal.has 로 채운다)
+World.skipMonster = function(_m: Model): boolean
+	return false
+end
+
 function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { { part: BasePart, char: boolean } }
 	local out = {}
 	local function consider(p: BasePart, isChar: boolean)
@@ -270,6 +275,10 @@ function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { {
 		end
 	end
 	for _, m in CollectionService:GetTagged(TAGS.Monster) do
+		-- (음파에 맞아 지금 모습 그대로 보이는 괴물은 굳은 선(잔상)을 따로 그리지 않는다)
+		if m:IsA("Model") and World.skipMonster(m :: Model) then
+			continue
+		end
 		if m:IsA("Model") and m.Parent and m ~= exclude and m.PrimaryPart and (m.PrimaryPart.Position - near).Magnitude <= radius + 12 then
 			for _, p in partsOfMonster(m) do
 				consider(p, false)

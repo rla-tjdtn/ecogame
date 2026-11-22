@@ -331,6 +331,46 @@ local function clearMonsters()
 	monsterFolder:ClearAllChildren()
 end
 
+-- 도플갱어가 흉내 낼 사람: 참가자들의 친구 목록에서 한 명(진짜 아바타). 친구를 못 가져오면 지금 플레이어 중 한 명(혼자면 내 모습)
+function Round.pickDisguise(): (HumanoidDescription?, string?)
+	local friends: { { id: number, name: string } } = {}
+	for _, p in Round.participants() do
+		if p.UserId > 0 then
+			local ok, pages = pcall(function()
+				return Players:GetFriendsAsync(p.UserId)
+			end)
+			if ok and pages then
+				for _, fr in (pages :: FriendPages):GetCurrentPage() do
+					table.insert(friends, { id = fr.Id, name = fr.DisplayName or fr.Username })
+				end
+			end
+		end
+	end
+	for _ = 1, math.min(4, #friends) do
+		local fr = table.remove(friends, math.random(1, #friends)) :: { id: number, name: string }
+		local ok, desc = pcall(function()
+			return Players:GetHumanoidDescriptionFromUserId(fr.id)
+		end)
+		if ok and desc then
+			return desc, fr.name
+		end
+	end
+	local ps = Round.participants()
+	for _ = 1, #ps do
+		local p = ps[math.random(1, #ps)]
+		local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			local ok, desc = pcall(function()
+				return hum:GetAppliedDescription()
+			end)
+			if ok and desc then
+				return desc, p.DisplayName
+			end
+		end
+	end
+	return nil, nil
+end
+
 function Round.spawnMonsters(count: number)
 	local info = Round.info :: Builder.StageInfo
 	local spawnPos = info.spawns[1].Position
@@ -378,6 +418,19 @@ function Round.spawnMonsters(count: number)
 			m.route = info.route
 			table.insert(Round.doppels, m)
 			m:run()
+			-- 진짜 사람(친구 또는 플레이어)의 아바타로 갈아입힌다(가져오는 데 잠깐 걸린다)
+			task.spawn(function()
+				for _ = 1, 20 do
+					local desc, who = Round.pickDisguise()
+					if desc and who then
+						if m:applyAvatar(desc, who) then
+							note("doppel looks like " .. who)
+						end
+						return
+					end
+					task.wait(0.5) -- (플레이어 캐릭터가 아직 안 생겼다)
+				end
+			end)
 		end
 		note("doppels " .. D.PerStage)
 	end

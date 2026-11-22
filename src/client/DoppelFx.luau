@@ -110,7 +110,9 @@ function DoppelFx.onPulse(origin: Vector3)
 		if m:IsA("Model") and m.PrimaryPart and m:GetAttribute("Form") == "Beast" then
 			local d = (m.PrimaryPart.Position - origin).Magnitude
 			if d <= S.Radius + 2 then
-				eyeUntil[m] = { from = now + math.min(1, d / 60), to = now + S.Hold + Config.Doppel.EyeLinger }
+				local from = now + math.min(1, d / 60)
+				-- (몸이 보이는 10초 동안 눈도 빛난다)
+				eyeUntil[m] = { from = from, to = from + ((S :: any).MonsterRevealSeconds or (S.Hold + Config.Doppel.EyeLinger)) }
 			end
 		end
 	end

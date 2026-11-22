@@ -24,7 +24,8 @@ local SearchLook = require(script.Parent:WaitForChild("SearchLook"))
 local DoppelFx = require(script.Parent:WaitForChild("DoppelFx"))
 local Reveal = require(script.Parent:WaitForChild("Reveal"))
 Pulses.onReach = MapView.onReach
--- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 어그로가 풀릴 때까지 계속 보이게
+-- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 10초 동안 지금 모습 그대로 보이게(굳은 잔상 선은 그리지 않는다)
+World.skipMonster = Reveal.has
 Pulses.onStart = function(origin: Vector3)
 	DoppelFx.onPulse(origin)
 	Reveal.onPulse(origin)
@@ -233,7 +234,10 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		if data.userId == player.UserId then
 			if data.why == "monster" or data.why == "doppel" then
 				JumpScare.play(function()
-					Audio.play("MonsterAlert", nil, 0.03, 0.8)
+					-- 잡은 괴물의 자기 괴성(도플갱어 / 그 스테이지 메인 괴물)
+					local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
+					local voice = if data.why == "doppel" then "Doppel" else tostring((math.max(1, si) - 1) % 5 + 1)
+					Audio.play(Audio.voiceName(voice, "Scream") or "MonsterAlert", nil, 0.03, 0.8)
 				end, data.why)
 				task.wait(JumpScare.Duration)
 			end
@@ -248,7 +252,10 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		if data.userId == player.UserId and (data.why == "monster" or data.why == "doppel") then
 			-- 점프스케어: 괴물 얼굴이 확 뜬 뒤 YOU DIED (도플갱어는 머리~배가 세로로 벌어진 입)
 			JumpScare.play(function()
-				Audio.play("MonsterAlert", nil, 0.03, 0.8)
+				-- 잡은 괴물의 자기 괴성(도플갱어 / 그 스테이지 메인 괴물)
+				local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
+				local voice = if data.why == "doppel" then "Doppel" else tostring((math.max(1, si) - 1) % 5 + 1)
+				Audio.play(Audio.voiceName(voice, "Scream") or "MonsterAlert", nil, 0.03, 0.8)
 			end, data.why)
 			task.wait(JumpScare.Duration)
 		end

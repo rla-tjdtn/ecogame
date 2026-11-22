@@ -222,6 +222,39 @@ end
 
 -- ── 발소리(캐릭터마다 이동 거리 누적) ──
 type Tracker = { last: Vector3, acc: number, root: BasePart, foot: number }
+-- ── 괴물마다 자기 소리(Config.MonsterVoices) ──
+-- voice: "1"~"5"(메인 괴물 머리 모양) / "Doppel". kind: Scream / Steps / Special / Burst. 없으면 nil
+local lastVoicePick: { [string]: number } = {}
+function Audio.voiceName(voice: string?, kind: string): string?
+	if not voice then
+		return nil
+	end
+	local def = (Config :: any).MonsterVoices and (Config :: any).MonsterVoices[voice]
+	local ids = def and def[kind]
+	if not ids or #ids == 0 then
+		return nil
+	end
+	local key = voice .. kind
+	local k = math.random(1, #ids)
+	if #ids > 1 and k == lastVoicePick[key] then
+		k = k % #ids + 1
+	end
+	lastVoicePick[key] = k
+	return "Voice_" .. voice .. "_" .. kind .. "_" .. k
+end
+local function voiceOf(m: Model, kind: string): string?
+	return Audio.voiceName(m:GetAttribute("Voice") :: string?, kind)
+end
+-- 쫓아올 때 괴성: 그 괴물 자기 괴성(없으면 공통 괴성)
+local function chaseScream(m: Model, root: BasePart)
+	local n = voiceOf(m, "Scream")
+	if n then
+		Audio.play(n, root, 0.03)
+	else
+		Audio.scream("Chase", root)
+	end
+end
+
 local trackers: { [Model]: Tracker } = {}
 -- 한 발짝 거리(스터드): 걷기 10/초면 초당 약 2발, 달리기 18/초면 약 2.8발, 웅크리기 5/초면 약 1.7발
 local STRIDE = { Walk = 4.8, Run = 6.5, Crouch = 3.0 }
@@ -251,8 +284,15 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 			tr.acc = 0
 			-- 배회할 때는 조금 작게, 쫓아올 때는 크게. 도플갱어(작은 괴물)는 조금 높고 가벼운 발소리
 			local chase = model:GetAttribute("State") == "Chase"
-			local small = model:GetAttribute("Form") ~= nil
-			Audio.play("MonsterStep", root, 0.08, (if chase then 1 else Config.Monster.StepWanderVolume) * (if small then 0.85 else 1), if small then 1.25 else nil)
+			local vol = if chase then 1 else Config.Monster.StepWanderVolume
+			local own = voiceOf(model, "Steps")
+			if own then
+				-- 그 괴물 자기 걸음 소리(발 끌기·나무 딱딱·손톱 톡톡·쿵·곤충 걸음)
+				Audio.play(own, root, 0.06, vol)
+			else
+				local small = model:GetAttribute("Form") ~= nil
+				Audio.play("MonsterStep", root, 0.08, vol * (if small then 0.85 else 1), if small then 1.25 else nil)
+			end
 		end
 	else
 		local mode = (model:GetAttribute("MoveMode") :: string?) or "Walk"
@@ -286,8 +326,14 @@ local function watchMonster(m: Instance)
 		end
 		-- 괴성은 플레이어를 발견해 쫓기 시작할 때만(배회·조사·수색·경계에는 지르지 않는다). 발소리는 평소에도 난다
 			if st == "Chase" then
-				Audio.scream("Chase", root)
+				chaseScream(model, root)
 				screamAt[model] = os.clock() + CHASE_SCREAM_GAP[1] + math.random() * (CHASE_SCREAM_GAP[2] - CHASE_SCREAM_GAP[1])
+			elseif st == "Alert" then
+				-- 소리를 듣고 멈칫: 그 괴물의 특수 소리(머리 돌리는 뼈 소리, 상체 꺾이는 와르르, 씹는 소리)
+				local sp = voiceOf(model, "Special")
+				if sp then
+					Audio.play(sp, root, 0.04)
+				end
 			end
 	end))
 	-- 도플갱어: 가짜 음파 소리, 사람 모습이 터질 때 소리
@@ -300,8 +346,16 @@ local function watchMonster(m: Instance)
 	table.insert(conns, model:GetAttributeChangedSignal("Form"):Connect(function()
 		local root = model.PrimaryPart
 		if root and model:GetAttribute("Form") == "Bursting" then
-			Audio.play("Door", root, 0.04, 1.4, 0.45) -- 뚝 꺾이고 찢어지는 소리(낮게)
-			Audio.play("FootRun", root, 0.1, 1.2, 0.5)
+			-- 도플갱어 자기 소리: 살 찢어짐 + 뼈 우두둑(없으면 낮게 꺾이는 소리)
+			local def = (Config :: any).MonsterVoices and (Config :: any).MonsterVoices[model:GetAttribute("Voice")]
+			if def and def.Burst then
+				for k = 1, #def.Burst do
+					Audio.play("Voice_" .. tostring(model:GetAttribute("Voice")) .. "_Burst_" .. k, root, 0.03)
+				end
+			else
+				Audio.play("Door", root, 0.04, 1.4, 0.45)
+				Audio.play("FootRun", root, 0.1, 1.2, 0.5)
+			end
 		end
 	end))
 	monsterConns[model] = conns
@@ -384,7 +438,7 @@ function Audio.update()
 				local at = screamAt[m]
 				if at and now > at then
 					screamAt[m] = now + CHASE_SCREAM_GAP[1] + math.random() * (CHASE_SCREAM_GAP[2] - CHASE_SCREAM_GAP[1])
-					Audio.scream("Chase", m.PrimaryPart)
+					chaseScream(m, m.PrimaryPart)
 				end
 			end
 		end

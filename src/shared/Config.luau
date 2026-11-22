@@ -10,6 +10,7 @@ Config.Sonar = {
 	Cooldown = 1.5, -- 발사 간격(초) — 서버가 같은 값으로 검증한다
 	ServerTolerance = 0.12, -- 네트워크 지연 허용치(초)
 	WaveSpeed = 40, -- 파동 전진 속도(스터드/초): 35스터드 끝까지 약 0.9초
+	MonsterRevealSeconds = 10, -- 음파에 맞은 괴물은 이 시간 동안 지금 모습 그대로(움직이는 그대로) 보인다(Reveal.luau)
 	Hold = 3.5, -- 선이 나타난 뒤 완전히 사라질 때까지(초)
 	FadeTime = 1.2, -- Hold 끝부분에서 서서히 사라지는 구간(초)
 	FlashTime = 0.15, -- 파동이 지나가는 순간 살짝 더 밝은 구간(초)
@@ -547,6 +548,44 @@ do
 end
 
 -- 태그 이름
+-- ─────────────────────────────── 괴물마다 자기 소리 ───────────────────────────────
+-- 모든 괴물은 각자의 소리가 있다. 괴물 모델의 Voice 속성(메인 괴물 = 머리 모양 번호 "1"~"5", 도플갱어 = "Doppel")으로 고른다.
+-- Freesound 의 CC0(자유 사용) 소리를 계정에 올린 에셋. 목록에 여러 개면 매번 그중 하나.
+--   Scream = 쫓아올 때 괴성, Steps = 걸음, Special = 소리를 듣고 멈칫할 때(머리 돌리기·상체 꺾기·씹기), Burst = 도플갱어가 터지며 변신할 때
+Config.MonsterVoices = {
+	["1"] = { Name = "삼각", Scream = { 120058293974831 }, Steps = { 76678088411883 }, Special = { 76493509944508 } }, -- 발 끌기, 머리 돌 때 뼈 소리
+	["2"] = { Name = "사각", Scream = { 105287149316706 }, Steps = { 79801539256457, 128595779168447 }, Special = { 114002785847325 } }, -- 나무 딱딱·삐걱, 상체가 꺾일 때 와르르
+	["3"] = { Name = "원", Scream = { 116389741993620 }, Steps = { 134919568490352 }, Special = { 83953676554672 } }, -- 손톱 톡톡, 머리로 씹기
+	["4"] = { Name = "별", Scream = { 78248585425234 }, Steps = { 137748804042134 } }, -- 쿵 걸음
+	["5"] = { Name = "육각", Scream = { 123342966944903 }, Steps = { 119059498928351 } }, -- 곤충 걸음
+	Doppel = { Name = "도플갱어", Scream = { 102508063645161 }, Burst = { 85832788832876, 74039555089610 } }, -- 지직거리는 괴성 / 살 찢어짐 + 뼈 우두둑
+}
+-- 소리 종류별 크기(괴성은 Config.MonsterLoudness 배)·자르는 길이(초)
+Config.VoiceMix = {
+	Scream = { Volume = 1.0, Cut = 3.5 },
+	Steps = { Volume = 0.7, Cut = 1.2 },
+	Special = { Volume = 0.9, Cut = 2.5 },
+	Burst = { Volume = 1.2, Cut = 2.5 },
+}
+for v, def in Config.MonsterVoices do
+	for kind, mix in Config.VoiceMix do
+		local ids = (def :: any)[kind]
+		if ids then
+			for k, id in ids do
+				local loud = if kind == "Scream" or kind == "Burst" then Config.MonsterLoudness else 1
+				;(Config.Sounds :: any)["Voice_" .. v .. "_" .. kind .. "_" .. k] = {
+					Id = "rbxassetid://" .. id,
+					Volume = mix.Volume * loud,
+					Pitch = 1,
+					Range = if kind == "Steps" then 120 else Config.MonsterRange,
+					Near = if kind == "Steps" then 10 else Config.MonsterNear,
+					Cut = mix.Cut,
+				}
+			end
+		end
+	end
+end
+
 Config.Tags = {
 	Renderable = "SonarRenderable", -- 이 태그가 붙은 파트(또는 모델 안 파트)는 음파 윤곽선 대상
 	Dynamic = "SonarDynamic", -- 움직이는 대상(문, 괴물): 음파가 닿는 순간의 모습으로 선을 만든다

@@ -519,6 +519,7 @@ export type Monster = typeof(setmetatable({} :: {
 	nextPause: number,
 	nextPing: number,
 	mawOpen: boolean,
+	tracks: { walk: AnimationTrack, idle: AnimationTrack }?, -- 도플갱어가 진짜 아바타로 걷는 애니메이션
 }, Monster))
 
 local function between(r: { number }): number
@@ -599,7 +600,10 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 		nextPause = os.clock() + between(Config.Doppel.PauseEvery),
 		nextPing = os.clock() + between(Config.Doppel.FakePingEvery),
 		mawOpen = false,
+		tracks = nil,
 	}, Monster)
+	-- 괴물마다 자기 소리(Config.MonsterVoices): 메인 괴물은 스테이지(머리 모양) 번호, 도플갱어는 "Doppel"
+	model:SetAttribute("Voice", if isDoppel then "Doppel" else tostring(((stage or 1) - 1) % 5 + 1))
 	if isDoppel then
 		self:setState("Disguise")
 	end
@@ -617,6 +621,23 @@ end
 
 -- 걷는 모습: 속도만큼 팔다리를 흔든다(초당 10번만 바꿔 네트워크 부담을 줄인다. 음파는 순간 모습만 보여 준다)
 function Monster.animate(self: Monster, dt: number)
+	local tracks = self.tracks
+	if tracks then
+		-- 진짜 아바타 모습: 움직이면 걷기, 서 있으면 숨쉬기(플레이어와 같은 기본 애니메이션)
+		local v = self.root.AssemblyLinearVelocity
+		local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+		if speed > 0.6 then
+			if not tracks.walk.IsPlaying then
+				tracks.idle:Stop(0.2)
+				tracks.walk:Play(0.2)
+			end
+			tracks.walk:AdjustSpeed(math.clamp(speed / 12, 0.4, 1.4))
+		elseif not tracks.idle.IsPlaying then
+			tracks.walk:Stop(0.2)
+			tracks.idle:Play(0.2)
+		end
+		return
+	end
 	self.animT += dt
 	if self.animT < 0.1 or #self.joints == 0 then
 		return
@@ -1257,6 +1278,104 @@ function Monster.disguiseTick(self: Monster, now: number)
 	self:checkStuck(true)
 end
 
+-- 도플갱어를 진짜 아바타로 입힌다(친구 목록의 사람, 없으면 지금 플레이어 중 한 명 — 혼자면 내 모습).
+-- 아바타 몸(R15 파트·장신구)을 모델 바로 아래로 옮기고(속성 DisguisePart), 관절을 우리 루트에 잇는다.
+-- 몸은 투명(음파에만 상자 선으로 보이고, 들키면 클라이언트가 팀원처럼 아바타 윤곽선으로 계속 보여 준다)
+local WALK_ANIM = "rbxassetid://507777826" -- 로블록스 기본 R15 걷기
+local IDLE_ANIM = "rbxassetid://507766388" -- 로블록스 기본 R15 서 있기
+function Monster.applyAvatar(self: Monster, desc: HumanoidDescription, who: string): boolean
+	if self.form ~= "Disguise" or not self.alive or not self.model.Parent then
+		return false
+	end
+	local ok, av = pcall(function()
+		return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+	if not ok or not av then
+		warn("[Doppel] avatar build failed: " .. tostring(av))
+		return false
+	end
+	local avatar = av :: Model
+	local avRoot = avatar:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local avHum = avatar:FindFirstChildOfClass("Humanoid")
+	if not avRoot or not avHum or self.form ~= "Disguise" then
+		avatar:Destroy()
+		return false
+	end
+	avatar:PivotTo(self.root.CFrame)
+	-- 예전 상자 몸 치우기
+	for _, j in self.root:GetChildren() do
+		if j:IsA("Motor6D") and j.Name:find("^DJoint") then
+			j:Destroy()
+		end
+	end
+	local old = self.model:FindFirstChild("Disguise")
+	if old then
+		old:Destroy()
+	end
+	self.joints = {}
+	local tag = Config.Tags.Renderable
+	for _, c in avatar:GetChildren() do
+		if c ~= avRoot and not c:IsA("Humanoid") and not c:IsA("BaseScript") then
+			c:SetAttribute("DisguisePart", true)
+			c.Parent = self.model
+			local list: { Instance } = c:GetDescendants()
+			table.insert(list, c)
+			for _, d in list do
+				if d:IsA("JointInstance") then
+					local jd = d :: any
+					if jd.Part0 == avRoot then
+						jd.Part0 = self.root
+					end
+					if jd.Part1 == avRoot then
+						jd.Part1 = self.root
+					end
+				elseif d:IsA("WeldConstraint") then
+					if d.Part0 == avRoot then
+						d.Part0 = self.root
+					end
+					if d.Part1 == avRoot then
+						d.Part1 = self.root
+					end
+				elseif d:IsA("BasePart") then
+					d.Anchored = false
+					d.Massless = true
+					d.CanCollide = false
+					d.CanQuery = false
+					d.CanTouch = false
+					d.CastShadow = false
+					d.Transparency = 1
+					CollectionService:AddTag(d, tag)
+				elseif d:IsA("Decal") then
+					d.Transparency = 1
+				end
+			end
+		end
+	end
+	self.hum.HipHeight = avHum.HipHeight
+	avatar:Destroy()
+	-- 플레이어와 같은 걷기·서 있기 애니메이션
+	local animator = self.hum:FindFirstChildOfClass("Animator")
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = self.hum
+	end
+	local function load(id: string, fallback: string): AnimationTrack
+		local a = Instance.new("Animation")
+		a.AnimationId = if id ~= "" and id ~= "rbxassetid://0" then id else fallback
+		local tr = (animator :: Animator):LoadAnimation(a)
+		tr.Looped = true
+		return tr
+	end
+	self.tracks = {
+		walk = load(if desc.WalkAnimation ~= 0 then "rbxassetid://" .. desc.WalkAnimation else "", WALK_ANIM),
+		idle = load(if desc.IdleAnimation ~= 0 then "rbxassetid://" .. desc.IdleAnimation else "", IDLE_ANIM),
+	}
+	self.model:SetAttribute("AvatarOf", who)
+	self.model:SetAttribute("BodyVersion", ((self.model:GetAttribute("BodyVersion") :: number?) or 1) + 1)
+	self:note("dressed as " .. who)
+	return true
+end
+
 -- 사람 모습이 터지고(클라이언트가 조각을 흩날린다) 그 자리에서 괴물이 나온다
 function Monster.transform(self: Monster)
 	if self.form ~= "Disguise" then
@@ -1275,6 +1394,25 @@ function Monster.transform(self: Monster)
 			end
 		end
 	end
+	-- 진짜 아바타 모습이면 그 몸 파트들(장신구 포함)이 터진다
+	local avatarParts: { Instance } = {}
+	for _, c in self.model:GetChildren() do
+		if c:GetAttribute("DisguisePart") then
+			table.insert(avatarParts, c)
+			local list: { Instance } = c:GetDescendants()
+			table.insert(list, c)
+			for _, d in list do
+				if d:IsA("BasePart") and #boxes < 40 then
+					table.insert(boxes, { cf = d.CFrame, size = d.Size })
+				end
+			end
+		end
+	end
+	if self.tracks then
+		self.tracks.walk:Stop(0)
+		self.tracks.idle:Stop(0)
+		self.tracks = nil
+	end
 	local ev = roundEvent()
 	if ev then
 		ev:FireAllClients("DoppelBurst", { at = self.root.Position, boxes = boxes })
@@ -1288,6 +1426,10 @@ function Monster.transform(self: Monster)
 	if disguise then
 		disguise:Destroy()
 	end
+	for _, c in avatarParts do
+		c:Destroy()
+	end
+	self.hum.HipHeight = DOPPEL_HIP
 	buildBeast(self.model, self.root, self.root.CFrame)
 	self.joints = {}
 	for _, name in { "Leg-1", "Leg1", "Arm-1", "Arm1" } do
