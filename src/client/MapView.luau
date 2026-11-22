@@ -68,6 +68,38 @@ local function square(color: Color3, px: number, z: number): Frame
 	return f
 end
 local me = square(Color3.fromRGB(226, 75, 74), 10, 3)
+-- 내가 바라보는 방향: 내 칸 가운데를 축으로 도는 투명 틀 안에, 가운데에서 앞쪽으로 뻗은 선 + 끝의 화살촉
+local look = Instance.new("Frame")
+look.Name = "Look"
+look.AnchorPoint = Vector2.new(0.5, 0.5)
+look.Size = UDim2.fromOffset(52, 52)
+look.BackgroundTransparency = 1
+look.ZIndex = 3
+look.Visible = false
+look.Parent = canvas
+do
+	local RED = Color3.fromRGB(226, 75, 74)
+	local stem = Instance.new("Frame")
+	stem.AnchorPoint = Vector2.new(0, 0.5)
+	stem.Position = UDim2.fromScale(0.5, 0.5)
+	stem.Size = UDim2.fromOffset(20, 3)
+	stem.BackgroundColor3 = RED
+	stem.BorderSizePixel = 0
+	stem.ZIndex = 3
+	stem.Parent = look
+	-- 화살촉: 45° 돌린 작은 칸 두 개가 끝에서 뒤로 벌어진다
+	for _, a in { 35, -35 } do
+		local wing = Instance.new("Frame")
+		wing.AnchorPoint = Vector2.new(1, 0.5)
+		wing.Position = UDim2.new(0.5, 25, 0.5, 0)
+		wing.Size = UDim2.fromOffset(9, 3)
+		wing.Rotation = a
+		wing.BackgroundColor3 = RED
+		wing.BorderSizePixel = 0
+		wing.ZIndex = 3
+		wing.Parent = look
+	end
+end
 -- 팀원 표시(흰 테두리 칸), 필요한 만큼 만든다
 local mates: { Frame } = {}
 local function mateMark(i: number): Frame
@@ -243,8 +275,18 @@ RunService.RenderStepped:Connect(function()
 	if root then
 		me.Position = UDim2.fromScale(root.Position.X / (W * T), root.Position.Z / (H * T))
 		me.Visible = true
+		-- 바라보는 방향(카메라가 보는 쪽, 지도는 X → 오른쪽, Z → 아래)
+		local cam = workspace.CurrentCamera
+		local lv = if cam then cam.CFrame.LookVector else root.CFrame.LookVector
+		local flat = Vector2.new(lv.X, lv.Z)
+		if flat.Magnitude > 0.05 then
+			look.Position = me.Position
+			look.Rotation = math.deg(math.atan2(flat.Y, flat.X))
+			look.Visible = true
+		end
 	else
 		me.Visible = false
+		look.Visible = false
 	end
 	-- 살아 있는 팀원(같은 게임의 다른 플레이어)
 	local n = 0
