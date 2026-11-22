@@ -8009,6 +8009,29 @@ local function revealTest()
 	Config.Monster.CatchDistance = catch0
 end
 
+-- ─────────────────────────────── mobile ───────────────────────────────
+-- 휴대폰 화면 버튼: 휴대폰 모드에서 로비·스테이지에 맞는 버튼이 보이는가
+local function mobileTest()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local pc = ask(p, "mobile")
+	check("PC: no phone buttons", pc and pc.enabled == false, pc and tostring(pc.enabled))
+	local st = ask(p, "mobile", true)
+	local b = st and table.concat(st.buttons, ",") or ""
+	check("phone in a stage: sonar, run, crouch, map buttons", st and st.enabled and b:find("Sonar") and b:find("Run") and b:find("Crouch") and b:find("Map") ~= nil, b)
+	Round.enterLobby()
+	readyPlayers(1)
+	task.wait(1)
+	local lb = ask(p, "mobile", true)
+	local lbs = lb and table.concat(lb.buttons, ",") or ""
+	check("phone in the lobby: sonar and room menu buttons", lb and lbs:find("Sonar") and lbs:find("Menu") ~= nil, lbs)
+	ask(p, "mobile", false)
+end
+
 -- ─────────────────────────────── seal ───────────────────────────────
 -- 스테이지 1~5 를 지어, 실제로 만들어진 벽·바닥에 구멍이 없는지 광선으로 확인한다:
 --   바닥 칸마다 아래로(바닥이 있나), 벽 칸 쪽으로(그 벽이 실제로 막고 있나),
@@ -8210,6 +8233,8 @@ task.spawn(function()
 			livesTest()
 		elseif args.Test == "reveal" then
 			revealTest()
+		elseif args.Test == "mobile" then
+			mobileTest()
 		else
 			core()
 		end
@@ -10282,6 +10307,12 @@ task.spawn(function()
 			end
 			table.insert(out, "svc=" .. tostring(game:GetService("ProximityPromptService").Enabled))
 			return table.concat(out, " ; ")
+		elseif cmd == "mobile" then
+			if arg ~= nil then
+				player:SetAttribute("ForceMobileUI", arg == true)
+			end
+			task.wait(0.4)
+			return MobileUI.state()
 		elseif cmd == "reveal" then
 			return Reveal.count()
 		elseif cmd == "doppelFx" then
@@ -10691,12 +10722,26 @@ MobileUI.spectating = nil :: (() -> boolean)?
 
 local player = Players.LocalPlayer
 
--- 터치 기기인가(키보드가 없는 휴대폰·태블릿). 속성 ForceMobileUI 로 PC 에서도 켜 볼 수 있다(테스트)
+-- 터치 기기인가. 휴대폰·태블릿은 기기마다 키보드·마우스가 있다고 보고되기도 해서 넉넉하게 본다:
+--   터치가 되고 (마우스가 없거나, 키보드가 없거나, 마지막 입력이 터치) 이거나, 화면을 한 번이라도 터치했으면 켠다.
+--   속성 ForceMobileUI 로 PC 에서도 켜 볼 수 있다(테스트)
+local sawTouch = false
+UserInputService.TouchStarted:Connect(function()
+	sawTouch = true
+end)
+UserInputService.LastInputTypeChanged:Connect(function(t)
+	if t == Enum.UserInputType.Touch then
+		sawTouch = true
+	end
+end)
 local function isTouch(): boolean
-	if player:GetAttribute("ForceMobileUI") then
+	if player:GetAttribute("ForceMobileUI") or sawTouch then
 		return true
 	end
-	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	if not UserInputService.TouchEnabled then
+		return false
+	end
+	return not UserInputService.MouseEnabled or not UserInputService.KeyboardEnabled or UserInputService:GetLastInputType() == Enum.UserInputType.Touch
 end
 
 local gui = Instance.new("ScreenGui")

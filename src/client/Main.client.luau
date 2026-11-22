@@ -525,6 +525,12 @@ task.spawn(function()
 			end
 			table.insert(out, "svc=" .. tostring(game:GetService("ProximityPromptService").Enabled))
 			return table.concat(out, " ; ")
+		elseif cmd == "mobile" then
+			if arg ~= nil then
+				player:SetAttribute("ForceMobileUI", arg == true)
+			end
+			task.wait(0.4)
+			return MobileUI.state()
 		elseif cmd == "reveal" then
 			return Reveal.count()
 		elseif cmd == "doppelFx" then

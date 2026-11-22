@@ -1717,6 +1717,29 @@ local function revealTest()
 	Config.Monster.CatchDistance = catch0
 end
 
+-- ─────────────────────────────── mobile ───────────────────────────────
+-- 휴대폰 화면 버튼: 휴대폰 모드에서 로비·스테이지에 맞는 버튼이 보이는가
+local function mobileTest()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local pc = ask(p, "mobile")
+	check("PC: no phone buttons", pc and pc.enabled == false, pc and tostring(pc.enabled))
+	local st = ask(p, "mobile", true)
+	local b = st and table.concat(st.buttons, ",") or ""
+	check("phone in a stage: sonar, run, crouch, map buttons", st and st.enabled and b:find("Sonar") and b:find("Run") and b:find("Crouch") and b:find("Map") ~= nil, b)
+	Round.enterLobby()
+	readyPlayers(1)
+	task.wait(1)
+	local lb = ask(p, "mobile", true)
+	local lbs = lb and table.concat(lb.buttons, ",") or ""
+	check("phone in the lobby: sonar and room menu buttons", lb and lbs:find("Sonar") and lbs:find("Menu") ~= nil, lbs)
+	ask(p, "mobile", false)
+end
+
 -- ─────────────────────────────── seal ───────────────────────────────
 -- 스테이지 1~5 를 지어, 실제로 만들어진 벽·바닥에 구멍이 없는지 광선으로 확인한다:
 --   바닥 칸마다 아래로(바닥이 있나), 벽 칸 쪽으로(그 벽이 실제로 막고 있나),
@@ -1918,6 +1941,8 @@ task.spawn(function()
 			livesTest()
 		elseif args.Test == "reveal" then
 			revealTest()
+		elseif args.Test == "mobile" then
+			mobileTest()
 		else
 			core()
 		end

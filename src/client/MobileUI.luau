@@ -25,12 +25,26 @@ MobileUI.spectating = nil :: (() -> boolean)?
 
 local player = Players.LocalPlayer
 
--- 터치 기기인가(키보드가 없는 휴대폰·태블릿). 속성 ForceMobileUI 로 PC 에서도 켜 볼 수 있다(테스트)
+-- 터치 기기인가. 휴대폰·태블릿은 기기마다 키보드·마우스가 있다고 보고되기도 해서 넉넉하게 본다:
+--   터치가 되고 (마우스가 없거나, 키보드가 없거나, 마지막 입력이 터치) 이거나, 화면을 한 번이라도 터치했으면 켠다.
+--   속성 ForceMobileUI 로 PC 에서도 켜 볼 수 있다(테스트)
+local sawTouch = false
+UserInputService.TouchStarted:Connect(function()
+	sawTouch = true
+end)
+UserInputService.LastInputTypeChanged:Connect(function(t)
+	if t == Enum.UserInputType.Touch then
+		sawTouch = true
+	end
+end)
 local function isTouch(): boolean
-	if player:GetAttribute("ForceMobileUI") then
+	if player:GetAttribute("ForceMobileUI") or sawTouch then
 		return true
 	end
-	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	if not UserInputService.TouchEnabled then
+		return false
+	end
+	return not UserInputService.MouseEnabled or not UserInputService.KeyboardEnabled or UserInputService:GetLastInputType() == Enum.UserInputType.Touch
 end
 
 local gui = Instance.new("ScreenGui")
