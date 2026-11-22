@@ -20,6 +20,8 @@ local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
 local MapShare = Remotes:WaitForChild("MapShare") :: RemoteEvent
 
+local Round = {}
+
 -- ── 팀 지도 공유: 이번 스테이지에서 팀이 밝힌 칸(행*1024+열). 스테이지를 새로 지으면 비운다 ──
 Round.explored = {} :: { [number]: boolean }
 MapShare.OnServerEvent:Connect(function(p: Player, data: any)
@@ -53,7 +55,6 @@ MapShare.OnServerEvent:Connect(function(p: Player, data: any)
 	end
 end)
 
-local Round = {}
 Round.stageIndex = 1
 Round.state = "Waiting"
 Round.roundId = 0
