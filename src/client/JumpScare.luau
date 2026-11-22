@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 local JumpScare = {}
 JumpScare.count = 0
 JumpScare.Duration = 0.9
+JumpScare.lastKind = "monster"
 
 local player = Players.LocalPlayer
 
@@ -148,9 +149,88 @@ local function draw(spec: Spec)
 	end
 end
 
--- 얼굴을 띄운다(이미 떠 있으면 무시)
+-- 도플갱어: 둥근 머리의 빛나는 두 눈 + 머리에서 배까지 세로로 벌어진 입(양쪽 이빨), 솟은 어깨
+-- (좌표는 Monster.luau 도플갱어 시안과 같은 그림에서 가져와, 머리~가슴이 화면을 채우게 맞춘다)
+local function drawDoppel()
+	for _, c in face:GetChildren() do
+		if c:IsA("Frame") then
+			c:Destroy()
+		end
+	end
+	local size = face.AbsoluteSize.X
+	if size < 10 then
+		size = math.min(back.AbsoluteSize.X, back.AbsoluteSize.Y) * 0.95
+	end
+	local thick = math.max(4, size * 0.011)
+	local function px(x: number, y: number): Vector2
+		-- 시안 픽셀(가운데 x=130, 화면 가운데 y=234) → 화면
+		return Vector2.new((0.5 + (x - 130) / 190) * size, (0.5 + (y - 234) / 190) * size)
+	end
+	local function line(ax: number, ay: number, bx: number, by: number, w: number?)
+		local a, b = px(ax, ay), px(bx, by)
+		local d = b - a
+		local f = Instance.new("Frame")
+		f.BackgroundColor3 = WHITE
+		f.BorderSizePixel = 0
+		f.AnchorPoint = Vector2.new(0.5, 0.5)
+		f.Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
+		f.Size = UDim2.fromOffset(d.Magnitude + (w or thick), w or thick)
+		f.Rotation = math.deg(math.atan2(d.Y, d.X))
+		f.Parent = face
+	end
+	local function bez(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, n: number, w: number?)
+		local px0, py0 = x0, y0
+		for i = 1, n do
+			local t = i / n
+			local u = 1 - t
+			local x = u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3
+			local y = u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3
+			line(px0, py0, x, y, w)
+			px0, py0 = x, y
+		end
+	end
+	local function dot(x: number, y: number, r: number)
+		local c = px(x, y)
+		local f = Instance.new("Frame")
+		f.BackgroundColor3 = WHITE
+		f.AnchorPoint = Vector2.new(0.5, 0.5)
+		f.Position = UDim2.fromOffset(c.X, c.Y)
+		f.Size = UDim2.fromOffset(r * 2 * size / 190, r * 2 * size / 190)
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(1, 0)
+		corner.Parent = f
+		f.Parent = face
+	end
+	-- 머리
+	bez(112, 186, 108, 160, 116, 146, 130, 146, 8)
+	bez(130, 146, 144, 146, 152, 160, 148, 186, 8)
+	bez(148, 186, 146, 198, 140, 206, 135, 207, 4)
+	bez(112, 186, 114, 198, 120, 206, 125, 207, 4)
+	-- 빛나는 두 눈(벌어진 입 양옆으로 밀려남)
+	dot(118, 166, 4.2)
+	dot(142, 166, 4.2)
+	-- 어깨·목
+	line(118, 204, 112, 218)
+	line(142, 204, 148, 218)
+	bez(112, 218, 98, 220, 86, 226, 78, 240, 4)
+	bez(148, 218, 162, 220, 174, 226, 182, 240, 4)
+	-- 세로로 벌어진 입(머리~배)
+	bez(130, 160, 112, 192, 106, 236, 108, 270, 10)
+	bez(108, 270, 110, 300, 118, 318, 130, 334, 6)
+	bez(130, 334, 142, 318, 150, 300, 152, 270, 6)
+	bez(152, 270, 154, 236, 148, 192, 130, 160, 10)
+	-- 이빨(양쪽 가장자리에서 안쪽으로)
+	local rows = { { 120, 176 }, { 116, 190 }, { 113, 204 }, { 110, 218 }, { 109, 232 }, { 108, 246 }, { 108, 260 }, { 109, 274 }, { 111, 288 }, { 115, 302 }, { 120, 316 } }
+	for k, t in rows do
+		local len = 7 + (k % 2) * 3
+		line(t[1], t[2], t[1] + len, t[2] + 2, thick * 0.7)
+		line(260 - t[1], t[2], 260 - t[1] - len, t[2] + 2, thick * 0.7)
+	end
+end
+
+-- 얼굴을 띄운다(이미 떠 있으면 무시). kind = "doppel" 이면 도플갱어 얼굴
 local busy = false
-function JumpScare.play(scream: (() -> ())?)
+function JumpScare.play(scream: (() -> ())?, kind: string?)
 	if busy then
 		return
 	end
@@ -158,7 +238,12 @@ function JumpScare.play(scream: (() -> ())?)
 	JumpScare.count += 1
 	local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
 	gui.Enabled = true
-	draw(SPECS[((math.max(1, si) - 1) % #SPECS) + 1])
+	if kind == "doppel" then
+		drawDoppel()
+	else
+		draw(SPECS[((math.max(1, si) - 1) % #SPECS) + 1])
+	end
+	JumpScare.lastKind = kind or "monster"
 	if scream then
 		task.spawn(scream)
 	end
@@ -182,7 +267,7 @@ function JumpScare.play(scream: (() -> ())?)
 end
 
 function JumpScare.state()
-	return { count = JumpScare.count, showing = gui.Enabled }
+	return { count = JumpScare.count, showing = gui.Enabled, kind = JumpScare.lastKind }
 end
 
 return JumpScare

@@ -176,6 +176,46 @@ Config.Monster = {
 	LegTiles = 8, -- 먼 길은 타일 경로를 따라 이만큼(칸)씩 나눠 경로를 계산한다
 }
 
+-- ─────────────────────────────── 목숨·안전 구역 ───────────────────────────────
+-- 스테이지마다 목숨 3개. 괴물(메인·도플갱어)에게 잡히면 하나 잃고 그 스테이지 시작 방에서 다시 시작한다.
+-- 다 잃으면 그 스테이지에서는 아웃(관전). 찾은 열쇠·지도 기록은 팀에 그대로 남는다.
+Config.Lives = {
+	PerStage = 3,
+	RespawnDelay = 3, -- 잡힌 뒤 다시 살아나기까지(초, 점프스케어 포함)
+}
+-- 시작한 방(시작 칸 S 가 있는 방, 문·아치로 둘러싸인 곳)은 안전 구역: 괴물이 들어오지 않고, 그 안의 플레이어는 보지도 잡지도 않는다
+Config.SafeZone = {
+	Enabled = true,
+}
+
+-- ─────────────────────────────── 도플갱어(서브 괴물) ───────────────────────────────
+-- 스테이지마다 한 마리. 평소엔 플레이어처럼(사람 모양, 플레이어 발소리, 가끔 가짜 음파 소리) 돌아다니다가
+-- 들키면(가까이서 보이거나 음파에 맞으면) 5~10초 뒤 사람 모습이 터지며 작은 괴물로 변해 쫓아온다.
+Config.Doppel = {
+	Enabled = true,
+	PerStage = 1,
+	StartDelay = 6, -- 라운드 시작 후 움직이기까지
+	WalkSpeed = 7, -- 사람 흉내: 천천히 걷기(플레이어 걷기 10)
+	PauseEvery = { 6, 14 }, -- 이 시간(초)마다 멈춰 서서 두리번(플레이어처럼)
+	PauseFor = { 1.5, 3.5 },
+	FakePingEvery = { 14, 28 }, -- 가끔 가짜 음파 소리(보이지는 않는다)
+	SpawnDistance = { 45, 120 }, -- 시작점에서 이 거리 사이에 등장
+	SeeRange = 14, -- 이 거리 안에서 플레이어가 보면(벽 없이) 들킨다
+	SonarRange = 35, -- 이 거리 안에서 음파를 쏘면(벽 1장 이하) 들킨다(음파에 모습이 드러났으니)
+	TransformDelay = { 5, 10 }, -- 들킨 뒤 변신까지(초)
+	StalkSpeed = 3, -- 들킨 뒤 변신 전: 발견한 플레이어를 바라보며 아주 천천히 다가온다
+	BurstPause = 0.8, -- 터지며 변신하는 동안 멈춤
+	-- 변신 뒤(괴물): 메인 괴물보다 작고 조금 빠르다
+	WanderSpeed = 4.5,
+	InvestigateSpeed = 6.5,
+	ChaseSpeed = 9.5, -- 메인 괴물 8.5, 플레이어 걷기 10
+	CatchDistance = 3.0,
+	AgentRadius = 1.3,
+	AgentHeight = 6.5,
+	MawDistance = 8, -- 이 거리 안으로 덮치면 머리~배의 틈이 세로 입으로 벌어진다
+	EyeLinger = 1.2, -- 음파 선이 사라진 뒤에도 눈이 이만큼 더 남는다(초)
+}
+
 -- ─────────────────────────────── 라운드 ───────────────────────────────
 Config.Round = {
 	FirstStartDelay = 2,
@@ -604,6 +644,7 @@ Config.Tags = {
 	Dynamic = "SonarDynamic", -- 움직이는 대상(문, 괴물): 음파가 닿는 순간의 모습으로 선을 만든다
 	Door = "SonarDoor",
 	Monster = "Monster",
+	Doppel = "Doppel", -- 도플갱어(Monster 태그도 함께 붙는다)
 	AmbientEmitter = "AmbientEmitter",
 	HideSpot = "HideSpot",
 	SearchSpot = "SearchSpot",
@@ -1990,8 +2031,12 @@ local MC = Config.Monster
 
 local Monster = {}
 Monster.__index = Monster
+-- 안전 구역(시작 방) 판정: Round 가 채운다. 그 안의 플레이어는 보지도 잡지도 않고, 그 안으로 들어가지 않는다
+Monster.isSafe = function(_pos: Vector3): boolean
+	return false
+end
 
-export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase"
+export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase" | "Disguise"
 
 -- ── 챕터별 머리 도형: 1 삼각형 · 2 사각형 · 3 원 · 4 별 · 5 육각형 (그 이후는 처음부터 반복) ──
 -- cy: 머리 중심 높이, eye = {x, y, 반지름}, mouth = {반폭, 윗입술 y, 깊이}, 좌표는 머리 중심 기준
@@ -2002,6 +2047,284 @@ local HeadSpec: { { cy: number, eye: { number }, mouth: { number }, verts: { { n
 	{ cy = 4.55, eye = { 0.16, 0.12, 0.065 }, mouth = { 0.3, -0.12, 0.25 }, star = { 1.0, 0.48 } },
 	{ cy = 4.35, eye = { 0.26, 0.15, 0.09 }, mouth = { 0.5, -0.12, 0.38 }, hex = 0.72 },
 }
+
+-- ── 몸 조립 공통: 팔·다리 묶음은 관절(Motor6D)에, 나머지는 루트에 붙인다. 몸은 완전히 투명(음파에만 드러난다) ──
+-- prefix: 관절 이름 앞부분(같은 모델에 몸이 둘일 때 구분), holder: 관절 받침 파트를 둘 곳
+local function rig(model: Model, root: BasePart, cf: CFrame, parts: { BasePart }, groupParts: { [string]: { BasePart } }, joints: { [string]: Vector3 }, prefix: string, holder: Instance?)
+	local grouped: { [BasePart]: boolean } = {}
+	for name, list in groupParts do
+		local off = joints[name]
+		if off then
+			local pv = Instance.new("Part")
+			pv.Name = "Pivot" .. name
+			pv.Size = Vector3.new(0.2, 0.2, 0.2)
+			pv.Transparency = 1
+			pv.CanCollide = false
+			pv.CanQuery = false
+			pv.CanTouch = false
+			pv.Massless = true
+			pv.CFrame = cf * CFrame.new(off)
+			pv.Parent = holder or model
+			local motor = Instance.new("Motor6D")
+			motor.Name = prefix .. name
+			motor.Part0 = root
+			motor.Part1 = pv
+			motor.C0 = CFrame.new(off)
+			motor.C1 = CFrame.identity
+			motor.Parent = root
+			for _, p in list do
+				p.Anchored = false
+				p.CanCollide = false
+				p.CanQuery = false
+				p.Massless = true
+				local w = Instance.new("WeldConstraint")
+				w.Part0 = pv
+				w.Part1 = p
+				w.Parent = p
+				grouped[p] = true
+			end
+		end
+	end
+	for _, p in parts do
+		if p.Name == "Part" then
+			p.Name = "Body"
+		end
+		-- 몸은 완전히 투명: 음파를 맞을 때만 선으로 드러난다(검은 몸이 선을 가려 위치가 드러나지 않게)
+		p.Transparency = 1
+		p.CastShadow = false
+		if not grouped[p] then
+			p.Anchored = false
+			p.CanCollide = false
+			p.CanQuery = false
+			p.Massless = true
+			local w = Instance.new("WeldConstraint")
+			w.Part0 = root
+			w.Part1 = p
+			w.Parent = p
+		end
+	end
+end
+
+local function makeHumanoid(model: Model, hip: number, speed: number): Humanoid
+	local hum = Instance.new("Humanoid")
+	hum.RigType = Enum.HumanoidRigType.R15
+	hum.HipHeight = hip
+	hum.WalkSpeed = speed
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	hum.BreakJointsOnDeath = false
+	hum.MaxHealth = math.huge
+	hum.Health = math.huge
+	hum.AutoJumpEnabled = false
+	hum.UseJumpPower = true
+	hum.JumpPower = 0
+	hum.Parent = model
+	for _, st in { Enum.HumanoidStateType.Jumping, Enum.HumanoidStateType.Climbing, Enum.HumanoidStateType.Swimming, Enum.HumanoidStateType.FallingDown, Enum.HumanoidStateType.Ragdoll, Enum.HumanoidStateType.Seated, Enum.HumanoidStateType.Dead } do
+		hum:SetStateEnabled(st, false)
+	end
+	return hum
+end
+
+-- ── 도플갱어 ──
+-- 루트(2x2x1) 가운데 기준 바닥은 y = -3 (HipHeight 2). 사람 모습은 약 5.2, 괴물 모습은 약 6.5 스터드.
+local DOPPEL_HIP = 2.0
+
+-- 사람 모습: 로블록스 기본 아바타 비율의 상자 6개(머리·몸통·팔·다리). 음파에는 상자 윤곽(사람 모양)으로 보인다
+local function buildDisguise(model: Model, root: BasePart, cf: CFrame)
+	local folder = Instance.new("Folder")
+	folder.Name = "Disguise"
+	folder.Parent = model
+	local parts: { BasePart } = {}
+	local groups: { [string]: { BasePart } } = {}
+	local function box(name: string, center: Vector3, size: Vector3, group: string?)
+		local p = Kit.box(folder, cf * CFrame.new(center), size, { name = name })
+		table.insert(parts, p)
+		if group then
+			groups[group] = groups[group] or {}
+			table.insert(groups[group], p)
+		end
+	end
+	box("Head", Vector3.new(0, 1.62, 0), Vector3.new(1.15, 1.2, 1.15))
+	box("Torso", Vector3.new(0, 0, 0), Vector3.new(2, 2, 1))
+	box("LeftArm", Vector3.new(-1.5, 0, 0), Vector3.new(1, 2, 1), "Arm-1")
+	box("RightArm", Vector3.new(1.5, 0, 0), Vector3.new(1, 2, 1), "Arm1")
+	box("LeftLeg", Vector3.new(-0.5, -2, 0), Vector3.new(1, 2, 1), "Leg-1")
+	box("RightLeg", Vector3.new(0.5, -2, 0), Vector3.new(1, 2, 1), "Leg1")
+	-- (관절은 어깨·엉덩이 위쪽: 팔·다리가 그 점을 축으로 흔들린다)
+	rig(model, root, cf, parts, groups, {
+		["Arm-1"] = Vector3.new(-1.5, 0.9, 0),
+		["Arm1"] = Vector3.new(1.5, 0.9, 0),
+		["Leg-1"] = Vector3.new(-0.5, -1, 0),
+		["Leg1"] = Vector3.new(0.5, -1, 0),
+	}, "DJoint", folder)
+end
+
+-- 괴물 모습(확정 시안): 둥글고 긴 머리 위쪽에 빛나는 두 눈, 이마에서 배까지 이어지는 지그재그 틈,
+-- 솟은 어깨, 무릎까지 늘어진 굵은 팔과 갈고리 손가락, 굽힌 다리. 앞으로 숙인 자세(머리가 앞으로 나온다).
+-- 좌표는 시안 그림(픽셀, 가운데 x=130, 바닥 y=394, 38.2px = 1스터드)에서 옮긴다. 앞 = -Z
+-- 틈(Slit)과 벌어진 입(Maw)은 둘 다 만들어 두고 음파 대상 태그로 바꿔 낀다(덮칠 때 입이 벌어진다)
+local function buildBeast(model: Model, root: BasePart, cf: CFrame)
+	local folder = Instance.new("Folder")
+	folder.Name = "Beast"
+	folder.Parent = model
+	local S = 38.2
+	local parts: { BasePart } = {}
+	local groups: { [string]: { BasePart } } = {}
+	local group: string? = nil
+	local mark: string? = nil -- "Slit" / "Maw"
+	local function P(px: number, py: number, z: number): Vector3
+		return Vector3.new((px - 130) / S, (394 - py) / S - 3, z)
+	end
+	local function seg(a: Vector3, b: Vector3, r: number, name: string?)
+		local shape = if (b - a).Magnitude > r * 4 then "Line" else "Disc"
+		local p = Kit.cylinder(folder, cf:PointToWorldSpace(a), cf:PointToWorldSpace(b), r, { shape = shape, name = name, tag = mark ~= "Maw" })
+		if mark then
+			p:SetAttribute(mark, true)
+		end
+		table.insert(parts, p)
+		if group then
+			groups[group] = groups[group] or {}
+			table.insert(groups[group], p)
+		end
+	end
+	-- 깊이(z): 머리가 가장 앞, 목·어깨, 몸통, 엉덩이 순으로 뒤
+	local function depth(py: number): number
+		if py < 210 then
+			return -1.05
+		elseif py < 236 then
+			return -0.75
+		elseif py < 300 then
+			return -0.45
+		end
+		return -0.25
+	end
+	-- 3차 베지어를 n 토막의 선으로(zf: 높이에 따른 깊이 함수)
+	local function bez(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, n: number, zf: (number) -> number, r: number?)
+		local prev = P(x0, y0, zf(y0))
+		for i = 1, n do
+			local t = i / n
+			local u = 1 - t
+			local x = u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3
+			local y = u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3
+			local p = P(x, y, zf(y))
+			seg(prev, p, r or 0.035)
+			prev = p
+		end
+	end
+	local function poly(pts: { number }, zf: (number) -> number, r: number?)
+		for i = 1, #pts - 2, 2 do
+			seg(P(pts[i], pts[i + 1], zf(pts[i + 1])), P(pts[i + 2], pts[i + 3], zf(pts[i + 3])), r or 0.035)
+		end
+	end
+	-- 머리(둥글고 위아래로 긴 돔)
+	bez(112, 186, 108, 160, 116, 146, 130, 146, 3, depth)
+	bez(130, 146, 144, 146, 152, 160, 148, 186, 3, depth)
+	bez(148, 186, 146, 198, 140, 206, 130, 208, 2, depth)
+	bez(130, 208, 120, 206, 114, 198, 112, 186, 2, depth)
+	-- 빛나는 두 눈(클라이언트가 음파 뒤에도 잠깐 빛나게 한다: 이름 Eye)
+	for _, ex in { 122, 138 } do
+		seg(P(ex, 166, -1.12), P(ex, 166, -1.18), 0.11, "Eye")
+	end
+	-- 목, 솟은 어깨(승모근), 둥근 어깨 근육
+	poly({ 118, 204, 114, 216 }, depth)
+	poly({ 142, 204, 146, 216 }, depth)
+	bez(114, 216, 100, 218, 90, 222, 84, 232, 2, depth)
+	bez(146, 216, 160, 218, 170, 222, 176, 232, 2, depth)
+	bez(84, 232, 78, 242, 78, 252, 84, 262, 2, depth)
+	bez(176, 232, 182, 242, 182, 252, 176, 262, 2, depth)
+	-- 몸통(좁아지는 허리) + 가슴 근육 선
+	bez(90, 240, 88, 270, 98, 300, 108, 318, 3, depth)
+	poly({ 108, 318, 152, 318 }, depth)
+	bez(152, 318, 162, 300, 172, 270, 170, 240, 3, depth)
+	bez(98, 248, 110, 258, 120, 256, 124, 250, 2, depth, 0.025)
+	bez(162, 248, 150, 258, 140, 256, 136, 250, 2, depth, 0.025)
+	-- 이마에서 배까지 이어지는 지그재그 틈(평소)
+	mark = "Slit"
+	poly({ 130, 172, 127, 180, 133, 188, 127, 196, 133, 204, 127, 212, 133, 220, 126, 230, 134, 240, 126, 250, 134, 260, 126, 270, 134, 280, 127, 290, 133, 300, 128, 310, 130, 318 }, function(py)
+		return depth(py) - 0.06
+	end)
+	-- 벌어진 세로 입(덮칠 때): 머리~배의 렌즈 모양 + 양쪽 이빨
+	mark = "Maw"
+	local function front(py: number): number
+		return depth(py) - 0.08
+	end
+	bez(130, 168, 116, 196, 112, 236, 114, 266, 3, front)
+	bez(114, 266, 116, 292, 122, 308, 130, 322, 2, front)
+	bez(130, 322, 138, 308, 144, 292, 146, 266, 2, front)
+	bez(146, 266, 148, 236, 144, 196, 130, 168, 3, front)
+	for _, t in { { 124, 182, 130, 185 }, { 121, 196, 128, 197 }, { 118, 210, 126, 210 }, { 116, 224, 124, 223 }, { 115, 238, 123, 237 }, { 115, 252, 123, 250 }, { 116, 266, 124, 264 }, { 118, 280, 125, 278 }, { 121, 294, 127, 292 }, { 124, 306, 129, 304 } } do
+		poly({ t[1], t[2], t[3], t[4] }, front, 0.025)
+		poly({ 260 - t[1], t[2], 260 - t[3], t[4] }, front, 0.025)
+	end
+	mark = nil
+	-- 팔: 무릎 아래까지 늘어진 굵은 팔(바깥선·안쪽선) + 손바닥 + 갈고리 손가락 4개. 손은 몸 앞쪽으로
+	local function armZ(py: number): number
+		return -0.45 - math.clamp((py - 232) / 162, 0, 1) * 0.55
+	end
+	for _, s in { -1, 1 } do
+		local function X(px: number): number
+			return if s < 0 then px else 260 - px
+		end
+		group = "Arm" .. s
+		bez(X(84), 232, X(72), 258, X(70), 280, X(74), 298, 2, armZ)
+		bez(X(74), 298, X(68), 320, X(66), 340, X(70), 356, 2, armZ)
+		bez(X(100), 252, X(92), 272, X(90), 284, X(92), 298, 2, armZ)
+		bez(X(92), 298, X(90), 320, X(86), 340, X(86), 356, 2, armZ)
+		bez(X(70), 356, X(68), 366, X(72), 372, X(78), 374, 2, armZ)
+		poly({ X(78), 374, X(86), 370 }, armZ)
+		bez(X(86), 370, X(88), 364, X(88), 360, X(86), 356, 1, armZ)
+		bez(X(72), 370, X(64), 380, X(62), 388, X(66), 394, 2, armZ, 0.028)
+		bez(X(77), 373, X(74), 384, X(74), 392, X(79), 396, 2, armZ, 0.028)
+		bez(X(82), 372, X(84), 384, X(86), 390, X(90), 392, 2, armZ, 0.028)
+		bez(X(86), 366, X(94), 372, X(96), 378, X(94), 386, 2, armZ, 0.028)
+	end
+	-- 다리: 무릎을 굽히고 한 발을 내딛은 자세, 크고 납작한 발
+	local function legZ(py: number): number
+		return if py < 362 then -0.25 - (py - 318) / 44 * 0.2 else -0.45 + (py - 362) / 32 * 0.45
+	end
+	group = "Leg-1"
+	bez(108, 318, 100, 340, 98, 352, 104, 362, 2, legZ)
+	bez(104, 362, 100, 376, 98, 386, 96, 392, 2, legZ)
+	bez(126, 324, 122, 340, 120, 352, 118, 362, 2, legZ)
+	bez(118, 362, 116, 374, 114, 384, 114, 392, 2, legZ)
+	poly({ 92, 394, 118, 394 }, legZ)
+	group = "Leg1"
+	bez(152, 318, 162, 336, 166, 350, 160, 362, 2, legZ)
+	bez(160, 362, 166, 374, 170, 386, 174, 392, 2, legZ)
+	bez(134, 324, 140, 340, 144, 352, 144, 362, 2, legZ)
+	bez(144, 362, 146, 374, 148, 384, 150, 392, 2, legZ)
+	poly({ 146, 394, 178, 394 }, legZ)
+	group = nil
+	rig(model, root, cf, parts, groups, {
+		["Arm-1"] = P(84, 232, -0.45),
+		["Arm1"] = P(176, 232, -0.45),
+		["Leg-1"] = P(116, 318, -0.25),
+		["Leg1"] = P(144, 318, -0.25),
+	}, "Joint", folder)
+end
+
+local function buildDoppel(cf: CFrame): Model
+	local model = Instance.new("Model")
+	model.Name = "Doppel"
+	model:SetAttribute(Config.Tags.Dynamic, true)
+	model:SetAttribute("State", "Disguise")
+	model:SetAttribute("Form", "Disguise")
+	model:SetAttribute("BodyVersion", 1)
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1)
+	root.Transparency = 1
+	root.CanCollide = true
+	root.CanTouch = false
+	root.CFrame = cf
+	root.Parent = model
+	model.PrimaryPart = root
+	buildDisguise(model, root, cf)
+	makeHumanoid(model, DOPPEL_HIP, Config.Doppel.WalkSpeed)
+	CollectionService:AddTag(model, Config.Tags.Monster)
+	CollectionService:AddTag(model, Config.Tags.Doppel)
+	return model
+end
 
 -- ── 모델 ──
 local function buildModel(cf: CFrame, stage: number): Model
@@ -2019,16 +2342,6 @@ local function buildModel(cf: CFrame, stage: number): Model
 	root.Parent = model
 	model.PrimaryPart = root
 
-	local function limb(p: BasePart)
-		p.Anchored = false
-		p.CanCollide = false
-		p.CanQuery = false
-		p.Massless = true
-		local w = Instance.new("WeldConstraint")
-		w.Part0 = root
-		w.Part1 = p
-		w.Parent = p
-	end
 	local function at(v: Vector3): Vector3
 		return cf:PointToWorldSpace(v)
 	end
@@ -2170,66 +2483,8 @@ local function buildModel(cf: CFrame, stage: number): Model
 		["Leg-1"] = Vector3.new(-0.4, 0.5, 0),
 		["Leg1"] = Vector3.new(0.4, 0.5, 0),
 	}
-	local grouped: { [BasePart]: boolean } = {}
-	for name, list in groupParts do
-		local off = JOINTS[name]
-		if off then
-			local pv = Instance.new("Part")
-			pv.Name = "Pivot" .. name
-			pv.Size = Vector3.new(0.2, 0.2, 0.2)
-			pv.Transparency = 1
-			pv.CanCollide = false
-			pv.CanQuery = false
-			pv.CanTouch = false
-			pv.Massless = true
-			pv.CFrame = cf * CFrame.new(off)
-			pv.Parent = model
-			local motor = Instance.new("Motor6D")
-			motor.Name = "Joint" .. name
-			motor.Part0 = root
-			motor.Part1 = pv
-			motor.C0 = CFrame.new(off)
-			motor.C1 = CFrame.identity
-			motor.Parent = root
-			for _, p in list do
-				p.Anchored = false
-				p.CanCollide = false
-				p.CanQuery = false
-				p.Massless = true
-				local w = Instance.new("WeldConstraint")
-				w.Part0 = pv
-				w.Part1 = p
-				w.Parent = p
-				grouped[p] = true
-			end
-		end
-	end
-	for _, p in parts do
-		p.Name = "Body"
-		-- 몸은 완전히 투명: 음파를 맞을 때만 선으로 드러난다(검은 몸이 선을 가려 위치가 드러나지 않게)
-		p.Transparency = 1
-		p.CastShadow = false
-		if not grouped[p] then
-			limb(p)
-		end
-	end
-	-- 장애물 판정과 무관하게(검은 몸은 SonarRenderable 태그로 음파에만 드러난다)
-	local hum = Instance.new("Humanoid")
-	hum.RigType = Enum.HumanoidRigType.R15
-	hum.HipHeight = 4.0
-	hum.WalkSpeed = MC.WanderSpeed
-	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
-	hum.BreakJointsOnDeath = false
-	hum.MaxHealth = math.huge
-	hum.Health = math.huge
-	hum.AutoJumpEnabled = false
-	hum.UseJumpPower = true
-	hum.JumpPower = 0
-	hum.Parent = model
-	for _, st in { Enum.HumanoidStateType.Jumping, Enum.HumanoidStateType.Climbing, Enum.HumanoidStateType.Swimming, Enum.HumanoidStateType.FallingDown, Enum.HumanoidStateType.Ragdoll, Enum.HumanoidStateType.Seated, Enum.HumanoidStateType.Dead } do
-		hum:SetStateEnabled(st, false)
-	end
+	rig(model, root, cf, parts, groupParts, JOINTS, "Joint")
+	makeHumanoid(model, 4.0, MC.WanderSpeed)
 	CollectionService:AddTag(model, Config.Tags.Monster)
 	return model
 end
@@ -2269,10 +2524,36 @@ export type Monster = typeof(setmetatable({} :: {
 	joints: { { motor: Motor6D, base: CFrame, offset: number, amp: number } },
 	phase: number,
 	animT: number,
+	kind: string, -- "main" / "doppel"
+	form: string, -- 도플갱어: "Disguise"(사람 모습) → "Bursting" → "Beast". 메인 괴물은 "Beast"
+	cfg: any, -- 속도·거리 설정(도플갱어는 Config.Doppel 이 먼저, 없으면 Config.Monster)
+	discoveredBy: Player?,
+	transformAt: number,
+	pauseUntil: number,
+	nextPause: number,
+	nextPing: number,
+	mawOpen: boolean,
 }, Monster))
 
-function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> (), stage: number?): Monster
-	local model = buildModel(CFrame.new(spawnPos + Vector3.new(0, 2.2, 0)), stage or 1)
+local function between(r: { number }): number
+	return r[1] + math.random() * (r[2] - r[1])
+end
+
+-- kind = "doppel" 이면 도플갱어(사람 모습으로 시작). 배회 지점(spawnPos)은 바닥 + 3
+function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> (), stage: number?, kind: string?): Monster
+	local isDoppel = kind == "doppel"
+	local cfg: any = if isDoppel
+		then setmetatable({}, {
+			__index = function(_, k)
+				local v = (Config.Doppel :: any)[k]
+				if v ~= nil then
+					return v
+				end
+				return (MC :: any)[k]
+			end,
+		})
+		else MC
+	local model = if isDoppel then buildDoppel(CFrame.new(spawnPos + Vector3.new(0, 0.1, 0))) else buildModel(CFrame.new(spawnPos + Vector3.new(0, 2.2, 0)), stage or 1)
 	model.Parent = parent
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
 	pcall(function()
@@ -2303,17 +2584,18 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 		stuck = 0,
 		alive = true,
 		path = PathfindingService:CreatePath({
-			AgentRadius = MC.AgentRadius,
-			AgentHeight = MC.AgentHeight,
+			AgentRadius = cfg.AgentRadius,
+			AgentHeight = cfg.AgentHeight,
 			AgentCanJump = false,
 			AgentCanClimb = false,
 			WaypointSpacing = 4,
+			Costs = { SafeZone = math.huge }, -- (안전 구역 칸은 지나가지 않는다)
 		}),
 		rayParams = rp,
 		onCatch = onCatch,
 		log = {},
 		geometry = geometry,
-		startAt = os.clock() + MC.StartDelay,
+		startAt = os.clock() + cfg.StartDelay,
 		stateChanged = os.clock(),
 		route = nil,
 		legGoal = nil,
@@ -2322,7 +2604,19 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 		joints = {},
 		phase = 0,
 		animT = 0,
+		kind = if isDoppel then "doppel" else "main",
+		form = if isDoppel then "Disguise" else "Beast",
+		cfg = cfg,
+		discoveredBy = nil,
+		transformAt = 0,
+		pauseUntil = 0,
+		nextPause = os.clock() + between(Config.Doppel.PauseEvery),
+		nextPing = os.clock() + between(Config.Doppel.FakePingEvery),
+		mawOpen = false,
 	}, Monster)
+	if isDoppel then
+		self:setState("Disguise")
+	end
 	for _, name in { "Leg-1", "Leg1", "Arm-1", "Arm1" } do
 		local motor = root:FindFirstChild("Joint" .. name) :: Motor6D?
 		if motor then
@@ -2366,15 +2660,21 @@ function Monster.setState(self: Monster, s: State)
 		self.stateChanged = os.clock()
 		self.model:SetAttribute("State", s)
 	end
-	local speed = MC.WanderSpeed
-	if s == "Investigate" or s == "Search" then
-		speed = MC.InvestigateSpeed
+	local cfg = self.cfg
+	local speed = cfg.WanderSpeed
+	if s == "Disguise" then
+		speed = cfg.WalkSpeed
+	elseif s == "Investigate" or s == "Search" then
+		speed = cfg.InvestigateSpeed
 	elseif s == "Chase" then
-		speed = MC.ChaseSpeed
+		speed = cfg.ChaseSpeed
 	elseif s == "Alert" then
 		speed = 0
 	end
 	self.hum.WalkSpeed = speed
+	if s ~= "Chase" and self.mawOpen then
+		self:setMaw(false)
+	end
 end
 
 -- (테스트용) 경로 계산 횟수·시간, tick 횟수
@@ -2465,12 +2765,35 @@ function Monster.follow(self: Monster): boolean
 end
 
 function Monster.randomNode(self: Monster, awayFrom: Vector3?): Vector3
-	local best = self.nodes[math.random(1, #self.nodes)]
+	local function pick(): Vector3
+		for _ = 1, 12 do
+			local n = self.nodes[math.random(1, #self.nodes)]
+			if not Monster.isSafe(n) then
+				return n
+			end
+		end
+		return self.nodes[math.random(1, #self.nodes)]
+	end
+	local best = pick()
 	if awayFrom then
 		for _ = 1, 6 do
-			local n = self.nodes[math.random(1, #self.nodes)]
+			local n = pick()
 			if (n - awayFrom).Magnitude > (best - awayFrom).Magnitude and (n - awayFrom).Magnitude < 90 then
 				best = n
+			end
+		end
+	end
+	return best
+end
+
+-- 안전 구역 밖에서 pos 에 가장 가까운 배회 지점
+function Monster.nearestOutside(self: Monster, pos: Vector3): Vector3?
+	local best, bd = nil, math.huge
+	for _, n in self.nodes do
+		if not Monster.isSafe(n) then
+			local d = (n - pos).Magnitude
+			if d < bd then
+				best, bd = n, d
 			end
 		end
 	end
@@ -2490,7 +2813,7 @@ local function alivePlayers(): { { player: Player, root: BasePart, char: Model }
 		if p:GetAttribute("Status") == "Alive" and not p:GetAttribute("Hidden") then
 			local char = p.Character
 			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if char and root then
+			if char and root and not Monster.isSafe(root.Position) then
 				table.insert(out, { player = p, root = root, char = char })
 			end
 		end
@@ -2511,6 +2834,9 @@ end
 
 -- 누가 숨었다: 쫓던 대상이고 방금까지 보고 있었다면 숨는 곳을 기억한다
 function Monster.onHide(self: Monster, p: Player, front: Vector3)
+	if self.form ~= "Beast" then
+		return
+	end
 	if self.state == "Chase" and self.target == p and os.clock() - self.lastSeen <= Config.Hide.SeenWindow then
 		self:note("saw " .. p.Name .. " hide")
 		self.pullSpot = front
@@ -2520,6 +2846,10 @@ function Monster.onHide(self: Monster, p: Player, front: Vector3)
 end
 
 function Monster.investigate(self: Monster, pos: Vector3)
+	if Monster.isSafe(pos) then
+		-- 안전 구역 안의 소리: 그 앞(밖)까지만 와 본다
+		pos = self:nearestOutside(pos) or pos
+	end
 	self.searchCenter = pos
 	if self.state == "Wander" then
 		self:setState("Alert")
@@ -2546,6 +2876,13 @@ function Monster.hear(self: Monster, pos: Vector3, radius: number, source: Playe
 	end
 	if kind == "Door" and source == nil then
 		return -- 괴물이 연 문 소리(괴물끼리 서로 문 소리에 끌려다니지 않게)
+	end
+	if self.form ~= "Beast" then
+		-- 사람 모습일 때는 소리에 반응하지 않는다. 다만 가까이서 쏜 음파에 모습이 드러나면 들킨 것
+		if self.form == "Disguise" and kind == "Sonar" and source then
+			self:sonarSeen(pos, source)
+		end
+		return
 	end
 	if not SoundBus.canHear(pos, self.root.Position, radius) then
 		return
@@ -2632,6 +2969,12 @@ function Monster.tick(self: Monster)
 	if now < self.startAt then
 		return
 	end
+	if self.form == "Disguise" then
+		self:disguiseTick(now)
+		return
+	elseif self.form ~= "Beast" then
+		return
+	end
 	self:sense()
 	local st = self.state
 	local moving = true
@@ -2649,7 +2992,26 @@ function Monster.tick(self: Monster)
 			return
 		end
 		local tp = troot.Position
+		if Monster.isSafe(tp) then
+			-- 안전 구역으로 도망쳤다: 쫓기를 그만두고 그 근처(밖)를 뒤진다
+			self:note("target reached safe zone")
+			self.pullSpot = nil
+			self.target = nil
+			self.searchCenter = self:nearestOutside(self.root.Position) or self.root.Position
+			self.searchUntil = now + MC.SearchTime
+			self:setState("Search")
+			self.waypoints = {}
+			return
+		end
 		local d = (tp - self.root.Position).Magnitude
+		if self.kind == "doppel" then
+			-- 덮칠 만큼 가까우면 머리~배의 틈이 세로 입으로 벌어진다(조금 멀어지면 다시 닫힌다)
+			if d < self.cfg.MawDistance then
+				self:setMaw(true)
+			elseif d > self.cfg.MawDistance + 3 then
+				self:setMaw(false)
+			end
+		end
 		local hidden = t:GetAttribute("Hidden") == true
 		if hidden and self.pullSpot then
 			-- 숨는 걸 봤다: 그 앞으로 가서 끌어낸다
@@ -2766,7 +3128,7 @@ function Monster.tick(self: Monster)
 				local ang = math.random() * math.pi * 2
 				local r = MC.SearchRadius * (0.4 + math.random() * 0.6)
 				local p = c + Vector3.new(math.cos(ang) * r, 0, math.sin(ang) * r)
-				if self:pathTo(p) then
+				if not Monster.isSafe(p) and self:pathTo(p) then
 					ok = true
 					break
 				end
@@ -2788,7 +3150,7 @@ function Monster.tick(self: Monster)
 					local near = {}
 					for _, c in self.nodes do
 						local dd = (c - tp).Magnitude
-						if dd > 12 and dd <= MC.HuntRadius then
+						if dd > 12 and dd <= MC.HuntRadius and not Monster.isSafe(c) then
 							table.insert(near, c)
 						end
 					end
@@ -2804,19 +3166,207 @@ function Monster.tick(self: Monster)
 			end
 		end
 	end
+	if Monster.isSafe(self.root.Position) then
+		local out = self:nearestOutside(self.root.Position)
+		if out then
+			self.waypoints = {}
+			self.hum:MoveTo(out)
+		end
+	end
 	self:checkStuck(moving)
+end
+
+-- ── 도플갱어: 사람 흉내 → 들킴 → 5~10초 뒤 터지며 괴물로 ──
+local RoundEvent: RemoteEvent? = nil
+local function roundEvent(): RemoteEvent?
+	if not RoundEvent then
+		local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+		RoundEvent = remotes and remotes:FindFirstChild("RoundEvent") :: RemoteEvent?
+	end
+	return RoundEvent
+end
+
+-- 들켰다: 변신 시각을 정한다(5~10초 뒤)
+function Monster.discover(self: Monster, p: Player)
+	if self.discoveredBy or self.form ~= "Disguise" then
+		return
+	end
+	self.discoveredBy = p
+	self.transformAt = os.clock() + between(self.cfg.TransformDelay)
+	self.waypoints = {}
+	self.model:SetAttribute("Discovered", true)
+	self:note(string.format("discovered by %s, transform in %.1f", p.Name, self.transformAt - os.clock()))
+end
+
+-- 가까이서 쏜 음파(벽 1장 이하)에 모습이 드러났다
+function Monster.sonarSeen(self: Monster, pos: Vector3, source: Player)
+	local my = self.root.Position
+	if (pos - my).Magnitude <= self.cfg.SonarRange and SoundBus.wallsBetween(pos, my) <= 1 then
+		self:discover(source)
+	end
+end
+
+-- 사람 모습일 때: 플레이어처럼 걷다 멈춰 두리번, 가끔 가짜 음파 소리. 누가 가까이서 보면 들킨다
+function Monster.disguiseTick(self: Monster, now: number)
+	local cfg = self.cfg
+	local my = self.root.Position
+	if not self.discoveredBy then
+		for _, e in alivePlayers() do
+			local p = e.root.Position
+			if (p - my).Magnitude <= cfg.SeeRange and math.abs(p.Y - my.Y) < 6 and self:lineOfSight(p) then
+				self:discover(e.player)
+				break
+			end
+		end
+	end
+	local who = self.discoveredBy
+	if who then
+		if now >= self.transformAt then
+			self:transform()
+			return
+		end
+		-- 변신 전: 발견한 플레이어를 바라보며 아주 천천히 다가온다(멀면 그 자리에 서서 바라본다)
+		local char = who.Character
+		local troot = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		self.hum.WalkSpeed = cfg.StalkSpeed
+		if troot and who:GetAttribute("Status") == "Alive" then
+			local tp = troot.Position
+			local flat = Vector3.new(tp.X - my.X, 0, tp.Z - my.Z)
+			if flat.Magnitude > 4 and flat.Magnitude < 30 and self:lineOfSight(tp) then
+				self.hum:MoveTo(tp)
+			else
+				self.hum:MoveTo(my)
+				if flat.Magnitude > 0.5 then
+					self.root.CFrame = CFrame.lookAt(my, my + flat.Unit)
+				end
+			end
+		else
+			self.hum:MoveTo(my)
+		end
+		return
+	end
+	self.hum.WalkSpeed = cfg.WalkSpeed
+	-- 멈춰 서서 두리번
+	if now < self.pauseUntil then
+		self.hum:MoveTo(my)
+		return
+	end
+	if now >= self.nextPause then
+		self.pauseUntil = now + between(cfg.PauseFor)
+		self.nextPause = self.pauseUntil + between(cfg.PauseEvery)
+		self.waypoints = {}
+		self.hum:MoveTo(my)
+		return
+	end
+	-- 가짜 음파 소리(클라이언트가 이 자리에서 음파 소리만 낸다)
+	if now >= self.nextPing then
+		self.nextPing = now + between(cfg.FakePingEvery)
+		self.model:SetAttribute("FakePing", now)
+	end
+	if #self.waypoints == 0 or self:follow() then
+		if not self:pathTo(self:randomNode(my)) then
+			self.waypoints = {}
+		end
+	end
+	self:checkStuck(true)
+end
+
+-- 사람 모습이 터지고(클라이언트가 조각을 흩날린다) 그 자리에서 괴물이 나온다
+function Monster.transform(self: Monster)
+	if self.form ~= "Disguise" then
+		return
+	end
+	self.form = "Bursting"
+	self.model:SetAttribute("Form", "Bursting")
+	self.hum.WalkSpeed = 0
+	self.hum:MoveTo(self.root.Position)
+	local boxes = {}
+	local disguise = self.model:FindFirstChild("Disguise")
+	if disguise then
+		for _, d in disguise:GetChildren() do
+			if d:IsA("BasePart") and d.Name ~= "Body" and not d.Name:find("^Pivot") then
+				table.insert(boxes, { cf = d.CFrame, size = d.Size })
+			end
+		end
+	end
+	local ev = roundEvent()
+	if ev then
+		ev:FireAllClients("DoppelBurst", { at = self.root.Position, boxes = boxes })
+	end
+	-- 사람 몸(상자·관절)을 없애고 괴물 몸을 붙인다
+	for _, j in self.root:GetChildren() do
+		if j:IsA("Motor6D") and j.Name:find("^DJoint") then
+			j:Destroy()
+		end
+	end
+	if disguise then
+		disguise:Destroy()
+	end
+	buildBeast(self.model, self.root, self.root.CFrame)
+	self.joints = {}
+	for _, name in { "Leg-1", "Leg1", "Arm-1", "Arm1" } do
+		local motor = self.root:FindFirstChild("Joint" .. name) :: Motor6D?
+		if motor then
+			local isLeg = name:sub(1, 3) == "Leg"
+			local left = name:find("-1") ~= nil
+			table.insert(self.joints, { motor = motor, base = motor.C0, offset = if (isLeg == left) then 0 else math.pi, amp = if isLeg then 0.45 else 0.35 })
+		end
+	end
+	self.mawOpen = false
+	self.model:SetAttribute("BodyVersion", ((self.model:GetAttribute("BodyVersion") :: number?) or 1) + 1)
+	self.model:SetAttribute("Form", "Beast")
+	self.form = "Beast"
+	self:note("transformed")
+	-- 터지는 동안 잠깐 멈췄다가 발견한 플레이어를 쫓는다
+	local now = os.clock()
+	self.startAt = now + self.cfg.BurstPause
+	local who = self.discoveredBy
+	local char = who and who.Character
+	local troot = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if who and troot and who:GetAttribute("Status") == "Alive" then
+		self:startChase(who, troot.Position)
+		self.lastSeen = now + self.cfg.BurstPause
+	else
+		self:setState("Wander")
+	end
+	self.waypoints = {}
+end
+
+-- 세로 입 열기/닫기: 음파 대상 태그를 틈(Slit) ↔ 입(Maw) 선으로 바꿔 낀다(클라이언트는 BodyVersion 이 바뀌면 다시 모은다)
+function Monster.setMaw(self: Monster, open: boolean)
+	if self.mawOpen == open or self.form ~= "Beast" then
+		return
+	end
+	self.mawOpen = open
+	local beast = self.model:FindFirstChild("Beast")
+	if not beast then
+		return
+	end
+	local tag = Config.Tags.Renderable
+	for _, p in beast:GetChildren() do
+		if p:IsA("BasePart") then
+			local on = if p:GetAttribute("Maw") then open elseif p:GetAttribute("Slit") then not open else nil
+			if on == true then
+				CollectionService:AddTag(p, tag)
+			elseif on == false then
+				CollectionService:RemoveTag(p, tag)
+			end
+		end
+	end
+	self.model:SetAttribute("MawOpen", open)
+	self.model:SetAttribute("BodyVersion", ((self.model:GetAttribute("BodyVersion") :: number?) or 1) + 1)
 end
 
 -- 잡기 판정(매 프레임)
 function Monster.checkCatch(self: Monster)
-	if not self.alive or os.clock() < self.startAt then
+	if not self.alive or os.clock() < self.startAt or self.form ~= "Beast" then
 		return
 	end
 	local my = self.root.Position
 	for _, e in alivePlayers() do
 		local p = e.root.Position
 		local flat = Vector3.new(p.X - my.X, 0, p.Z - my.Z).Magnitude
-		if flat <= MC.CatchDistance and math.abs(p.Y - (my.Y - 1.5)) < 5 then
+		if flat <= self.cfg.CatchDistance and math.abs(p.Y - (my.Y - 1.5)) < 5 then
 			self:note("caught " .. e.player.Name)
 			self.onCatch(e.player, self)
 			-- 잡은 뒤에는 그 자리를 잠깐 뒤진다
@@ -3131,6 +3681,7 @@ Round.roundId = 0
 Round.lastBuildMs = 0
 Round.info = nil :: Builder.StageInfo?
 Round.monsters = {} :: { any }
+Round.doppels = {} :: { any } -- 도플갱어(서브 괴물): 메인 괴물 수와 따로 센다
 Round.autoLoop = true -- 테스트가 끌 수 있다
 Round.lastOutcome = "" :: string
 Round.events = {} :: { string }
@@ -3196,6 +3747,51 @@ local function stageModule(i: number): any?
 	return require(m :: ModuleScript)
 end
 
+-- ── 안전 구역: 시작 칸(S)이 있는 방(벽·문·아치로 둘러싸인 곳) ──
+Round.safe = {} :: { [string]: boolean }
+local function computeSafe(rows: { string }): { [string]: boolean }
+	local H = #rows
+	local W = if H > 0 then #rows[1] else 0
+	local function at(x: number, y: number): string
+		if y < 0 or y >= H or x < 0 or x >= W then
+			return "#"
+		end
+		return string.sub(rows[y + 1], x + 1, x + 1)
+	end
+	local set: { [string]: boolean } = {}
+	local q: { { number } } = {}
+	for y = 0, H - 1 do
+		for x = 0, W - 1 do
+			if at(x, y) == "S" then
+				set[x .. "," .. y] = true
+				table.insert(q, { x, y })
+			end
+		end
+	end
+	while #q > 0 do
+		local c = table.remove(q) :: { number }
+		for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+			local nx, ny = c[1] + d[1], c[2] + d[2]
+			local ch = at(nx, ny)
+			local k = nx .. "," .. ny
+			if ch ~= "#" and ch ~= "D" and ch ~= "A" and not set[k] then
+				set[k] = true
+				table.insert(q, { nx, ny })
+			end
+		end
+	end
+	return set
+end
+
+-- 이 위치가 안전 구역 안인가(맵 칸 8스터드)
+function Round.inSafe(pos: Vector3): boolean
+	if not Config.SafeZone.Enabled or Round.state == "Lobby" then
+		return false
+	end
+	return Round.safe[math.floor(pos.X / 8) .. "," .. math.floor(pos.Z / 8)] == true
+end
+Monster.isSafe = Round.inSafe
+
 local function buildLayout(layout: any, label: string)
 	if stageFolder then
 		stageFolder:Destroy()
@@ -3207,6 +3803,36 @@ local function buildLayout(layout: any, label: string)
 	Round.lastBuildMs = (os.clock() - b0) * 1000
 	local folder = info.folder
 	folder:SetAttribute("Rows", table.concat(layout.Rows, "/")) -- 클라이언트 지도(Q)용 격자(행을 / 로 구분)
+	-- 안전 구역: 클라이언트 안내용 목록 + 괴물 길찾기가 피해 가도록 PathfindingModifier(SafeZone) 칸
+	Round.safe = computeSafe(layout.Rows)
+	local keys = {}
+	for k in Round.safe do
+		table.insert(keys, k)
+	end
+	folder:SetAttribute("SafeTiles", table.concat(keys, ";"))
+	if Config.SafeZone.Enabled and label ~= "lobby" then
+		local zone = Instance.new("Folder")
+		zone.Name = "SafeZone"
+		zone.Parent = folder
+		for _, k in keys do
+			local xy = string.split(k, ",")
+			local x, y = tonumber(xy[1]) :: number, tonumber(xy[2]) :: number
+			local part = Instance.new("Part")
+			part.Name = "Safe"
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.Transparency = 1
+			part.CastShadow = false
+			part.Size = Vector3.new(8, 12, 8)
+			part.Position = Vector3.new(x * 8 + 4, 5, y * 8 + 4)
+			local mod = Instance.new("PathfindingModifier")
+			mod.Label = "SafeZone"
+			mod.Parent = part
+			part.Parent = zone
+		end
+	end
 	local count = 0
 	for _, d in folder:GetDescendants() do
 		if d:IsA("BasePart") then
@@ -3287,6 +3913,35 @@ function Round.kill(p: Player, why: string?)
 		end)
 		return
 	end
+	-- 목숨이 남아 있으면: 하나 잃고 잠시 뒤 그 스테이지 시작 방에서 다시
+	local lives = ((p:GetAttribute("Lives") :: number?) or 1) - 1
+	p:SetAttribute("Lives", math.max(0, lives))
+	if lives > 0 and Round.state == "Playing" then
+		setStatus(p, "Respawning")
+		note("life lost " .. p.Name .. " " .. (why or "") .. " left " .. lives)
+		RoundEvent:FireAllClients("LifeLost", { userId = p.UserId, lives = lives, why = why, seconds = Config.Lives.RespawnDelay })
+		local char0 = p.Character
+		if char0 then
+			local root0 = char0:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if root0 then
+				root0.Anchored = true
+			end
+			task.delay(Config.Round.DeadBodyLinger, function()
+				if p.Character == char0 then
+					p.Character = nil
+				end
+				char0:Destroy()
+			end)
+		end
+		local rid = Round.roundId
+		task.delay(Config.Lives.RespawnDelay, function()
+			if Round.state == "Playing" and Round.roundId == rid and Round.status(p) == "Respawning" and p.Parent then
+				Round.spawnPlayer(p)
+				note("respawned " .. p.Name)
+			end
+		end)
+		return
+	end
 	setStatus(p, "Dead")
 	note("dead " .. p.Name .. " " .. (why or ""))
 	local others = #Round.alivePlayers()
@@ -3325,6 +3980,10 @@ local function clearMonsters()
 		m:destroy()
 	end
 	table.clear(Round.monsters)
+	for _, m in Round.doppels do
+		m:destroy()
+	end
+	table.clear(Round.doppels)
 	monsterFolder:ClearAllChildren()
 end
 
@@ -3354,6 +4013,30 @@ function Round.spawnMonsters(count: number)
 		m:run()
 	end
 	note("monsters " .. count)
+	-- 도플갱어: 시작점에서 적당히 떨어진(너무 멀지 않은) 곳에, 플레이어처럼 돌아다니게
+	local D = Config.Doppel
+	if D.Enabled and Round.stageIndex > 0 then
+		local near = {}
+		for _, n in info.nodes do
+			local d = (n - spawnPos).Magnitude
+			if d >= D.SpawnDistance[1] and d <= D.SpawnDistance[2] then
+				table.insert(near, n)
+			end
+		end
+		if #near == 0 then
+			near = candidates
+		end
+		for _ = 1, D.PerStage do
+			local pick = near[math.random(1, #near)]
+			local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
+				Round.kill(player, "doppel")
+			end, Round.stageIndex, "doppel")
+			m.route = info.route
+			table.insert(Round.doppels, m)
+			m:run()
+		end
+		note("doppels " .. D.PerStage)
+	end
 end
 
 function Round.startStage(i: number)
@@ -3376,6 +4059,7 @@ function Round.startStage(i: number)
 	ReplicatedStorage:SetAttribute("RoundId", Round.roundId)
 	spawnCursor = 0
 	for _, p in Round.participants() do
+		p:SetAttribute("Lives", Config.Lives.PerStage)
 		task.spawn(Round.spawnPlayer, p)
 	end
 	Round.state = "Playing"
@@ -3396,7 +4080,7 @@ function Round.finished(): boolean
 	end
 	for _, p in Round.participants() do
 		local s = Round.status(p)
-		if s == "Alive" or s == "Waiting" then
+		if s == "Alive" or s == "Waiting" or s == "Respawning" then
 			return false
 		end
 	end
@@ -3441,6 +4125,10 @@ RunService.Heartbeat:Connect(function(dt)
 		return
 	end
 	for _, m in Round.monsters do
+		m:checkCatch()
+		m:animate(dt)
+	end
+	for _, m in Round.doppels do
 		m:checkCatch()
 		m:animate(dt)
 	end
@@ -3504,11 +4192,17 @@ SoundBus.listen(function(pos, radius, source, kind)
 	for _, m in Round.monsters do
 		m:hear(pos, radius, source, kind)
 	end
+	for _, m in Round.doppels do
+		m:hear(pos, radius, source, kind)
+	end
 end)
 
 -- 숨는 순간: 쫓던 괴물이 그 모습을 봤는지
 Hiding.onHide(function(p, spot)
 	for _, m in Round.monsters do
+		m:onHide(p, spot.front)
+	end
+	for _, m in Round.doppels do
 		m:onHide(p, spot.front)
 	end
 end)
@@ -4650,7 +5344,7 @@ return {
 		"#S..#.......#...f..##m.L#.....###mvmvmv.A.#####",
 		"#S..D..O.O..A..cc..##v..#.###A###.......#.#####",
 		"#...#.......#......##...#.#...Z.....T...#.....#",
-		"##.###A######.####D##Z..#.#.....#.......#.###.#",
+		"##A###A######.####D##Z..#.#.....#.......#.###.#",
 		"#...#....#....#....##...#.#.L.vm#.......#...#.#",
 		"#.c.#.##.#.##.#.m..###D##f##########D#####A##.#",
 		"#...A.#..A..#.A....##...D.A.cc#####m...m.m..#.#",
@@ -4915,7 +5609,7 @@ return {
 		"#SS...#...#.....#...........#.###ppsppbppppppp#",
 		"#.....#L..#####.#.B.B...B.B.#.###pppppbppppppp#",
 		"#.....#m.Z#.#...#..........Z#...#ppppsbppspppp#",
-		"###.#A#####.#.###...B.B.B...###.#.............#",
+		"###A#A#####.#.###...B.B.B...###.#.............#",
 		"#...#...#.......#....Z......#...#.............#",
 		"#.#.#...#.##############.####.###########D#####",
 		"#A#.#.m.#.###..Z###..v#..##...#########.......#",
@@ -4984,6 +5678,7 @@ end
 local Players = game:GetService("Players")
 local LogService = game:GetService("LogService")
 local PathfindingService = game:GetService("PathfindingService")
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Round = require(script.Parent.Round)
@@ -5013,6 +5708,9 @@ end)
 -- 로비 테스트만 로비로, 나머지는 바로 게임으로 시작(Lobby.boot 가 읽는다)
 ReplicatedStorage:SetAttribute("ForceMode", if args.Test == "lobby" then "Lobby" else "Game")
 Config.Monster.StartDelay = 1e6
+Config.Lives.PerStage = 1 -- (예전 테스트는 한 번 잡히면 죽는 것을 전제: lives 테스트에서만 3개)
+Config.SafeZone.Enabled = false -- (예전 테스트는 시작 방에서 괴물을 시험한다: lives 테스트에서만 켠다)
+Config.Doppel.StartDelay = 1e6 -- (도플갱어도 멈춰 둔다: doppel 테스트에서만 움직인다)
 Config.Key.Required = false -- (열쇠 시험은 core 에서 따로 켠다)
 Config.Round.ResultSeconds = 2
 Config.Round.FirstStartDelay = 1
@@ -5985,6 +6683,9 @@ local function load()
 			m.startAt = 0 -- (테스트는 괴물을 멈춰 두므로 여기서는 실제처럼 움직이게)
 			m.lastHunt = os.clock() - Config.Monster.HuntEvery + 5
 		end
+		for _, d in Round.doppels do
+			d.startAt = 0 -- (도플갱어도 사람 모습으로 돌아다니게)
+		end
 		for _ = 1, 10 do
 			ask(p, "resetCooldown")
 			ask(p, "fire")
@@ -6370,6 +7071,234 @@ local function stages()
 	end
 end
 
+-- ─────────────────────────────── doppel ───────────────────────────────
+-- 도플갱어: 스테이지마다 한 마리(사람 모습) → 음파·가까이서 보면 들킴 → 5~10초 뒤 터지며 괴물 → 추격·잡기(도플갱어 점프스케어)
+local function doppelTest()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local D = Config.Doppel
+	-- 스테이지마다 한 마리, 사람 모습, 메인 괴물 수는 그대로
+	for i = 1, #Config.Stages do
+		Round.startStage(i)
+		readyPlayers(1)
+		local d = Round.doppels[1]
+		local disguise = d and d.model:FindFirstChild("Disguise")
+		local boxes = 0
+		if disguise then
+			for _, c in disguise:GetChildren() do
+				if c:IsA("BasePart") and CollectionService:HasTag(c, Config.Tags.Renderable) then
+					boxes += 1
+				end
+			end
+		end
+		local dist = d and (d.root.Position - Round.info.spawns[1].Position).Magnitude or -1
+		check(string.format("stage %d: one doppelganger in player form (main monsters still %d)", i, Config.Stages[i].Monsters), #Round.doppels == D.PerStage and d ~= nil and d.form == "Disguise" and boxes == 6 and #Round.monsters == Config.Stages[i].Monsters and CollectionService:HasTag(d.model, Config.Tags.Doppel), string.format("doppels=%d form=%s boxes=%d monsters=%d", #Round.doppels, d and d.form or "-", boxes, #Round.monsters))
+		check(string.format("stage %d: doppelganger spawns %d~%d studs from the start", i, D.SpawnDistance[1], D.SpawnDistance[2]), dist >= D.SpawnDistance[1] - 6 and dist <= D.SpawnDistance[2] + 6, string.format("%.0f", dist))
+	end
+	-- 1스테이지 시작 방에서: 플레이어 tile(2,2), 도플갱어 tile(4,4) (약 23스터드: 보이는 거리 밖, 음파 거리 안)
+	Round.startStage(1)
+	readyPlayers(1)
+	local d = Round.doppels[1]
+	if not d then
+		return
+	end
+	d.startAt = 0
+	local pPos = tile(2, 2, 3)
+	place(p, pPos, tile(4, 4, 3))
+	local function putDoppel(pos: Vector3)
+		d.model:PivotTo(CFrame.lookAt(pos, Vector3.new(pPos.X, pos.Y, pPos.Z)))
+		d.waypoints = {}
+		d.pauseUntil = os.clock() + 30 -- (제자리에 서 있게)
+	end
+	putDoppel(tile(4, 4, 3))
+	task.wait(1.5)
+	check("doppelganger far away (out of sight range) is not discovered yet", d.discoveredBy == nil and d.form == "Disguise", tostring(d.discoveredBy))
+	-- 사람 모습도 음파에 윤곽선으로 보인다 + 음파를 쏘면 들킨다
+	ask(p, "resetCooldown")
+	ask(p, "fire")
+	local found = waitFor(function()
+		return d.discoveredBy ~= nil
+	end, 3)
+	local wait0 = d.transformAt - os.clock()
+	check("sonar reveals the doppelganger: discovered", found ~= nil and d.discoveredBy == p, tostring(d.discoveredBy))
+	check(string.format("transforms %d~%d s after being discovered", D.TransformDelay[1], D.TransformDelay[2]), wait0 > D.TransformDelay[1] - 1.5 and wait0 <= D.TransformDelay[2] + 0.1, string.format("%.1f s", wait0))
+	task.wait(1.2)
+	local lines = ask(p, "linesNear", { d.root.Position, 5 })
+	check("player-shaped doppelganger shows as outlines in the sonar", lines and lines > 6, lines)
+	local fx0 = ask(p, "doppelFx")
+	-- 변신: 사람 모습이 터지고(조각) 괴물 몸으로
+	local turned = waitFor(function()
+		return d.form == "Beast"
+	end, D.TransformDelay[2] + 3)
+	task.wait(0.4)
+	local fx1 = ask(p, "doppelFx")
+	local beast = d.model:FindFirstChild("Beast")
+	local eyes, lineParts = 0, 0
+	if beast then
+		for _, c in beast:GetChildren() do
+			if c:IsA("BasePart") then
+				if c.Name == "Eye" then
+					eyes += 1
+				end
+				if CollectionService:HasTag(c, Config.Tags.Renderable) then
+					lineParts += 1
+				end
+			end
+		end
+	end
+	check("transforms into the monster (player body gone, beast body with 2 eyes)", turned ~= nil and d.model:FindFirstChild("Disguise") == nil and beast ~= nil and eyes == 2, string.format("form=%s eyes=%d lines=%d", d.form, eyes, lineParts))
+	check("the player body bursts into flying pieces on screen", fx1 and fx0 and fx1.bursts == fx0.bursts + 1 and fx1.shards >= 50, fx1 and string.format("bursts %d->%d shards=%d", fx0 and fx0.bursts or -1, fx1.bursts, fx1.shards))
+	check("monster body is drawn with single strokes (lines and discs)", lineParts > 60 and lineParts < 160, lineParts)
+	local chasing = waitFor(function()
+		return d.state == "Chase" and d.target == p
+	end, D.BurstPause + 2)
+	check("after bursting it chases the player who found it", chasing ~= nil, d.state)
+	check("doppelganger monster is smaller than the main monster", d.hum.HipHeight < 4 and d.cfg.ChaseSpeed > Config.Monster.ChaseSpeed, string.format("hip %.1f speed %.1f", d.hum.HipHeight, d.cfg.ChaseSpeed))
+	-- 음파에 맞으면 눈이 빛난다(선보다 조금 더 오래)
+	putDoppel(tile(4, 4, 3))
+	d.startAt = os.clock() + 4 -- (잠깐 세워 둔다)
+	ask(p, "resetCooldown")
+	ask(p, "fire")
+	local lit = waitFor(function()
+		local f = ask(p, "doppelFx")
+		return f and f.eyes >= 2 and f
+	end, 3)
+	check("sonar makes its eyes glow", lit ~= nil, lit and lit.eyes)
+	-- 덮칠 때 세로 입이 벌어지고, 잡히면 도플갱어 점프스케어
+	d.startAt = 0
+	d:startChase(p, pPos)
+	local opened = waitFor(function()
+		return d.model:GetAttribute("MawOpen") == true
+	end, 8)
+	check("its head-to-belly split opens into a mouth when it lunges", opened ~= nil, tostring(d.model:GetAttribute("MawOpen")))
+	local dead = waitFor(function()
+		return p:GetAttribute("Status") == "Dead"
+	end, 8)
+	local js = ask(p, "jumpscare")
+	check("caught by the doppelganger -> death with its own jump scare", dead ~= nil and js and js.kind == "doppel", js and tostring(js.kind))
+	-- 가까이서 보면(음파 없이) 들킨다
+	waitFor(function()
+		return Round.state == "Playing" and p:GetAttribute("Status") == "Alive" and Round.doppels[1] ~= nil and Round.doppels[1] ~= d
+	end, 20)
+	readyPlayers(1)
+	local d2 = Round.doppels[1]
+	if d2 then
+		d2.startAt = 0
+		place(p, pPos, tile(3, 3, 3))
+		d2.model:PivotTo(CFrame.lookAt(tile(3, 3, 3), pPos))
+		d2.waypoints = {}
+		d2.pauseUntil = os.clock() + 30
+		local seen = waitFor(function()
+			return d2.discoveredBy == p
+		end, 3)
+		check("seeing it up close (no sonar) also gives it away", seen ~= nil, tostring(d2.discoveredBy))
+	end
+	-- 사람 모습일 때는 플레이어를 잡지 않는다
+	Round.startStage(1)
+	readyPlayers(1)
+	local d3 = Round.doppels[1]
+	if d3 then
+		d3.startAt = 0
+		place(p, pPos, tile(3, 3, 3))
+		d3.model:PivotTo(CFrame.lookAt(pPos + Vector3.new(2, 0, 0), pPos))
+		task.wait(1.5)
+		check("in player form it never kills", p:GetAttribute("Status") == "Alive" and d3.form == "Disguise", p:GetAttribute("Status") .. " " .. d3.form)
+	end
+end
+
+-- ─────────────────────────────── lives ───────────────────────────────
+-- 목숨 3개(스테이지마다) + 시작 방 안전 구역
+local function livesTest()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	Config.Lives.PerStage = 3
+	Config.SafeZone.Enabled = true
+	Round.startStage(1)
+	readyPlayers(1)
+	local stage = stageFolder()
+	local safeCount = #string.split((stage:GetAttribute("SafeTiles") :: string?) or "", ";")
+	check("start room is a safe zone (stage 1: 3x3 room)", safeCount == 9 and stage:FindFirstChild("SafeZone") ~= nil, safeCount)
+	check("3 lives at the start of a stage", p:GetAttribute("Lives") == 3, p:GetAttribute("Lives"))
+	local hud = ask(p, "keyHud")
+	check("lives shown on screen (3 hearts)", hud and hud.lives and select(2, string.gsub(hud.lives, "♥", "")) == 3, hud and hud.lives)
+	-- 안전 구역 안: 화면에 표시, 괴물이 바로 옆에 와도 잡지 않고 밖으로 나간다
+	local inside = tile(2, 2, 3)
+	place(p, inside, tile(4, 4, 3))
+	local safeShown = waitFor(function()
+		local h = ask(p, "keyHud")
+		return h and h.safe
+	end, 3)
+	check("'safe zone' shown while in the start room", safeShown ~= nil)
+	local m = Round.monsters[1]
+	m.model:PivotTo(CFrame.new(tile(3, 3, 5.2)))
+	m.waypoints = {}
+	m.startAt = 0
+	task.wait(2.5)
+	check("monster in the safe zone does not catch or chase the player", p:GetAttribute("Status") == "Alive" and not (m.state == "Chase" and m.target == p), p:GetAttribute("Status") .. " " .. m.state)
+	local left = waitFor(function()
+		return not Round.inSafe(m.root.Position)
+	end, 8)
+	check("monster leaves the safe zone on its own", left ~= nil, tostring(m.root.Position))
+	-- 쫓기다 안전 구역으로 들어가면 추격을 멈춘다
+	local outside = tile(7, 3, 3)
+	place(p, outside, tile(9, 3, 3))
+	m.model:PivotTo(CFrame.new(tile(10, 3, 5.2)))
+	m.waypoints = {}
+	m:startChase(p, outside)
+	task.wait(0.3)
+	place(p, inside, tile(4, 4, 3))
+	local dropped = waitFor(function()
+		return m.target ~= p and m.state ~= "Chase"
+	end, 3)
+	check("chase stops when the player reaches the safe zone", dropped ~= nil, m.state)
+	m.startAt = 1e9
+	-- 잡히면 목숨 하나 잃고 시작 방에서 다시(점프스케어)
+	local js0 = ask(p, "jumpscare")
+	place(p, outside, tile(9, 3, 3))
+	m.model:PivotTo(CFrame.new(outside + Vector3.new(1.5, 2.2, 0)))
+	m.startAt = 0
+	m:startChase(p, outside)
+	local lost = waitFor(function()
+		return p:GetAttribute("Status") == "Respawning"
+	end, 6)
+	m.startAt = 1e9
+	m.model:PivotTo(CFrame.new(tile(20, 20, 5.2)))
+	check("caught with lives left -> lose one life (not dead)", lost ~= nil and p:GetAttribute("Lives") == 2, tostring(p:GetAttribute("Status")) .. " lives=" .. tostring(p:GetAttribute("Lives")))
+	local js1 = ask(p, "jumpscare")
+	check("jump scare still plays when a life is lost", js1 and js0 and js1.count == js0.count + 1, js1 and js1.count)
+	local back = waitFor(function()
+		local r = root(p)
+		return p:GetAttribute("Status") == "Alive" and r and Round.inSafe(r.Position)
+	end, Config.Lives.RespawnDelay + 6)
+	check("respawns in the start room after a moment", back ~= nil, tostring(p:GetAttribute("Status")))
+	check("the stage keeps going (not restarted)", Round.state == "Playing" and Round.stageIndex == 1, Round.state)
+	local hud2 = ask(p, "keyHud")
+	check("hearts drop to 2", hud2 and hud2.lives and select(2, string.gsub(hud2.lives, "♥", "")) == 2, hud2 and hud2.lives)
+	-- 두 번 더 잡히면 아웃(마지막 목숨)
+	Round.kill(p, "monster")
+	waitFor(function()
+		return p:GetAttribute("Status") == "Alive"
+	end, Config.Lives.RespawnDelay + 6)
+	check("second catch: 1 life left", p:GetAttribute("Lives") == 1, p:GetAttribute("Lives"))
+	Round.kill(p, "monster")
+	check("last life lost -> dead", p:GetAttribute("Status") == "Dead" and p:GetAttribute("Lives") == 0, tostring(p:GetAttribute("Status")))
+	-- (혼자면 스테이지 다시 시작) 다시 시작하면 목숨이 다시 3개
+	local again = waitFor(function()
+		return Round.state == "Playing" and p:GetAttribute("Status") == "Alive"
+	end, 25)
+	check("new attempt / stage refills lives to 3", again ~= nil and p:GetAttribute("Lives") == 3, p:GetAttribute("Lives"))
+	Config.Lives.PerStage = 1
+	Config.SafeZone.Enabled = false
+end
+
 -- ─────────────────────────────── seal ───────────────────────────────
 -- 스테이지 1~5 를 지어, 실제로 만들어진 벽·바닥에 구멍이 없는지 광선으로 확인한다:
 --   바닥 칸마다 아래로(바닥이 있나), 벽 칸 쪽으로(그 벽이 실제로 막고 있나),
@@ -6565,6 +7494,10 @@ task.spawn(function()
 			stages()
 		elseif args.Test == "seal" then
 			seal()
+		elseif args.Test == "doppel" then
+			doppelTest()
+		elseif args.Test == "lives" then
+			livesTest()
 		else
 			core()
 		end
@@ -6848,12 +7781,20 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 		return -- 순간 이동
 	end
 	tr.acc += d
-	if isMonster then
+	local form = model:GetAttribute("Form")
+	if isMonster and form == "Disguise" then
+		-- 도플갱어(사람 모습): 플레이어와 똑같은 발소리
+		if tr.acc >= STRIDE.Walk then
+			tr.acc = 0
+			Audio.footstep("FootWalk", root, 0)
+		end
+	elseif isMonster then
 		if tr.acc >= 4.6 then -- 사람(4.8)과 비슷한 거리지만 괴물은 느려서 쿵… 쿵… 간격이 더 길다
 			tr.acc = 0
-			-- 배회할 때는 조금 작게, 쫓아올 때는 크게
+			-- 배회할 때는 조금 작게, 쫓아올 때는 크게. 도플갱어(작은 괴물)는 조금 높고 가벼운 발소리
 			local chase = model:GetAttribute("State") == "Chase"
-			Audio.play("MonsterStep", root, 0.08, if chase then 1 else Config.Monster.StepWanderVolume)
+			local small = model:GetAttribute("Form") ~= nil
+			Audio.play("MonsterStep", root, 0.08, (if chase then 1 else Config.Monster.StepWanderVolume) * (if small then 0.85 else 1), if small then 1.25 else nil)
 		end
 	else
 		local mode = (model:GetAttribute("MoveMode") :: string?) or "Walk"
@@ -6890,6 +7831,20 @@ local function watchMonster(m: Instance)
 				Audio.scream("Chase", root)
 				screamAt[model] = os.clock() + CHASE_SCREAM_GAP[1] + math.random() * (CHASE_SCREAM_GAP[2] - CHASE_SCREAM_GAP[1])
 			end
+	end))
+	-- 도플갱어: 가짜 음파 소리, 사람 모습이 터질 때 소리
+	table.insert(conns, model:GetAttributeChangedSignal("FakePing"):Connect(function()
+		local root = model.PrimaryPart
+		if root then
+			Audio.play("Sonar", root, 0.02, 0.9)
+		end
+	end))
+	table.insert(conns, model:GetAttributeChangedSignal("Form"):Connect(function()
+		local root = model.PrimaryPart
+		if root and model:GetAttribute("Form") == "Bursting" then
+			Audio.play("Door", root, 0.04, 1.4, 0.45) -- 뚝 꺾이고 찢어지는 소리(낮게)
+			Audio.play("FootRun", root, 0.1, 1.2, 0.5)
+		end
 	end))
 	monsterConns[model] = conns
 	
@@ -7039,6 +7994,212 @@ return Audio
       </Item>
       <Item class="ModuleScript" referent="40">
         <Properties>
+          <string name="Name">DoppelFx</string>
+          <string name="Source"><![CDATA[--!strict
+-- 도플갱어 연출(클라이언트):
+--  1) 변신: 사람 모습(상자 6개)의 윤곽선이 조각나 사방으로 터져 흩날리다 사라진다(음파와 상관없이 보인다).
+--  2) 눈: 음파가 괴물 모습의 도플갱어에 닿으면, 두 눈(이름 Eye)이 음파 선보다 조금 더 오래 하얗게 빛나다 꺼진다.
+
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local DoppelFx = {}
+DoppelFx.bursts = 0 -- (테스트) 터진 횟수
+DoppelFx.lastShards = 0 -- (테스트) 마지막으로 터질 때 만든 조각 수
+
+local WHITE = Color3.new(1, 1, 1)
+local folder: Folder? = nil
+local function getFolder(): Folder
+	if folder and folder.Parent then
+		return folder
+	end
+	local f = Instance.new("Folder")
+	f.Name = "DoppelFx"
+	f.Parent = workspace
+	folder = f
+	return f
+end
+
+type Shard = { part: Part, pos: Vector3, vel: Vector3, rot: CFrame, spin: Vector3, born: number, life: number }
+local shards: { Shard } = {}
+
+local function newShard(cf: CFrame, len: number, vel: Vector3, life: number, now: number)
+	local p = Instance.new("Part")
+	p.Name = "Shard"
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Material = Enum.Material.Neon
+	p.Color = WHITE
+	p.Size = Vector3.new(0.07, 0.07, math.max(0.1, len))
+	p.CFrame = cf
+	p.Parent = getFolder()
+	local spin = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 14
+	table.insert(shards, { part = p, pos = cf.Position, vel = vel, rot = cf.Rotation, spin = spin, born = now, life = life })
+end
+
+-- 상자 하나의 12 모서리를 조각으로
+local EDGES = {
+	{ Vector3.new(-1, -1, -1), Vector3.new(1, -1, -1) },
+	{ Vector3.new(-1, 1, -1), Vector3.new(1, 1, -1) },
+	{ Vector3.new(-1, -1, 1), Vector3.new(1, -1, 1) },
+	{ Vector3.new(-1, 1, 1), Vector3.new(1, 1, 1) },
+	{ Vector3.new(-1, -1, -1), Vector3.new(-1, 1, -1) },
+	{ Vector3.new(1, -1, -1), Vector3.new(1, 1, -1) },
+	{ Vector3.new(-1, -1, 1), Vector3.new(-1, 1, 1) },
+	{ Vector3.new(1, -1, 1), Vector3.new(1, 1, 1) },
+	{ Vector3.new(-1, -1, -1), Vector3.new(-1, -1, 1) },
+	{ Vector3.new(1, -1, -1), Vector3.new(1, -1, 1) },
+	{ Vector3.new(-1, 1, -1), Vector3.new(-1, 1, 1) },
+	{ Vector3.new(1, 1, -1), Vector3.new(1, 1, 1) },
+}
+
+function DoppelFx.burst(data: { at: Vector3, boxes: { { cf: CFrame, size: Vector3 } } })
+	local cam = workspace.CurrentCamera
+	if not data or not data.at or (cam and (cam.CFrame.Position - data.at).Magnitude > 160) then
+		return
+	end
+	local now = os.clock()
+	local made = 0
+	local center = data.at
+	for _, b in data.boxes or {} do
+		local half = b.size / 2
+		for _, e in EDGES do
+			-- 모서리를 두 토막으로 나눠 더 잘게 부서지게
+			local a = b.cf:PointToWorldSpace(e[1] * half)
+			local c = b.cf:PointToWorldSpace(e[2] * half)
+			for k = 0, 1 do
+				local p0 = a:Lerp(c, k * 0.5)
+				local p1 = a:Lerp(c, k * 0.5 + 0.5)
+				local mid = (p0 + p1) / 2
+				local out = mid - center
+				out = if out.Magnitude > 0.01 then out.Unit else Vector3.yAxis
+				local vel = out * (10 + math.random() * 18) + Vector3.new(0, 6 + math.random() * 10, 0)
+				newShard(CFrame.lookAt(mid, p1), (p1 - p0).Magnitude, vel, 1.1 + math.random() * 0.7, now)
+				made += 1
+			end
+		end
+	end
+	-- 몸 안쪽에서 튀어나오는 잔조각
+	for _ = 1, 24 do
+		local dir = Vector3.new(math.random() - 0.5, math.random() * 0.8, math.random() - 0.5)
+		dir = if dir.Magnitude > 0.01 then dir.Unit else Vector3.yAxis
+		local p = center + Vector3.new(0, math.random() * 2 - 0.5, 0)
+		newShard(CFrame.lookAt(p, p + dir), 0.2 + math.random() * 0.5, dir * (14 + math.random() * 16), 0.8 + math.random() * 0.6, now)
+		made += 1
+	end
+	DoppelFx.bursts += 1
+	DoppelFx.lastShards = made
+end
+
+-- ── 눈 ──
+local eyeUntil: { [Model]: { from: number, to: number } } = setmetatable({}, { __mode = "k" }) :: any
+local litEyes: { [BasePart]: boolean } = {}
+
+function DoppelFx.onPulse(origin: Vector3)
+	local S = Config.Sonar
+	local now = os.clock()
+	for _, m in CollectionService:GetTagged(Config.Tags.Doppel) do
+		if m:IsA("Model") and m.PrimaryPart and m:GetAttribute("Form") == "Beast" then
+			local d = (m.PrimaryPart.Position - origin).Magnitude
+			if d <= S.Radius + 2 then
+				eyeUntil[m] = { from = now + math.min(1, d / 60), to = now + S.Hold + Config.Doppel.EyeLinger }
+			end
+		end
+	end
+end
+
+local function setEye(p: BasePart, on: boolean)
+	if on then
+		p.Transparency = 0
+		p.Material = Enum.Material.Neon
+		p.Color = WHITE
+		litEyes[p] = true
+	else
+		p.Transparency = 1
+		litEyes[p] = nil
+	end
+end
+
+-- (테스트) 지금 빛나는 눈 수
+function DoppelFx.litEyeCount(): number
+	local n = 0
+	for p in litEyes do
+		if p.Parent then
+			n += 1
+		end
+	end
+	return n
+end
+
+local moveParts: { BasePart } = {}
+local moveCFs: { CFrame } = {}
+RunService.RenderStepped:Connect(function(dt)
+	local now = os.clock()
+	-- 조각: 날아가며 돌고 떨어지다 검게(보이지 않게) 사라진다
+	local i = 1
+	while i <= #shards do
+		local s = shards[i]
+		local age = now - s.born
+		if age >= s.life or not s.part.Parent then
+			s.part:Destroy()
+			shards[i] = shards[#shards]
+			shards[#shards] = nil
+		else
+			s.vel += Vector3.new(0, -45 * dt, 0)
+			s.vel *= (1 - math.min(0.9, dt * 1.2))
+			s.pos += s.vel * dt
+			s.rot = s.rot * CFrame.Angles(s.spin.X * dt, s.spin.Y * dt, s.spin.Z * dt)
+			table.insert(moveParts, s.part)
+			table.insert(moveCFs, CFrame.new(s.pos) * s.rot)
+			local fade = math.clamp((age - s.life * 0.35) / (s.life * 0.65), 0, 1)
+			local v = 1 - fade
+			s.part.Color = Color3.new(v, v, v)
+			i += 1
+		end
+	end
+	if #moveParts > 0 then
+		workspace:BulkMoveTo(moveParts, moveCFs, Enum.BulkMoveMode.FireCFrameChanged)
+		table.clear(moveParts)
+		table.clear(moveCFs)
+	end
+	-- 눈
+	for m, w in eyeUntil do
+		local on = now >= w.from and now <= w.to and m.Parent ~= nil and m:GetAttribute("Form") == "Beast"
+		local beast = m:FindFirstChild("Beast")
+		if beast then
+			for _, p in beast:GetChildren() do
+				if p:IsA("BasePart") and p.Name == "Eye" then
+					if on ~= (litEyes[p] == true) then
+						setEye(p, on)
+					end
+				end
+			end
+		end
+		if now > w.to then
+			eyeUntil[m] = nil
+		end
+	end
+end)
+
+function DoppelFx.clear()
+	for _, s in shards do
+		s.part:Destroy()
+	end
+	table.clear(shards)
+	table.clear(litEyes)
+end
+
+return DoppelFx
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="41">
+        <Properties>
           <string name="Name">JumpScare</string>
           <string name="Source"><![CDATA[--!strict
 -- 괴물에게 잡혔을 때: 그 스테이지 괴물의 얼굴(흰 선)이 화면 가득 확 튀어나오며 흔들린다(점프스케어). 약 0.9초 뒤 YOU DIED.
@@ -7051,6 +8212,7 @@ local RunService = game:GetService("RunService")
 local JumpScare = {}
 JumpScare.count = 0
 JumpScare.Duration = 0.9
+JumpScare.lastKind = "monster"
 
 local player = Players.LocalPlayer
 
@@ -7190,9 +8352,88 @@ local function draw(spec: Spec)
 	end
 end
 
--- 얼굴을 띄운다(이미 떠 있으면 무시)
+-- 도플갱어: 둥근 머리의 빛나는 두 눈 + 머리에서 배까지 세로로 벌어진 입(양쪽 이빨), 솟은 어깨
+-- (좌표는 Monster.luau 도플갱어 시안과 같은 그림에서 가져와, 머리~가슴이 화면을 채우게 맞춘다)
+local function drawDoppel()
+	for _, c in face:GetChildren() do
+		if c:IsA("Frame") then
+			c:Destroy()
+		end
+	end
+	local size = face.AbsoluteSize.X
+	if size < 10 then
+		size = math.min(back.AbsoluteSize.X, back.AbsoluteSize.Y) * 0.95
+	end
+	local thick = math.max(4, size * 0.011)
+	local function px(x: number, y: number): Vector2
+		-- 시안 픽셀(가운데 x=130, 화면 가운데 y=234) → 화면
+		return Vector2.new((0.5 + (x - 130) / 190) * size, (0.5 + (y - 234) / 190) * size)
+	end
+	local function line(ax: number, ay: number, bx: number, by: number, w: number?)
+		local a, b = px(ax, ay), px(bx, by)
+		local d = b - a
+		local f = Instance.new("Frame")
+		f.BackgroundColor3 = WHITE
+		f.BorderSizePixel = 0
+		f.AnchorPoint = Vector2.new(0.5, 0.5)
+		f.Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
+		f.Size = UDim2.fromOffset(d.Magnitude + (w or thick), w or thick)
+		f.Rotation = math.deg(math.atan2(d.Y, d.X))
+		f.Parent = face
+	end
+	local function bez(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, n: number, w: number?)
+		local px0, py0 = x0, y0
+		for i = 1, n do
+			local t = i / n
+			local u = 1 - t
+			local x = u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3
+			local y = u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3
+			line(px0, py0, x, y, w)
+			px0, py0 = x, y
+		end
+	end
+	local function dot(x: number, y: number, r: number)
+		local c = px(x, y)
+		local f = Instance.new("Frame")
+		f.BackgroundColor3 = WHITE
+		f.AnchorPoint = Vector2.new(0.5, 0.5)
+		f.Position = UDim2.fromOffset(c.X, c.Y)
+		f.Size = UDim2.fromOffset(r * 2 * size / 190, r * 2 * size / 190)
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(1, 0)
+		corner.Parent = f
+		f.Parent = face
+	end
+	-- 머리
+	bez(112, 186, 108, 160, 116, 146, 130, 146, 8)
+	bez(130, 146, 144, 146, 152, 160, 148, 186, 8)
+	bez(148, 186, 146, 198, 140, 206, 135, 207, 4)
+	bez(112, 186, 114, 198, 120, 206, 125, 207, 4)
+	-- 빛나는 두 눈(벌어진 입 양옆으로 밀려남)
+	dot(118, 166, 4.2)
+	dot(142, 166, 4.2)
+	-- 어깨·목
+	line(118, 204, 112, 218)
+	line(142, 204, 148, 218)
+	bez(112, 218, 98, 220, 86, 226, 78, 240, 4)
+	bez(148, 218, 162, 220, 174, 226, 182, 240, 4)
+	-- 세로로 벌어진 입(머리~배)
+	bez(130, 160, 112, 192, 106, 236, 108, 270, 10)
+	bez(108, 270, 110, 300, 118, 318, 130, 334, 6)
+	bez(130, 334, 142, 318, 150, 300, 152, 270, 6)
+	bez(152, 270, 154, 236, 148, 192, 130, 160, 10)
+	-- 이빨(양쪽 가장자리에서 안쪽으로)
+	local rows = { { 120, 176 }, { 116, 190 }, { 113, 204 }, { 110, 218 }, { 109, 232 }, { 108, 246 }, { 108, 260 }, { 109, 274 }, { 111, 288 }, { 115, 302 }, { 120, 316 } }
+	for k, t in rows do
+		local len = 7 + (k % 2) * 3
+		line(t[1], t[2], t[1] + len, t[2] + 2, thick * 0.7)
+		line(260 - t[1], t[2], 260 - t[1] - len, t[2] + 2, thick * 0.7)
+	end
+end
+
+-- 얼굴을 띄운다(이미 떠 있으면 무시). kind = "doppel" 이면 도플갱어 얼굴
 local busy = false
-function JumpScare.play(scream: (() -> ())?)
+function JumpScare.play(scream: (() -> ())?, kind: string?)
 	if busy then
 		return
 	end
@@ -7200,7 +8441,12 @@ function JumpScare.play(scream: (() -> ())?)
 	JumpScare.count += 1
 	local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
 	gui.Enabled = true
-	draw(SPECS[((math.max(1, si) - 1) % #SPECS) + 1])
+	if kind == "doppel" then
+		drawDoppel()
+	else
+		draw(SPECS[((math.max(1, si) - 1) % #SPECS) + 1])
+	end
+	JumpScare.lastKind = kind or "monster"
 	if scream then
 		task.spawn(scream)
 	end
@@ -7224,21 +8470,23 @@ function JumpScare.play(scream: (() -> ())?)
 end
 
 function JumpScare.state()
-	return { count = JumpScare.count, showing = gui.Enabled }
+	return { count = JumpScare.count, showing = gui.Enabled, kind = JumpScare.lastKind }
 end
 
 return JumpScare
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="41">
+      <Item class="ModuleScript" referent="42">
         <Properties>
           <string name="Name">KeyHUD</string>
           <string name="Source"><![CDATA[--!strict
--- 열쇠 표시(오른쪽 위): 게임 중에만. 팀이 열쇠를 찾았는가(ReplicatedStorage 속성 HasKey).
+-- 오른쪽 위 표시(게임 중에만): 열쇠(팀이 찾았는가, ReplicatedStorage 속성 HasKey), 목숨(내 Lives, 스테이지마다 3개).
+-- 위쪽 가운데: 안전 구역(시작 방) 안에 있으면 "안전 구역" 표시.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local KeyHUD = {}
@@ -7250,39 +8498,101 @@ gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.DisplayOrder = 5
 
-local label = Instance.new("TextLabel")
-label.AnchorPoint = Vector2.new(1, 0)
-label.Position = UDim2.new(1, -24, 0, 18)
-label.Size = UDim2.fromOffset(220, 28)
-label.BackgroundTransparency = 1
-label.Font = Enum.Font.GothamMedium
-label.TextSize = 18
-label.TextXAlignment = Enum.TextXAlignment.Right
-label.Parent = gui
+local function makeLabel(y: number, size: number): TextLabel
+	local l = Instance.new("TextLabel")
+	l.AnchorPoint = Vector2.new(1, 0)
+	l.Position = UDim2.new(1, -24, 0, y)
+	l.Size = UDim2.fromOffset(240, size + 10)
+	l.BackgroundTransparency = 1
+	l.Font = Enum.Font.GothamMedium
+	l.TextSize = size
+	l.TextXAlignment = Enum.TextXAlignment.Right
+	l.Parent = gui
+	return l
+end
+local label = makeLabel(18, 18)
+local livesLabel = makeLabel(46, 18)
+
+local safeLabel = Instance.new("TextLabel")
+safeLabel.AnchorPoint = Vector2.new(0.5, 0)
+safeLabel.Position = UDim2.new(0.5, 0, 0, 18)
+safeLabel.Size = UDim2.fromOffset(420, 26)
+safeLabel.BackgroundTransparency = 1
+safeLabel.Font = Enum.Font.GothamMedium
+safeLabel.TextSize = 16
+safeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+safeLabel.TextTransparency = 0.15
+safeLabel.Text = "안전 구역  —  괴물이 들어오지 못한다"
+safeLabel.Visible = false
+safeLabel.Parent = gui
 gui.Parent = player:WaitForChild("PlayerGui")
 
+local function playing(): boolean
+	return ReplicatedStorage:GetAttribute("Mode") == "Game" and ReplicatedStorage:GetAttribute("RoundState") == "Playing"
+end
+
 local function refresh()
-	local playing = ReplicatedStorage:GetAttribute("Mode") == "Game" and ReplicatedStorage:GetAttribute("RoundState") == "Playing" and Config.Key.Required
-	gui.Enabled = playing == true
+	gui.Enabled = playing()
+	label.Visible = Config.Key.Required
 	local has = ReplicatedStorage:GetAttribute("HasKey") == true
 	label.Text = if has then "열쇠  있음 — 출구로" else "열쇠  없음"
 	label.TextColor3 = if has then Color3.fromRGB(235, 235, 235) else Color3.fromRGB(140, 140, 140)
+	-- 목숨: 남은 것은 ♥, 잃은 것은 ♡
+	local lives = (player:GetAttribute("Lives") :: number?) or Config.Lives.PerStage
+	local hearts = {}
+	for i = 1, Config.Lives.PerStage do
+		table.insert(hearts, if i <= lives then "♥" else "♡")
+	end
+	livesLabel.Text = "목숨  " .. table.concat(hearts, " ")
+	livesLabel.TextColor3 = if lives <= 1 then Color3.fromRGB(230, 120, 120) else Color3.fromRGB(220, 220, 220)
 end
 
+-- 안전 구역 칸(스테이지 폴더 속성 SafeTiles: "x,y;x,y;…")
+local safeSet: { [string]: boolean } = {}
+local safeSrc: string? = nil
+local function inSafe(pos: Vector3): boolean
+	local stage = workspace:FindFirstChild("Stage")
+	local s = stage and stage:GetAttribute("SafeTiles")
+	if type(s) ~= "string" then
+		return false
+	end
+	if s ~= safeSrc then
+		safeSrc = s
+		table.clear(safeSet)
+		for _, k in string.split(s, ";") do
+			safeSet[k] = true
+		end
+	end
+	return safeSet[math.floor(pos.X / 8) .. "," .. math.floor(pos.Z / 8)] == true
+end
+
+local acc = 0
+RunService.Heartbeat:Connect(function(dt)
+	acc += dt
+	if acc < 0.2 then
+		return
+	end
+	acc = 0
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	safeLabel.Visible = Config.SafeZone.Enabled and playing() and root ~= nil and player:GetAttribute("Status") == "Alive" and inSafe(root.Position)
+end)
+
 function KeyHUD.state()
-	return { visible = gui.Enabled, text = label.Text }
+	return { visible = gui.Enabled, text = label.Text, lives = livesLabel.Text, safe = safeLabel.Visible }
 end
 
 for _, a in { "HasKey", "Mode", "RoundState" } do
 	ReplicatedStorage:GetAttributeChangedSignal(a):Connect(refresh)
 end
+player:GetAttributeChangedSignal("Lives"):Connect(refresh)
 refresh()
 
 return KeyHUD
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="42">
+      <Item class="ModuleScript" referent="43">
         <Properties>
           <string name="Name">LobbyUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -7581,7 +8891,7 @@ return LobbyUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="43">
+      <Item class="LocalScript" referent="44">
         <Properties>
           <string name="Name">Main</string>
           <string name="Source"><![CDATA[--!strict
@@ -7607,7 +8917,9 @@ local Mates = require(script.Parent:WaitForChild("Mates"))
 local KeyHUD = require(script.Parent:WaitForChild("KeyHUD"))
 local JumpScare = require(script.Parent:WaitForChild("JumpScare"))
 local SearchLook = require(script.Parent:WaitForChild("SearchLook"))
+local DoppelFx = require(script.Parent:WaitForChild("DoppelFx"))
 Pulses.onReach = MapView.onReach
+Pulses.onStart = DoppelFx.onPulse
 
 local player = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -7651,6 +8963,7 @@ local function tryBuild()
 		end
 		Pulses.clear()
 		Lines.clear()
+		DoppelFx.clear()
 		World.build(stage)
 		MapView.load(stage)
 		task.spawn(Lines.prewarm, 2500) -- 선 파트 미리 만들기(음파 도중 끊김 방지)
@@ -7802,17 +9115,36 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 			task.delay(2.5, UI.hint, "좌클릭 — 음파      Shift — 달리기      Ctrl — 웅크리기", 7)
 		end
 		task.delay(if data.stage == 1 then 10 else 2.5, UI.hint, "상자와 서랍(E)을 뒤져 열쇠를 찾아야 출구가 열린다", 6)
+	elseif kind == "DoppelBurst" then
+		-- 도플갱어의 사람 모습이 터진다(조각이 흩날림)
+		DoppelFx.burst(data)
+	elseif kind == "LifeLost" then
+		-- 잡혔지만 목숨이 남았다: 점프스케어 → 잠깐 검은 화면 → 시작 방에서 다시(캐릭터가 생기면 화면이 걷힌다)
+		if data.userId == player.UserId then
+			if data.why == "monster" or data.why == "doppel" then
+				JumpScare.play(function()
+					Audio.play("MonsterAlert", nil, 0.03, 0.8)
+				end, data.why)
+				task.wait(JumpScare.Duration)
+			end
+			if player:GetAttribute("Status") == "Respawning" then
+				UI.overlay("잡혔다", string.format("남은 목숨 %d — 시작 방에서 다시 시작합니다", data.lives), true)
+			end
+		else
+			local who = Players:GetPlayerByUserId(data.userId)
+			UI.hint(string.format("%s 님이 잡혔다 — 남은 목숨 %d", if who then who.DisplayName else "팀원", data.lives), 4)
+		end
 	elseif kind == "Died" then
-		if data.userId == player.UserId and data.why == "monster" then
-			-- 점프스케어: 괴물 얼굴이 확 뜬 뒤 YOU DIED
+		if data.userId == player.UserId and (data.why == "monster" or data.why == "doppel") then
+			-- 점프스케어: 괴물 얼굴이 확 뜬 뒤 YOU DIED (도플갱어는 머리~배가 세로로 벌어진 입)
 			JumpScare.play(function()
 				Audio.play("MonsterAlert", nil, 0.03, 0.8)
-			end)
+			end, data.why)
 			task.wait(JumpScare.Duration)
 		end
 		if data.userId == player.UserId then
 			if data.othersAlive > 0 then
-				UI.overlay("YOU DIED", "관전으로 전환합니다", true)
+				UI.overlay("YOU DIED", "목숨을 모두 잃었다 — 관전으로 전환합니다", true)
 				task.delay(2.5, function()
 					if spectating() then
 						UI.liftOverlay()
@@ -8042,6 +9374,8 @@ task.spawn(function()
 			end
 			table.insert(out, "svc=" .. tostring(game:GetService("ProximityPromptService").Enabled))
 			return table.concat(out, " ; ")
+		elseif cmd == "doppelFx" then
+			return { bursts = DoppelFx.bursts, shards = DoppelFx.lastShards, eyes = DoppelFx.litEyeCount() }
 		elseif cmd == "jump" then
 			local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 			if h then
@@ -8104,7 +9438,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="44">
+      <Item class="ModuleScript" referent="45">
         <Properties>
           <string name="Name">MapView</string>
           <string name="Source"><![CDATA[--!strict
@@ -8349,7 +9683,7 @@ return Map
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="45">
+      <Item class="ModuleScript" referent="46">
         <Properties>
           <string name="Name">Mates</string>
           <string name="Source"><![CDATA[--!strict
@@ -8417,7 +9751,7 @@ return Mates
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="46">
+      <Item class="ModuleScript" referent="47">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
@@ -8518,7 +9852,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="47">
+      <Item class="LocalScript" referent="48">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -8526,7 +9860,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="48">
+      <Item class="ModuleScript" referent="49">
         <Properties>
           <string name="Name">SearchLook</string>
           <string name="Source"><![CDATA[--!strict
@@ -8618,7 +9952,7 @@ return SearchLook
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="49">
+      <Item class="ModuleScript" referent="50">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -8914,7 +10248,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="50">
+      <Item class="ModuleScript" referent="51">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -9142,6 +10476,9 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 	if not World.ready then
 		return false
 	end
+	if Pulses.onStart then
+		Pulses.onStart(origin)
+	end
 	local x, y, z = World.cellOf(origin)
 	if not x then
 		return false
@@ -9343,6 +10680,7 @@ function Pulses.update(now: number)
 end
 
 -- 음파(내 것·팀원 것)가 끝났을 때 (복셀 → 거리, 반경)을 받는다(MapView)
+Pulses.onStart = nil :: ((origin: Vector3) -> ())? -- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛
 Pulses.onReach = nil :: ((dist: { [number]: number }, radius: number) -> ())?
 
 function Pulses.active(): number
@@ -9357,7 +10695,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="51">
+      <Item class="ModuleScript" referent="52">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -9600,10 +10938,13 @@ end
 -- 움직이는 파트: 스테이지 안(문·서랍·뚜껑)은 빌드할 때 모아 두고, 괴물은 모델마다 한 번만 모은다
 -- (예전처럼 음파마다 태그된 파트 전부를 훑으면 큰 맵에서 한 번에 수십~수백 ms 가 걸린다)
 World.stageDynamics = {} :: { BasePart }
+-- (도플갱어는 몸이 바뀐다: 사람 → 괴물, 틈 ↔ 벌어진 입. 바뀔 때마다 BodyVersion 이 올라가면 다시 모은다)
 local monsterParts: { [Model]: { BasePart } } = setmetatable({}, { __mode = "k" }) :: any
+local monsterVer: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
 local function partsOfMonster(m: Model): { BasePart }
 	local l = monsterParts[m]
-	if not l then
+	local ver = (m:GetAttribute("BodyVersion") :: number?) or 0
+	if not l or monsterVer[m] ~= ver then
 		l = {}
 		for _, d in m:GetDescendants() do
 			if d:IsA("BasePart") and CollectionService:HasTag(d, TAGS.Renderable) then
@@ -9611,6 +10952,7 @@ local function partsOfMonster(m: Model): { BasePart }
 			end
 		end
 		monsterParts[m] = l
+		monsterVer[m] = ver
 	end
 	return l
 end
@@ -9923,7 +11265,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="52">
+      <Item class="ModuleScript" referent="53">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -10136,7 +11478,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="53">
+  <Item class="Workspace" referent="54">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

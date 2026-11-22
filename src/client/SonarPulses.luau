@@ -223,6 +223,9 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 	if not World.ready then
 		return false
 	end
+	if Pulses.onStart then
+		Pulses.onStart(origin)
+	end
 	local x, y, z = World.cellOf(origin)
 	if not x then
 		return false
@@ -424,6 +427,7 @@ function Pulses.update(now: number)
 end
 
 -- 음파(내 것·팀원 것)가 끝났을 때 (복셀 → 거리, 반경)을 받는다(MapView)
+Pulses.onStart = nil :: ((origin: Vector3) -> ())? -- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛
 Pulses.onReach = nil :: ((dist: { [number]: number }, radius: number) -> ())?
 
 function Pulses.active(): number

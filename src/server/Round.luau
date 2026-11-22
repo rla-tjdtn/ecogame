@@ -25,6 +25,7 @@ Round.roundId = 0
 Round.lastBuildMs = 0
 Round.info = nil :: Builder.StageInfo?
 Round.monsters = {} :: { any }
+Round.doppels = {} :: { any } -- 도플갱어(서브 괴물): 메인 괴물 수와 따로 센다
 Round.autoLoop = true -- 테스트가 끌 수 있다
 Round.lastOutcome = "" :: string
 Round.events = {} :: { string }
@@ -90,6 +91,51 @@ local function stageModule(i: number): any?
 	return require(m :: ModuleScript)
 end
 
+-- ── 안전 구역: 시작 칸(S)이 있는 방(벽·문·아치로 둘러싸인 곳) ──
+Round.safe = {} :: { [string]: boolean }
+local function computeSafe(rows: { string }): { [string]: boolean }
+	local H = #rows
+	local W = if H > 0 then #rows[1] else 0
+	local function at(x: number, y: number): string
+		if y < 0 or y >= H or x < 0 or x >= W then
+			return "#"
+		end
+		return string.sub(rows[y + 1], x + 1, x + 1)
+	end
+	local set: { [string]: boolean } = {}
+	local q: { { number } } = {}
+	for y = 0, H - 1 do
+		for x = 0, W - 1 do
+			if at(x, y) == "S" then
+				set[x .. "," .. y] = true
+				table.insert(q, { x, y })
+			end
+		end
+	end
+	while #q > 0 do
+		local c = table.remove(q) :: { number }
+		for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+			local nx, ny = c[1] + d[1], c[2] + d[2]
+			local ch = at(nx, ny)
+			local k = nx .. "," .. ny
+			if ch ~= "#" and ch ~= "D" and ch ~= "A" and not set[k] then
+				set[k] = true
+				table.insert(q, { nx, ny })
+			end
+		end
+	end
+	return set
+end
+
+-- 이 위치가 안전 구역 안인가(맵 칸 8스터드)
+function Round.inSafe(pos: Vector3): boolean
+	if not Config.SafeZone.Enabled or Round.state == "Lobby" then
+		return false
+	end
+	return Round.safe[math.floor(pos.X / 8) .. "," .. math.floor(pos.Z / 8)] == true
+end
+Monster.isSafe = Round.inSafe
+
 local function buildLayout(layout: any, label: string)
 	if stageFolder then
 		stageFolder:Destroy()
@@ -101,6 +147,36 @@ local function buildLayout(layout: any, label: string)
 	Round.lastBuildMs = (os.clock() - b0) * 1000
 	local folder = info.folder
 	folder:SetAttribute("Rows", table.concat(layout.Rows, "/")) -- 클라이언트 지도(Q)용 격자(행을 / 로 구분)
+	-- 안전 구역: 클라이언트 안내용 목록 + 괴물 길찾기가 피해 가도록 PathfindingModifier(SafeZone) 칸
+	Round.safe = computeSafe(layout.Rows)
+	local keys = {}
+	for k in Round.safe do
+		table.insert(keys, k)
+	end
+	folder:SetAttribute("SafeTiles", table.concat(keys, ";"))
+	if Config.SafeZone.Enabled and label ~= "lobby" then
+		local zone = Instance.new("Folder")
+		zone.Name = "SafeZone"
+		zone.Parent = folder
+		for _, k in keys do
+			local xy = string.split(k, ",")
+			local x, y = tonumber(xy[1]) :: number, tonumber(xy[2]) :: number
+			local part = Instance.new("Part")
+			part.Name = "Safe"
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.Transparency = 1
+			part.CastShadow = false
+			part.Size = Vector3.new(8, 12, 8)
+			part.Position = Vector3.new(x * 8 + 4, 5, y * 8 + 4)
+			local mod = Instance.new("PathfindingModifier")
+			mod.Label = "SafeZone"
+			mod.Parent = part
+			part.Parent = zone
+		end
+	end
 	local count = 0
 	for _, d in folder:GetDescendants() do
 		if d:IsA("BasePart") then
@@ -181,6 +257,35 @@ function Round.kill(p: Player, why: string?)
 		end)
 		return
 	end
+	-- 목숨이 남아 있으면: 하나 잃고 잠시 뒤 그 스테이지 시작 방에서 다시
+	local lives = ((p:GetAttribute("Lives") :: number?) or 1) - 1
+	p:SetAttribute("Lives", math.max(0, lives))
+	if lives > 0 and Round.state == "Playing" then
+		setStatus(p, "Respawning")
+		note("life lost " .. p.Name .. " " .. (why or "") .. " left " .. lives)
+		RoundEvent:FireAllClients("LifeLost", { userId = p.UserId, lives = lives, why = why, seconds = Config.Lives.RespawnDelay })
+		local char0 = p.Character
+		if char0 then
+			local root0 = char0:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if root0 then
+				root0.Anchored = true
+			end
+			task.delay(Config.Round.DeadBodyLinger, function()
+				if p.Character == char0 then
+					p.Character = nil
+				end
+				char0:Destroy()
+			end)
+		end
+		local rid = Round.roundId
+		task.delay(Config.Lives.RespawnDelay, function()
+			if Round.state == "Playing" and Round.roundId == rid and Round.status(p) == "Respawning" and p.Parent then
+				Round.spawnPlayer(p)
+				note("respawned " .. p.Name)
+			end
+		end)
+		return
+	end
 	setStatus(p, "Dead")
 	note("dead " .. p.Name .. " " .. (why or ""))
 	local others = #Round.alivePlayers()
@@ -219,6 +324,10 @@ local function clearMonsters()
 		m:destroy()
 	end
 	table.clear(Round.monsters)
+	for _, m in Round.doppels do
+		m:destroy()
+	end
+	table.clear(Round.doppels)
 	monsterFolder:ClearAllChildren()
 end
 
@@ -248,6 +357,30 @@ function Round.spawnMonsters(count: number)
 		m:run()
 	end
 	note("monsters " .. count)
+	-- 도플갱어: 시작점에서 적당히 떨어진(너무 멀지 않은) 곳에, 플레이어처럼 돌아다니게
+	local D = Config.Doppel
+	if D.Enabled and Round.stageIndex > 0 then
+		local near = {}
+		for _, n in info.nodes do
+			local d = (n - spawnPos).Magnitude
+			if d >= D.SpawnDistance[1] and d <= D.SpawnDistance[2] then
+				table.insert(near, n)
+			end
+		end
+		if #near == 0 then
+			near = candidates
+		end
+		for _ = 1, D.PerStage do
+			local pick = near[math.random(1, #near)]
+			local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
+				Round.kill(player, "doppel")
+			end, Round.stageIndex, "doppel")
+			m.route = info.route
+			table.insert(Round.doppels, m)
+			m:run()
+		end
+		note("doppels " .. D.PerStage)
+	end
 end
 
 function Round.startStage(i: number)
@@ -270,6 +403,7 @@ function Round.startStage(i: number)
 	ReplicatedStorage:SetAttribute("RoundId", Round.roundId)
 	spawnCursor = 0
 	for _, p in Round.participants() do
+		p:SetAttribute("Lives", Config.Lives.PerStage)
 		task.spawn(Round.spawnPlayer, p)
 	end
 	Round.state = "Playing"
@@ -290,7 +424,7 @@ function Round.finished(): boolean
 	end
 	for _, p in Round.participants() do
 		local s = Round.status(p)
-		if s == "Alive" or s == "Waiting" then
+		if s == "Alive" or s == "Waiting" or s == "Respawning" then
 			return false
 		end
 	end
@@ -335,6 +469,10 @@ RunService.Heartbeat:Connect(function(dt)
 		return
 	end
 	for _, m in Round.monsters do
+		m:checkCatch()
+		m:animate(dt)
+	end
+	for _, m in Round.doppels do
 		m:checkCatch()
 		m:animate(dt)
 	end
@@ -398,11 +536,17 @@ SoundBus.listen(function(pos, radius, source, kind)
 	for _, m in Round.monsters do
 		m:hear(pos, radius, source, kind)
 	end
+	for _, m in Round.doppels do
+		m:hear(pos, radius, source, kind)
+	end
 end)
 
 -- 숨는 순간: 쫓던 괴물이 그 모습을 봤는지
 Hiding.onHide(function(p, spot)
 	for _, m in Round.monsters do
+		m:onHide(p, spot.front)
+	end
+	for _, m in Round.doppels do
 		m:onHide(p, spot.front)
 	end
 end)

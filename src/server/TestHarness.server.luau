@@ -20,6 +20,7 @@ end
 local Players = game:GetService("Players")
 local LogService = game:GetService("LogService")
 local PathfindingService = game:GetService("PathfindingService")
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Round = require(script.Parent.Round)
@@ -49,6 +50,9 @@ end)
 -- 로비 테스트만 로비로, 나머지는 바로 게임으로 시작(Lobby.boot 가 읽는다)
 ReplicatedStorage:SetAttribute("ForceMode", if args.Test == "lobby" then "Lobby" else "Game")
 Config.Monster.StartDelay = 1e6
+Config.Lives.PerStage = 1 -- (예전 테스트는 한 번 잡히면 죽는 것을 전제: lives 테스트에서만 3개)
+Config.SafeZone.Enabled = false -- (예전 테스트는 시작 방에서 괴물을 시험한다: lives 테스트에서만 켠다)
+Config.Doppel.StartDelay = 1e6 -- (도플갱어도 멈춰 둔다: doppel 테스트에서만 움직인다)
 Config.Key.Required = false -- (열쇠 시험은 core 에서 따로 켠다)
 Config.Round.ResultSeconds = 2
 Config.Round.FirstStartDelay = 1
@@ -1021,6 +1025,9 @@ local function load()
 			m.startAt = 0 -- (테스트는 괴물을 멈춰 두므로 여기서는 실제처럼 움직이게)
 			m.lastHunt = os.clock() - Config.Monster.HuntEvery + 5
 		end
+		for _, d in Round.doppels do
+			d.startAt = 0 -- (도플갱어도 사람 모습으로 돌아다니게)
+		end
 		for _ = 1, 10 do
 			ask(p, "resetCooldown")
 			ask(p, "fire")
@@ -1406,6 +1413,234 @@ local function stages()
 	end
 end
 
+-- ─────────────────────────────── doppel ───────────────────────────────
+-- 도플갱어: 스테이지마다 한 마리(사람 모습) → 음파·가까이서 보면 들킴 → 5~10초 뒤 터지며 괴물 → 추격·잡기(도플갱어 점프스케어)
+local function doppelTest()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local D = Config.Doppel
+	-- 스테이지마다 한 마리, 사람 모습, 메인 괴물 수는 그대로
+	for i = 1, #Config.Stages do
+		Round.startStage(i)
+		readyPlayers(1)
+		local d = Round.doppels[1]
+		local disguise = d and d.model:FindFirstChild("Disguise")
+		local boxes = 0
+		if disguise then
+			for _, c in disguise:GetChildren() do
+				if c:IsA("BasePart") and CollectionService:HasTag(c, Config.Tags.Renderable) then
+					boxes += 1
+				end
+			end
+		end
+		local dist = d and (d.root.Position - Round.info.spawns[1].Position).Magnitude or -1
+		check(string.format("stage %d: one doppelganger in player form (main monsters still %d)", i, Config.Stages[i].Monsters), #Round.doppels == D.PerStage and d ~= nil and d.form == "Disguise" and boxes == 6 and #Round.monsters == Config.Stages[i].Monsters and CollectionService:HasTag(d.model, Config.Tags.Doppel), string.format("doppels=%d form=%s boxes=%d monsters=%d", #Round.doppels, d and d.form or "-", boxes, #Round.monsters))
+		check(string.format("stage %d: doppelganger spawns %d~%d studs from the start", i, D.SpawnDistance[1], D.SpawnDistance[2]), dist >= D.SpawnDistance[1] - 6 and dist <= D.SpawnDistance[2] + 6, string.format("%.0f", dist))
+	end
+	-- 1스테이지 시작 방에서: 플레이어 tile(2,2), 도플갱어 tile(4,4) (약 23스터드: 보이는 거리 밖, 음파 거리 안)
+	Round.startStage(1)
+	readyPlayers(1)
+	local d = Round.doppels[1]
+	if not d then
+		return
+	end
+	d.startAt = 0
+	local pPos = tile(2, 2, 3)
+	place(p, pPos, tile(4, 4, 3))
+	local function putDoppel(pos: Vector3)
+		d.model:PivotTo(CFrame.lookAt(pos, Vector3.new(pPos.X, pos.Y, pPos.Z)))
+		d.waypoints = {}
+		d.pauseUntil = os.clock() + 30 -- (제자리에 서 있게)
+	end
+	putDoppel(tile(4, 4, 3))
+	task.wait(1.5)
+	check("doppelganger far away (out of sight range) is not discovered yet", d.discoveredBy == nil and d.form == "Disguise", tostring(d.discoveredBy))
+	-- 사람 모습도 음파에 윤곽선으로 보인다 + 음파를 쏘면 들킨다
+	ask(p, "resetCooldown")
+	ask(p, "fire")
+	local found = waitFor(function()
+		return d.discoveredBy ~= nil
+	end, 3)
+	local wait0 = d.transformAt - os.clock()
+	check("sonar reveals the doppelganger: discovered", found ~= nil and d.discoveredBy == p, tostring(d.discoveredBy))
+	check(string.format("transforms %d~%d s after being discovered", D.TransformDelay[1], D.TransformDelay[2]), wait0 > D.TransformDelay[1] - 1.5 and wait0 <= D.TransformDelay[2] + 0.1, string.format("%.1f s", wait0))
+	task.wait(1.2)
+	local lines = ask(p, "linesNear", { d.root.Position, 5 })
+	check("player-shaped doppelganger shows as outlines in the sonar", lines and lines > 6, lines)
+	local fx0 = ask(p, "doppelFx")
+	-- 변신: 사람 모습이 터지고(조각) 괴물 몸으로
+	local turned = waitFor(function()
+		return d.form == "Beast"
+	end, D.TransformDelay[2] + 3)
+	task.wait(0.4)
+	local fx1 = ask(p, "doppelFx")
+	local beast = d.model:FindFirstChild("Beast")
+	local eyes, lineParts = 0, 0
+	if beast then
+		for _, c in beast:GetChildren() do
+			if c:IsA("BasePart") then
+				if c.Name == "Eye" then
+					eyes += 1
+				end
+				if CollectionService:HasTag(c, Config.Tags.Renderable) then
+					lineParts += 1
+				end
+			end
+		end
+	end
+	check("transforms into the monster (player body gone, beast body with 2 eyes)", turned ~= nil and d.model:FindFirstChild("Disguise") == nil and beast ~= nil and eyes == 2, string.format("form=%s eyes=%d lines=%d", d.form, eyes, lineParts))
+	check("the player body bursts into flying pieces on screen", fx1 and fx0 and fx1.bursts == fx0.bursts + 1 and fx1.shards >= 50, fx1 and string.format("bursts %d->%d shards=%d", fx0 and fx0.bursts or -1, fx1.bursts, fx1.shards))
+	check("monster body is drawn with single strokes (lines and discs)", lineParts > 60 and lineParts < 160, lineParts)
+	local chasing = waitFor(function()
+		return d.state == "Chase" and d.target == p
+	end, D.BurstPause + 2)
+	check("after bursting it chases the player who found it", chasing ~= nil, d.state)
+	check("doppelganger monster is smaller than the main monster", d.hum.HipHeight < 4 and d.cfg.ChaseSpeed > Config.Monster.ChaseSpeed, string.format("hip %.1f speed %.1f", d.hum.HipHeight, d.cfg.ChaseSpeed))
+	-- 음파에 맞으면 눈이 빛난다(선보다 조금 더 오래)
+	putDoppel(tile(4, 4, 3))
+	d.startAt = os.clock() + 4 -- (잠깐 세워 둔다)
+	ask(p, "resetCooldown")
+	ask(p, "fire")
+	local lit = waitFor(function()
+		local f = ask(p, "doppelFx")
+		return f and f.eyes >= 2 and f
+	end, 3)
+	check("sonar makes its eyes glow", lit ~= nil, lit and lit.eyes)
+	-- 덮칠 때 세로 입이 벌어지고, 잡히면 도플갱어 점프스케어
+	d.startAt = 0
+	d:startChase(p, pPos)
+	local opened = waitFor(function()
+		return d.model:GetAttribute("MawOpen") == true
+	end, 8)
+	check("its head-to-belly split opens into a mouth when it lunges", opened ~= nil, tostring(d.model:GetAttribute("MawOpen")))
+	local dead = waitFor(function()
+		return p:GetAttribute("Status") == "Dead"
+	end, 8)
+	local js = ask(p, "jumpscare")
+	check("caught by the doppelganger -> death with its own jump scare", dead ~= nil and js and js.kind == "doppel", js and tostring(js.kind))
+	-- 가까이서 보면(음파 없이) 들킨다
+	waitFor(function()
+		return Round.state == "Playing" and p:GetAttribute("Status") == "Alive" and Round.doppels[1] ~= nil and Round.doppels[1] ~= d
+	end, 20)
+	readyPlayers(1)
+	local d2 = Round.doppels[1]
+	if d2 then
+		d2.startAt = 0
+		place(p, pPos, tile(3, 3, 3))
+		d2.model:PivotTo(CFrame.lookAt(tile(3, 3, 3), pPos))
+		d2.waypoints = {}
+		d2.pauseUntil = os.clock() + 30
+		local seen = waitFor(function()
+			return d2.discoveredBy == p
+		end, 3)
+		check("seeing it up close (no sonar) also gives it away", seen ~= nil, tostring(d2.discoveredBy))
+	end
+	-- 사람 모습일 때는 플레이어를 잡지 않는다
+	Round.startStage(1)
+	readyPlayers(1)
+	local d3 = Round.doppels[1]
+	if d3 then
+		d3.startAt = 0
+		place(p, pPos, tile(3, 3, 3))
+		d3.model:PivotTo(CFrame.lookAt(pPos + Vector3.new(2, 0, 0), pPos))
+		task.wait(1.5)
+		check("in player form it never kills", p:GetAttribute("Status") == "Alive" and d3.form == "Disguise", p:GetAttribute("Status") .. " " .. d3.form)
+	end
+end
+
+-- ─────────────────────────────── lives ───────────────────────────────
+-- 목숨 3개(스테이지마다) + 시작 방 안전 구역
+local function livesTest()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	Config.Lives.PerStage = 3
+	Config.SafeZone.Enabled = true
+	Round.startStage(1)
+	readyPlayers(1)
+	local stage = stageFolder()
+	local safeCount = #string.split((stage:GetAttribute("SafeTiles") :: string?) or "", ";")
+	check("start room is a safe zone (stage 1: 3x3 room)", safeCount == 9 and stage:FindFirstChild("SafeZone") ~= nil, safeCount)
+	check("3 lives at the start of a stage", p:GetAttribute("Lives") == 3, p:GetAttribute("Lives"))
+	local hud = ask(p, "keyHud")
+	check("lives shown on screen (3 hearts)", hud and hud.lives and select(2, string.gsub(hud.lives, "♥", "")) == 3, hud and hud.lives)
+	-- 안전 구역 안: 화면에 표시, 괴물이 바로 옆에 와도 잡지 않고 밖으로 나간다
+	local inside = tile(2, 2, 3)
+	place(p, inside, tile(4, 4, 3))
+	local safeShown = waitFor(function()
+		local h = ask(p, "keyHud")
+		return h and h.safe
+	end, 3)
+	check("'safe zone' shown while in the start room", safeShown ~= nil)
+	local m = Round.monsters[1]
+	m.model:PivotTo(CFrame.new(tile(3, 3, 5.2)))
+	m.waypoints = {}
+	m.startAt = 0
+	task.wait(2.5)
+	check("monster in the safe zone does not catch or chase the player", p:GetAttribute("Status") == "Alive" and not (m.state == "Chase" and m.target == p), p:GetAttribute("Status") .. " " .. m.state)
+	local left = waitFor(function()
+		return not Round.inSafe(m.root.Position)
+	end, 8)
+	check("monster leaves the safe zone on its own", left ~= nil, tostring(m.root.Position))
+	-- 쫓기다 안전 구역으로 들어가면 추격을 멈춘다
+	local outside = tile(7, 3, 3)
+	place(p, outside, tile(9, 3, 3))
+	m.model:PivotTo(CFrame.new(tile(10, 3, 5.2)))
+	m.waypoints = {}
+	m:startChase(p, outside)
+	task.wait(0.3)
+	place(p, inside, tile(4, 4, 3))
+	local dropped = waitFor(function()
+		return m.target ~= p and m.state ~= "Chase"
+	end, 3)
+	check("chase stops when the player reaches the safe zone", dropped ~= nil, m.state)
+	m.startAt = 1e9
+	-- 잡히면 목숨 하나 잃고 시작 방에서 다시(점프스케어)
+	local js0 = ask(p, "jumpscare")
+	place(p, outside, tile(9, 3, 3))
+	m.model:PivotTo(CFrame.new(outside + Vector3.new(1.5, 2.2, 0)))
+	m.startAt = 0
+	m:startChase(p, outside)
+	local lost = waitFor(function()
+		return p:GetAttribute("Status") == "Respawning"
+	end, 6)
+	m.startAt = 1e9
+	m.model:PivotTo(CFrame.new(tile(20, 20, 5.2)))
+	check("caught with lives left -> lose one life (not dead)", lost ~= nil and p:GetAttribute("Lives") == 2, tostring(p:GetAttribute("Status")) .. " lives=" .. tostring(p:GetAttribute("Lives")))
+	local js1 = ask(p, "jumpscare")
+	check("jump scare still plays when a life is lost", js1 and js0 and js1.count == js0.count + 1, js1 and js1.count)
+	local back = waitFor(function()
+		local r = root(p)
+		return p:GetAttribute("Status") == "Alive" and r and Round.inSafe(r.Position)
+	end, Config.Lives.RespawnDelay + 6)
+	check("respawns in the start room after a moment", back ~= nil, tostring(p:GetAttribute("Status")))
+	check("the stage keeps going (not restarted)", Round.state == "Playing" and Round.stageIndex == 1, Round.state)
+	local hud2 = ask(p, "keyHud")
+	check("hearts drop to 2", hud2 and hud2.lives and select(2, string.gsub(hud2.lives, "♥", "")) == 2, hud2 and hud2.lives)
+	-- 두 번 더 잡히면 아웃(마지막 목숨)
+	Round.kill(p, "monster")
+	waitFor(function()
+		return p:GetAttribute("Status") == "Alive"
+	end, Config.Lives.RespawnDelay + 6)
+	check("second catch: 1 life left", p:GetAttribute("Lives") == 1, p:GetAttribute("Lives"))
+	Round.kill(p, "monster")
+	check("last life lost -> dead", p:GetAttribute("Status") == "Dead" and p:GetAttribute("Lives") == 0, tostring(p:GetAttribute("Status")))
+	-- (혼자면 스테이지 다시 시작) 다시 시작하면 목숨이 다시 3개
+	local again = waitFor(function()
+		return Round.state == "Playing" and p:GetAttribute("Status") == "Alive"
+	end, 25)
+	check("new attempt / stage refills lives to 3", again ~= nil and p:GetAttribute("Lives") == 3, p:GetAttribute("Lives"))
+	Config.Lives.PerStage = 1
+	Config.SafeZone.Enabled = false
+end
+
 -- ─────────────────────────────── seal ───────────────────────────────
 -- 스테이지 1~5 를 지어, 실제로 만들어진 벽·바닥에 구멍이 없는지 광선으로 확인한다:
 --   바닥 칸마다 아래로(바닥이 있나), 벽 칸 쪽으로(그 벽이 실제로 막고 있나),
@@ -1601,6 +1836,10 @@ task.spawn(function()
 			stages()
 		elseif args.Test == "seal" then
 			seal()
+		elseif args.Test == "doppel" then
+			doppelTest()
+		elseif args.Test == "lives" then
+			livesTest()
 		else
 			core()
 		end

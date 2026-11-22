@@ -239,12 +239,20 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 		return -- 순간 이동
 	end
 	tr.acc += d
-	if isMonster then
+	local form = model:GetAttribute("Form")
+	if isMonster and form == "Disguise" then
+		-- 도플갱어(사람 모습): 플레이어와 똑같은 발소리
+		if tr.acc >= STRIDE.Walk then
+			tr.acc = 0
+			Audio.footstep("FootWalk", root, 0)
+		end
+	elseif isMonster then
 		if tr.acc >= 4.6 then -- 사람(4.8)과 비슷한 거리지만 괴물은 느려서 쿵… 쿵… 간격이 더 길다
 			tr.acc = 0
-			-- 배회할 때는 조금 작게, 쫓아올 때는 크게
+			-- 배회할 때는 조금 작게, 쫓아올 때는 크게. 도플갱어(작은 괴물)는 조금 높고 가벼운 발소리
 			local chase = model:GetAttribute("State") == "Chase"
-			Audio.play("MonsterStep", root, 0.08, if chase then 1 else Config.Monster.StepWanderVolume)
+			local small = model:GetAttribute("Form") ~= nil
+			Audio.play("MonsterStep", root, 0.08, (if chase then 1 else Config.Monster.StepWanderVolume) * (if small then 0.85 else 1), if small then 1.25 else nil)
 		end
 	else
 		local mode = (model:GetAttribute("MoveMode") :: string?) or "Walk"
@@ -281,6 +289,20 @@ local function watchMonster(m: Instance)
 				Audio.scream("Chase", root)
 				screamAt[model] = os.clock() + CHASE_SCREAM_GAP[1] + math.random() * (CHASE_SCREAM_GAP[2] - CHASE_SCREAM_GAP[1])
 			end
+	end))
+	-- 도플갱어: 가짜 음파 소리, 사람 모습이 터질 때 소리
+	table.insert(conns, model:GetAttributeChangedSignal("FakePing"):Connect(function()
+		local root = model.PrimaryPart
+		if root then
+			Audio.play("Sonar", root, 0.02, 0.9)
+		end
+	end))
+	table.insert(conns, model:GetAttributeChangedSignal("Form"):Connect(function()
+		local root = model.PrimaryPart
+		if root and model:GetAttribute("Form") == "Bursting" then
+			Audio.play("Door", root, 0.04, 1.4, 0.45) -- 뚝 꺾이고 찢어지는 소리(낮게)
+			Audio.play("FootRun", root, 0.1, 1.2, 0.5)
+		end
 	end))
 	monsterConns[model] = conns
 	

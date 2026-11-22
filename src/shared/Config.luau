@@ -84,6 +84,46 @@ Config.Monster = {
 	LegTiles = 8, -- 먼 길은 타일 경로를 따라 이만큼(칸)씩 나눠 경로를 계산한다
 }
 
+-- ─────────────────────────────── 목숨·안전 구역 ───────────────────────────────
+-- 스테이지마다 목숨 3개. 괴물(메인·도플갱어)에게 잡히면 하나 잃고 그 스테이지 시작 방에서 다시 시작한다.
+-- 다 잃으면 그 스테이지에서는 아웃(관전). 찾은 열쇠·지도 기록은 팀에 그대로 남는다.
+Config.Lives = {
+	PerStage = 3,
+	RespawnDelay = 3, -- 잡힌 뒤 다시 살아나기까지(초, 점프스케어 포함)
+}
+-- 시작한 방(시작 칸 S 가 있는 방, 문·아치로 둘러싸인 곳)은 안전 구역: 괴물이 들어오지 않고, 그 안의 플레이어는 보지도 잡지도 않는다
+Config.SafeZone = {
+	Enabled = true,
+}
+
+-- ─────────────────────────────── 도플갱어(서브 괴물) ───────────────────────────────
+-- 스테이지마다 한 마리. 평소엔 플레이어처럼(사람 모양, 플레이어 발소리, 가끔 가짜 음파 소리) 돌아다니다가
+-- 들키면(가까이서 보이거나 음파에 맞으면) 5~10초 뒤 사람 모습이 터지며 작은 괴물로 변해 쫓아온다.
+Config.Doppel = {
+	Enabled = true,
+	PerStage = 1,
+	StartDelay = 6, -- 라운드 시작 후 움직이기까지
+	WalkSpeed = 7, -- 사람 흉내: 천천히 걷기(플레이어 걷기 10)
+	PauseEvery = { 6, 14 }, -- 이 시간(초)마다 멈춰 서서 두리번(플레이어처럼)
+	PauseFor = { 1.5, 3.5 },
+	FakePingEvery = { 14, 28 }, -- 가끔 가짜 음파 소리(보이지는 않는다)
+	SpawnDistance = { 45, 120 }, -- 시작점에서 이 거리 사이에 등장
+	SeeRange = 14, -- 이 거리 안에서 플레이어가 보면(벽 없이) 들킨다
+	SonarRange = 35, -- 이 거리 안에서 음파를 쏘면(벽 1장 이하) 들킨다(음파에 모습이 드러났으니)
+	TransformDelay = { 5, 10 }, -- 들킨 뒤 변신까지(초)
+	StalkSpeed = 3, -- 들킨 뒤 변신 전: 발견한 플레이어를 바라보며 아주 천천히 다가온다
+	BurstPause = 0.8, -- 터지며 변신하는 동안 멈춤
+	-- 변신 뒤(괴물): 메인 괴물보다 작고 조금 빠르다
+	WanderSpeed = 4.5,
+	InvestigateSpeed = 6.5,
+	ChaseSpeed = 9.5, -- 메인 괴물 8.5, 플레이어 걷기 10
+	CatchDistance = 3.0,
+	AgentRadius = 1.3,
+	AgentHeight = 6.5,
+	MawDistance = 8, -- 이 거리 안으로 덮치면 머리~배의 틈이 세로 입으로 벌어진다
+	EyeLinger = 1.2, -- 음파 선이 사라진 뒤에도 눈이 이만큼 더 남는다(초)
+}
+
 -- ─────────────────────────────── 라운드 ───────────────────────────────
 Config.Round = {
 	FirstStartDelay = 2,
@@ -512,6 +552,7 @@ Config.Tags = {
 	Dynamic = "SonarDynamic", -- 움직이는 대상(문, 괴물): 음파가 닿는 순간의 모습으로 선을 만든다
 	Door = "SonarDoor",
 	Monster = "Monster",
+	Doppel = "Doppel", -- 도플갱어(Monster 태그도 함께 붙는다)
 	AmbientEmitter = "AmbientEmitter",
 	HideSpot = "HideSpot",
 	SearchSpot = "SearchSpot",

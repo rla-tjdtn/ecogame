@@ -238,10 +238,13 @@ end
 -- 움직이는 파트: 스테이지 안(문·서랍·뚜껑)은 빌드할 때 모아 두고, 괴물은 모델마다 한 번만 모은다
 -- (예전처럼 음파마다 태그된 파트 전부를 훑으면 큰 맵에서 한 번에 수십~수백 ms 가 걸린다)
 World.stageDynamics = {} :: { BasePart }
+-- (도플갱어는 몸이 바뀐다: 사람 → 괴물, 틈 ↔ 벌어진 입. 바뀔 때마다 BodyVersion 이 올라가면 다시 모은다)
 local monsterParts: { [Model]: { BasePart } } = setmetatable({}, { __mode = "k" }) :: any
+local monsterVer: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
 local function partsOfMonster(m: Model): { BasePart }
 	local l = monsterParts[m]
-	if not l then
+	local ver = (m:GetAttribute("BodyVersion") :: number?) or 0
+	if not l or monsterVer[m] ~= ver then
 		l = {}
 		for _, d in m:GetDescendants() do
 			if d:IsA("BasePart") and CollectionService:HasTag(d, TAGS.Renderable) then
@@ -249,6 +252,7 @@ local function partsOfMonster(m: Model): { BasePart }
 			end
 		end
 		monsterParts[m] = l
+		monsterVer[m] = ver
 	end
 	return l
 end

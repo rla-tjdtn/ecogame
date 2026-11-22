@@ -21,7 +21,9 @@ local Mates = require(script.Parent:WaitForChild("Mates"))
 local KeyHUD = require(script.Parent:WaitForChild("KeyHUD"))
 local JumpScare = require(script.Parent:WaitForChild("JumpScare"))
 local SearchLook = require(script.Parent:WaitForChild("SearchLook"))
+local DoppelFx = require(script.Parent:WaitForChild("DoppelFx"))
 Pulses.onReach = MapView.onReach
+Pulses.onStart = DoppelFx.onPulse
 
 local player = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -65,6 +67,7 @@ local function tryBuild()
 		end
 		Pulses.clear()
 		Lines.clear()
+		DoppelFx.clear()
 		World.build(stage)
 		MapView.load(stage)
 		task.spawn(Lines.prewarm, 2500) -- 선 파트 미리 만들기(음파 도중 끊김 방지)
@@ -216,17 +219,36 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 			task.delay(2.5, UI.hint, "좌클릭 — 음파      Shift — 달리기      Ctrl — 웅크리기", 7)
 		end
 		task.delay(if data.stage == 1 then 10 else 2.5, UI.hint, "상자와 서랍(E)을 뒤져 열쇠를 찾아야 출구가 열린다", 6)
+	elseif kind == "DoppelBurst" then
+		-- 도플갱어의 사람 모습이 터진다(조각이 흩날림)
+		DoppelFx.burst(data)
+	elseif kind == "LifeLost" then
+		-- 잡혔지만 목숨이 남았다: 점프스케어 → 잠깐 검은 화면 → 시작 방에서 다시(캐릭터가 생기면 화면이 걷힌다)
+		if data.userId == player.UserId then
+			if data.why == "monster" or data.why == "doppel" then
+				JumpScare.play(function()
+					Audio.play("MonsterAlert", nil, 0.03, 0.8)
+				end, data.why)
+				task.wait(JumpScare.Duration)
+			end
+			if player:GetAttribute("Status") == "Respawning" then
+				UI.overlay("잡혔다", string.format("남은 목숨 %d — 시작 방에서 다시 시작합니다", data.lives), true)
+			end
+		else
+			local who = Players:GetPlayerByUserId(data.userId)
+			UI.hint(string.format("%s 님이 잡혔다 — 남은 목숨 %d", if who then who.DisplayName else "팀원", data.lives), 4)
+		end
 	elseif kind == "Died" then
-		if data.userId == player.UserId and data.why == "monster" then
-			-- 점프스케어: 괴물 얼굴이 확 뜬 뒤 YOU DIED
+		if data.userId == player.UserId and (data.why == "monster" or data.why == "doppel") then
+			-- 점프스케어: 괴물 얼굴이 확 뜬 뒤 YOU DIED (도플갱어는 머리~배가 세로로 벌어진 입)
 			JumpScare.play(function()
 				Audio.play("MonsterAlert", nil, 0.03, 0.8)
-			end)
+			end, data.why)
 			task.wait(JumpScare.Duration)
 		end
 		if data.userId == player.UserId then
 			if data.othersAlive > 0 then
-				UI.overlay("YOU DIED", "관전으로 전환합니다", true)
+				UI.overlay("YOU DIED", "목숨을 모두 잃었다 — 관전으로 전환합니다", true)
 				task.delay(2.5, function()
 					if spectating() then
 						UI.liftOverlay()
@@ -456,6 +478,8 @@ task.spawn(function()
 			end
 			table.insert(out, "svc=" .. tostring(game:GetService("ProximityPromptService").Enabled))
 			return table.concat(out, " ; ")
+		elseif cmd == "doppelFx" then
+			return { bursts = DoppelFx.bursts, shards = DoppelFx.lastShards, eyes = DoppelFx.litEyeCount() }
 		elseif cmd == "jump" then
 			local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 			if h then
