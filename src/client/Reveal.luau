@@ -69,6 +69,16 @@ function Reveal.onPulse(origin: Vector3)
 end
 
 -- 음파가 이 괴물의 굳은 선(잔상)을 그리지 않아도 되는가(지금 보이는 중이거나 곧 보일 것)
+-- 지금 음파에 걸려 있는가(파동이 닿은 뒤 ~ 10초): 이 동안만 그 괴물 발소리가 들린다
+function Reveal.active(m: Model): boolean
+	local e = revealed[m]
+	if not e then
+		return false
+	end
+	local now = os.clock()
+	return now >= e.from and now <= e.to
+end
+
 function Reveal.has(m: Model): boolean
 	return revealed[m] ~= nil
 end

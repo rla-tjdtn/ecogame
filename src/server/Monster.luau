@@ -1180,8 +1180,24 @@ function Monster.follow(self: Monster): boolean
 	return false
 end
 
+-- 맡은 반쪽(territory): 맵을 반으로 나눠 메인 괴물이 한 마리씩 맡는다. 없으면 맵 전체
+function Monster.inTerritory(self: Monster, pos: Vector3): boolean
+	local t = (self :: any).territory
+	if not t then
+		return true
+	end
+	local v = if t.axis == "X" then pos.X else pos.Z
+	return (v - t.mid) * t.side >= 0
+end
+
 function Monster.randomNode(self: Monster, awayFrom: Vector3?): Vector3
 	local function pick(): Vector3
+		for _ = 1, 16 do
+			local n = self.nodes[math.random(1, #self.nodes)]
+			if not Monster.isSafe(n) and self:inTerritory(n) then
+				return n
+			end
+		end
 		for _ = 1, 12 do
 			local n = self.nodes[math.random(1, #self.nodes)]
 			if not Monster.isSafe(n) then
@@ -1570,7 +1586,13 @@ function Monster.tick(self: Monster)
 			-- 넓은 맵에서 영영 마주치지 않는 일이 없게: 가끔 플레이어(숨지 않은) 근처로 배회한다
 			if now - self.lastHunt >= MC.HuntEvery then
 				self.lastHunt = now
-				local ps = alivePlayers()
+				-- (자기 반쪽에 있는 플레이어만 찾아간다)
+				local ps = {}
+				for _, e in alivePlayers() do
+					if self:inTerritory(e.root.Position) then
+						table.insert(ps, e)
+					end
+				end
 				if #ps > 0 then
 					local pick = ps[math.random(1, #ps)]
 					local tp = pick.root.Position

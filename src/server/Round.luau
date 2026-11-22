@@ -399,13 +399,49 @@ function Round.spawnMonsters(count: number)
 	table.sort(candidates, function(a, b)
 		return (a - spawnPos).Magnitude > (b - spawnPos).Magnitude
 	end)
+	-- 맵을 반으로 나눠(긴 쪽 기준) 반쪽마다 메인 괴물 한 마리: 그 반쪽에서 나타나 그 안을 돌아다닌다(쫓을 때는 넘어온다)
+	local halves: { { axis: string, mid: number, side: number } }? = nil
+	if count == 2 then
+		local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
+		for _, n in info.nodes do
+			x0, x1 = math.min(x0, n.X), math.max(x1, n.X)
+			z0, z1 = math.min(z0, n.Z), math.max(z1, n.Z)
+		end
+		local axis = if x1 - x0 >= z1 - z0 then "X" else "Z"
+		local mid = if axis == "X" then (x0 + x1) / 2 else (z0 + z1) / 2
+		halves = { { axis = axis, mid = mid, side = -1 }, { axis = axis, mid = mid, side = 1 } }
+	end
 	for k = 1, count do
 		-- 멀리 있는 지점들 중 서로 떨어진 곳
 		local pick = candidates[math.min(#candidates, 1 + (k - 1) * math.max(1, math.floor(#candidates / (count + 1))))]
+		local half = halves and halves[k]
+		if half then
+			-- 그 반쪽 안, 안전 구역 밖에서 시작점과 먼 곳 중 하나
+			local inHalf = {}
+			for _, n in candidates do
+				local v = if half.axis == "X" then n.X else n.Z
+				if (v - half.mid) * half.side >= 0 and not Round.inSafe(n) then
+					table.insert(inHalf, n)
+				end
+			end
+			if #inHalf == 0 then
+				for _, n in info.nodes do
+					local v = if half.axis == "X" then n.X else n.Z
+					if (v - half.mid) * half.side >= 0 and not Round.inSafe(n) then
+						table.insert(inHalf, n)
+					end
+				end
+			end
+			if #inHalf > 0 then
+				-- (candidates 는 시작점에서 먼 순: 먼 쪽 3분의 1 중 무작위)
+				pick = inHalf[math.random(1, math.max(1, math.ceil(#inHalf / 3)))]
+			end
+		end
 		local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
 			Round.kill(player, "monster")
 		end, Round.stageIndex)
 		m.route = info.route
+		;(m :: any).territory = half
 		table.insert(Round.monsters, m)
 		m:run()
 	end

@@ -179,11 +179,11 @@ Config.Hide = {
 }
 
 Config.Stages = {
-	{ Id = 1, Name = "STAGE 1 — 지하 시설", Module = "Stage1", Monsters = 1 },
+	{ Id = 1, Name = "STAGE 1 — 지하 시설", Module = "Stage1", Monsters = 2 },
 	{ Id = 2, Name = "STAGE 2 — 물류 창고", Module = "Stage2", Monsters = 2 },
 	{ Id = 3, Name = "STAGE 3 — 하수도", Module = "Stage3", Monsters = 2 },
-	{ Id = 4, Name = "STAGE 4 — 폐병원", Module = "Stage4", Monsters = 3 },
-	{ Id = 5, Name = "STAGE 5 — 심층 미로", Module = "Stage5", Monsters = 4 },
+	{ Id = 4, Name = "STAGE 4 — 폐병원", Module = "Stage4", Monsters = 2 },
+	{ Id = 5, Name = "STAGE 5 — 심층 미로", Module = "Stage5", Monsters = 2 },
 }
 
 -- ─────────────────────────────── 사운드 ───────────────────────────────

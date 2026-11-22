@@ -247,8 +247,15 @@ local function voiceOf(m: Model, kind: string): string?
 end
 -- 괴물 발이 땅에 닿는 순간(MonsterAnim): 그 괴물 자기 걸음 소리. hit = 착지 세기(무게·속도, 약 0.3~1.6)
 Audio.monsterSteps = 0 -- (테스트)
+-- 괴물 발소리는 음파에 걸린 동안만 들린다(Main 이 Reveal.active 로 채운다). 그 전에는 조용히 다가온다
+Audio.stepAudible = function(_m: Model): boolean
+	return true
+end
 function Audio.monsterFoot(model: Model, at: Vector3, hit: number)
 	Audio.monsterSteps += 1
+	if not Audio.stepAudible(model) then
+		return
+	end
 	local chase = model:GetAttribute("State") == "Chase"
 	local vol = (if chase then 1 else Config.Monster.StepWanderVolume) * math.clamp(0.6 + hit * 0.35, 0.6, 1.3)
 	local own = Audio.voiceName(model:GetAttribute("Voice") :: string?, "Steps")
@@ -302,6 +309,13 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 	end
 	tr.acc += d
 	local form = model:GetAttribute("Form")
+	if isMonster and not Audio.stepAudible(model) then
+		-- (음파에 걸리기 전: 괴물 발소리 없음)
+		if tr.acc >= 4.6 then
+			tr.acc = 0
+		end
+		return
+	end
 	if isMonster and form == "Disguise" then
 		-- 도플갱어(사람 모습): 플레이어와 똑같은 발소리
 		if tr.acc >= STRIDE.Walk then

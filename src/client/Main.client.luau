@@ -39,6 +39,7 @@ local MobileUI = require(script.Parent:WaitForChild("MobileUI"))
 Pulses.onReach = MapView.onReach
 -- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 10초 동안 지금 모습 그대로 보이게(굳은 잔상 선은 그리지 않는다)
 World.skipMonster = Reveal.has
+Audio.stepAudible = Reveal.active -- (괴물 발소리는 음파에 걸린 동안만)
 Pulses.onStart = function(origin: Vector3)
 	DoppelFx.onPulse(origin)
 	Reveal.onPulse(origin)
