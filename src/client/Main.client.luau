@@ -22,8 +22,13 @@ local KeyHUD = require(script.Parent:WaitForChild("KeyHUD"))
 local JumpScare = require(script.Parent:WaitForChild("JumpScare"))
 local SearchLook = require(script.Parent:WaitForChild("SearchLook"))
 local DoppelFx = require(script.Parent:WaitForChild("DoppelFx"))
+local Reveal = require(script.Parent:WaitForChild("Reveal"))
 Pulses.onReach = MapView.onReach
-Pulses.onStart = DoppelFx.onPulse
+-- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 어그로가 풀릴 때까지 계속 보이게
+Pulses.onStart = function(origin: Vector3)
+	DoppelFx.onPulse(origin)
+	Reveal.onPulse(origin)
+end
 
 local player = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -68,6 +73,7 @@ local function tryBuild()
 		Pulses.clear()
 		Lines.clear()
 		DoppelFx.clear()
+		Reveal.clear()
 		World.build(stage)
 		MapView.load(stage)
 		task.spawn(Lines.prewarm, 2500) -- 선 파트 미리 만들기(음파 도중 끊김 방지)
@@ -478,6 +484,8 @@ task.spawn(function()
 			end
 			table.insert(out, "svc=" .. tostring(game:GetService("ProximityPromptService").Enabled))
 			return table.concat(out, " ; ")
+		elseif cmd == "reveal" then
+			return Reveal.count()
 		elseif cmd == "doppelFx" then
 			return { bursts = DoppelFx.bursts, shards = DoppelFx.lastShards, eyes = DoppelFx.litEyeCount() }
 		elseif cmd == "jump" then

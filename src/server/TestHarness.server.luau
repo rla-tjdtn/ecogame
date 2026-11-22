@@ -1641,6 +1641,75 @@ local function livesTest()
 	Config.SafeZone.Enabled = false
 end
 
+-- ─────────────────────────────── reveal ───────────────────────────────
+-- 음파에 맞은 괴물은 어그로가 풀릴 때까지(다시 배회할 때까지) 계속 보인다
+local function revealTest()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	Round.startStage(1)
+	readyPlayers(1)
+	local catch0 = Config.Monster.CatchDistance
+	Config.Monster.CatchDistance = -1 -- (이 테스트에서는 잡지 않게)
+	local m = Round.monsters[1]
+	local pPos = tile(2, 2, 3)
+	place(p, pPos, tile(4, 4, 3))
+	m.model:PivotTo(CFrame.new(tile(4, 4, 5.2)))
+	m.waypoints = {}
+	m.startAt = 0
+	task.wait(0.5)
+	check("monster not shown before any sonar", ask(p, "reveal") == 0, ask(p, "reveal"))
+	ask(p, "resetCooldown")
+	ask(p, "fire")
+	m:startChase(p, pPos)
+	local shown = waitFor(function()
+		return (ask(p, "reveal") or 0) >= 1
+	end, 3)
+	check("sonar hit: the monster becomes visible", shown ~= nil, ask(p, "reveal"))
+	task.wait(Config.Sonar.Hold + 1.5)
+	m:startChase(p, pPos)
+	check("still visible after the sonar lines fade, while it is aggroed", (ask(p, "reveal") or 0) >= 1 and m.state ~= "Wander", string.format("%s %s", tostring(ask(p, "reveal")), m.state))
+	-- 어그로가 풀리면(배회) 안 보인다
+	m.startAt = 1e9
+	m.target = nil
+	m:setState("Wander")
+	local hidden = waitFor(function()
+		return ask(p, "reveal") == 0
+	end, 3)
+	check("aggro gone (wandering again) -> invisible again", hidden ~= nil, ask(p, "reveal"))
+	-- 음파 범위 밖의 괴물은 드러나지 않는다
+	m.model:PivotTo(CFrame.new(tile(30, 30, 5.2)))
+	m.startAt = 0
+	m:startChase(p, pPos)
+	ask(p, "resetCooldown")
+	ask(p, "fire")
+	task.wait(1.5)
+	check("a monster out of sonar range is not revealed", ask(p, "reveal") == 0, ask(p, "reveal"))
+	m.startAt = 1e9
+	m:setState("Wander")
+	-- 도플갱어: 음파에 들키면(사람 모습) 계속 보인다
+	local d = Round.doppels[1]
+	if d then
+		d.startAt = 0
+		d.model:PivotTo(CFrame.lookAt(tile(4, 4, 3), pPos))
+		d.waypoints = {}
+		d.pauseUntil = os.clock() + 30
+		task.wait(0.3)
+		ask(p, "resetCooldown")
+		ask(p, "fire")
+		local dshown = waitFor(function()
+			return d.discoveredBy ~= nil and (ask(p, "reveal") or 0) >= 1
+		end, 3)
+		task.wait(Config.Sonar.Hold + 0.5)
+		check("discovered doppelganger stays visible (player form)", dshown ~= nil and (ask(p, "reveal") or 0) >= 1 and d.form == "Disguise", string.format("%s %s", tostring(ask(p, "reveal")), d.form))
+		d.startAt = 1e9
+	end
+	Config.Monster.CatchDistance = catch0
+end
+
 -- ─────────────────────────────── seal ───────────────────────────────
 -- 스테이지 1~5 를 지어, 실제로 만들어진 벽·바닥에 구멍이 없는지 광선으로 확인한다:
 --   바닥 칸마다 아래로(바닥이 있나), 벽 칸 쪽으로(그 벽이 실제로 막고 있나),
@@ -1840,6 +1909,8 @@ task.spawn(function()
 			doppelTest()
 		elseif args.Test == "lives" then
 			livesTest()
+		elseif args.Test == "reveal" then
+			revealTest()
 		else
 			core()
 		end
