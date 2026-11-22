@@ -262,9 +262,9 @@ Config.Stages = {
 Config.Sounds = {
 	-- 사람 발소리: 실제 녹음된 발걸음 파일(2.5초 안에 4걸음) 중 가장 또렷한 한 걸음(1.22초 지점)만 짧게(Steps = {시작초, 재생길이초}).
 	-- 걸음마다 똑같은 소리 하나 — 다른 소리를 섞거나 피치를 바꾸지 않는다(깔끔하게).
-	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.55, Pitch = 1.0, Range = 40, Steps = { { 1.22, 0.13 } } },
-	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.85, Pitch = 1.0, Range = 70, Steps = { { 1.22, 0.13 } } },
-	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.2, Pitch = 1.0, Range = 18, Steps = { { 1.22, 0.13 } } },
+	FootWalk = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.36, Pitch = 1.0, Range = 40, Steps = { { 1.22, 0.13 } } },
+	FootRun = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.55, Pitch = 1.0, Range = 70, Steps = { { 1.22, 0.13 } } },
+	FootCrouch = { Id = "rbxasset://sounds/action_footsteps_plastic.mp3", Volume = 0.13, Pitch = 1.0, Range = 18, Steps = { { 1.22, 0.13 } } },
 	Sonar = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.3, Pitch = 0.35, Range = 90 }, -- (크면 머리가 아프다: 0.9 → 0.3)
 	SonarEcho = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.12, Pitch = 0.28, Range = 90 },
 	Door = { Id = "rbxasset://sounds/action_get_up.mp3", Volume = 0.8, Pitch = 0.55, Range = 60 },
