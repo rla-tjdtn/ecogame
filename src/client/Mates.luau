@@ -17,20 +17,42 @@ local function wanted(p: Player): Model?
 	return p.Character
 end
 
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TAG = require(ReplicatedStorage.Shared.Config).Tags.Monster
+
+local function outline(target: Model): Highlight
+	local hl = Instance.new("Highlight")
+	hl.Name = NAME
+	hl.Adornee = target
+	hl.FillTransparency = 1
+	hl.OutlineColor = Color3.new(1, 1, 1)
+	hl.OutlineTransparency = 0.3
+	hl.DepthMode = Enum.HighlightDepthMode.Occluded
+	hl.Parent = target
+	return hl
+end
+
 local function sync()
+	-- 사람 모습 도플갱어(진짜 아바타)도 팀원과 똑같이 늘 윤곽선으로 보인다. 터지면 지운다
+	for _, inst in CollectionService:GetTagged(TAG) do
+		if inst:IsA("Model") then
+			local m = inst :: Model
+			local want = m:GetAttribute("Form") == "Disguise" and m:GetAttribute("AvatarOf") ~= nil
+			local h = m:FindFirstChild(NAME)
+			if want and not h then
+				outline(m)
+			elseif h and not want then
+				h:Destroy()
+			end
+		end
+	end
 	for _, p in Players:GetPlayers() do
 		local char = p.Character
 		local want = wanted(p)
 		local h = char and char:FindFirstChild(NAME) :: Highlight?
 		if want and not h then
-			local hl = Instance.new("Highlight")
-			hl.Name = NAME
-			hl.Adornee = want
-			hl.FillTransparency = 1
-			hl.OutlineColor = Color3.new(1, 1, 1)
-			hl.OutlineTransparency = 0.3
-			hl.DepthMode = Enum.HighlightDepthMode.Occluded
-			hl.Parent = want
+			outline(want)
 		elseif h and not want then
 			h:Destroy()
 		end

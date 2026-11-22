@@ -38,7 +38,10 @@ local Reveal = require(script.Parent:WaitForChild("Reveal"))
 local MobileUI = require(script.Parent:WaitForChild("MobileUI"))
 Pulses.onReach = MapView.onReach
 -- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 10초 동안 지금 모습 그대로 보이게(굳은 잔상 선은 그리지 않는다)
-World.skipMonster = Reveal.has
+-- (사람 모습 도플갱어는 팀원처럼 윤곽선으로 늘 보이므로 음파 선을 그리지 않는다)
+World.skipMonster = function(m: Model): boolean
+	return Reveal.has(m) or Reveal.disguised(m)
+end
 Audio.stepAudible = Reveal.active -- (괴물 발소리는 음파에 걸린 동안만)
 Pulses.onStart = function(origin: Vector3)
 	DoppelFx.onPulse(origin)
@@ -140,8 +143,18 @@ local function charOf(userId: number): Model?
 	return p and p.Character
 end
 
-SonarPulse.OnClientEvent:Connect(function(userId: number, origin: Vector3)
+SonarPulse.OnClientEvent:Connect(function(userId: number, origin: Vector3, fromModel: Model?)
 	if typeof(origin) ~= "Vector3" then
+		return
+	end
+	if userId == 0 then
+		-- 도플갱어의 가짜 음파: 팀원 음파와 똑같이 보이고 들린다(그 몸은 파동에서 뺀다)
+		local cam = workspace.CurrentCamera
+		if cam and (cam.CFrame.Position - origin).Magnitude > Config.Sonar.RemoteViewDistance then
+			return
+		end
+		Pulses.start(origin, if typeof(fromModel) == "Instance" then fromModel else nil, false)
+		Audio.sonar(false, origin)
 		return
 	end
 	local cam = workspace.CurrentCamera

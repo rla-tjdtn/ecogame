@@ -1667,6 +1667,21 @@ local function roundEvent(): RemoteEvent?
 	return RoundEvent
 end
 
+-- 가짜 음파: 머리 높이에서 팀원 음파와 똑같이(SonarPulse, userId 0 + 이 모델)
+local SonarPulseRemote: RemoteEvent? = nil
+function Monster.fakeSonar(self: Monster)
+	if not SonarPulseRemote then
+		local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+		SonarPulseRemote = remotes and remotes:FindFirstChild("SonarPulse") :: RemoteEvent?
+	end
+	local head = self.model:FindFirstChild("Head") :: BasePart?
+	local origin = if head then head.Position else self.root.Position + Vector3.new(0, 1.5, 0)
+	if SonarPulseRemote then
+		SonarPulseRemote:FireAllClients(0, origin, self.model)
+	end
+	self.model:SetAttribute("FakePing", os.clock()) -- (테스트·기록용. 소리는 SonarPulse 가 낸다)
+end
+
 -- 들켰다: 변신 시각을 정한다(Config.Doppel.TransformDelay: 10~30초 뒤, 그때 플레이어가 가까이 있어야 변신)
 function Monster.discover(self: Monster, p: Player)
 	if self.discoveredBy or self.form ~= "Disguise" then
@@ -1749,10 +1764,10 @@ function Monster.disguiseTick(self: Monster, now: number)
 		self.hum:MoveTo(my)
 		return
 	end
-	-- 가짜 음파 소리(클라이언트가 이 자리에서 음파 소리만 낸다)
+	-- 가짜 음파: 플레이어처럼 진짜 음파를 쏜다(모두에게 파동·소리가 보이고 들린다. 괴물을 부르지는 않는다)
 	if now >= self.nextPing then
 		self.nextPing = now + between(cfg.FakePingEvery)
-		self.model:SetAttribute("FakePing", now)
+		self:fakeSonar()
 	end
 	if #self.waypoints == 0 or self:follow() then
 		if not self:pathTo(self:randomNode(my)) then
@@ -1764,7 +1779,7 @@ end
 
 -- 도플갱어를 진짜 아바타로 입힌다(친구 목록의 사람, 없으면 지금 플레이어 중 한 명 — 혼자면 내 모습).
 -- 아바타 몸(R15 파트·장신구)을 모델 바로 아래로 옮기고(속성 DisguisePart), 관절을 우리 루트에 잇는다.
--- 몸은 투명(음파에만 상자 선으로 보이고, 들키면 클라이언트가 팀원처럼 아바타 윤곽선으로 계속 보여 준다)
+-- 몸은 그대로 보인다: 클라이언트가 팀원과 똑같이 늘 흰 윤곽선을 씌운다(Mates). 음파 선은 그리지 않는다(플레이어처럼)
 local WALK_ANIM = "rbxassetid://507777826" -- 로블록스 기본 R15 걷기
 local IDLE_ANIM = "rbxassetid://507766388" -- 로블록스 기본 R15 서 있기
 function Monster.applyAvatar(self: Monster, desc: HumanoidDescription, who: string): boolean
@@ -1827,10 +1842,8 @@ function Monster.applyAvatar(self: Monster, desc: HumanoidDescription, who: stri
 					d.CanQuery = false
 					d.CanTouch = false
 					d.CastShadow = false
-					d.Transparency = 1
+					-- (투명하게 하지 않는다: 들키기 전에도 팀원처럼 늘 그 사람 모습으로 보인다)
 					CollectionService:AddTag(d, tag)
-				elseif d:IsA("Decal") then
-					d.Transparency = 1
 				end
 			end
 		end

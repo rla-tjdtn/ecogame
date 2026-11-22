@@ -383,12 +383,7 @@ local function watchMonster(m: Instance)
 			end
 	end))
 	-- 도플갱어: 가짜 음파 소리, 사람 모습이 터질 때 소리
-	table.insert(conns, model:GetAttributeChangedSignal("FakePing"):Connect(function()
-		local root = model.PrimaryPart
-		if root then
-			Audio.play("Sonar", root, 0.02, 0.9)
-		end
-	end))
+	-- (가짜 음파 소리는 SonarPulse 로 진짜 음파처럼 난다)
 	table.insert(conns, model:GetAttributeChangedSignal("Form"):Connect(function()
 		local root = model.PrimaryPart
 		local form = model:GetAttribute("Form")

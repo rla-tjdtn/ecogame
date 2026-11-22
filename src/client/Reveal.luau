@@ -47,11 +47,16 @@ local function wallsBetween(a: Vector3, b: Vector3): number
 	return n
 end
 
+-- 진짜 아바타를 입은 사람 모습 도플갱어: 늘 보인다(Mates 가 팀원처럼 윤곽선). 음파로 따로 드러낼 필요가 없다
+function Reveal.disguised(m: Model): boolean
+	return m:GetAttribute("Form") == "Disguise" and m:GetAttribute("AvatarOf") ~= nil
+end
+
 function Reveal.onPulse(origin: Vector3)
 	local now = os.clock()
 	for _, inst in CollectionService:GetTagged(TAGS.Monster) do
 		local m = inst :: Model
-		if m:IsA("Model") and m.PrimaryPart then
+		if m:IsA("Model") and m.PrimaryPart and not Reveal.disguised(m) then
 			local p = m.PrimaryPart.Position
 			local d = (p - origin).Magnitude
 			if d <= S.Radius + 3 and wallsBetween(origin, p) <= 1 then

@@ -209,7 +209,7 @@ Config.Doppel = {
 	WalkSpeed = 7, -- 사람 흉내: 천천히 걷기(플레이어 걷기 10)
 	PauseEvery = { 6, 14 }, -- 이 시간(초)마다 멈춰 서서 두리번(플레이어처럼)
 	PauseFor = { 1.5, 3.5 },
-	FakePingEvery = { 14, 28 }, -- 가끔 가짜 음파 소리(보이지는 않는다)
+	FakePingEvery = { 7, 15 }, -- 이 간격(초)으로 플레이어처럼 가짜 음파를 쏜다(파동·소리 모두 진짜와 같다)
 	SpawnDistance = { 45, 120 }, -- 시작점에서 이 거리 사이에 등장
 	SeeRange = 14, -- 이 거리 안에서 플레이어가 보면(벽 없이) 들킨다
 	SonarRange = 35, -- 이 거리 안에서 음파를 쏘면(벽 1장 이하) 들킨다(음파에 모습이 드러났으니)
@@ -3998,6 +3998,21 @@ local function roundEvent(): RemoteEvent?
 	return RoundEvent
 end
 
+-- 가짜 음파: 머리 높이에서 팀원 음파와 똑같이(SonarPulse, userId 0 + 이 모델)
+local SonarPulseRemote: RemoteEvent? = nil
+function Monster.fakeSonar(self: Monster)
+	if not SonarPulseRemote then
+		local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+		SonarPulseRemote = remotes and remotes:FindFirstChild("SonarPulse") :: RemoteEvent?
+	end
+	local head = self.model:FindFirstChild("Head") :: BasePart?
+	local origin = if head then head.Position else self.root.Position + Vector3.new(0, 1.5, 0)
+	if SonarPulseRemote then
+		SonarPulseRemote:FireAllClients(0, origin, self.model)
+	end
+	self.model:SetAttribute("FakePing", os.clock()) -- (테스트·기록용. 소리는 SonarPulse 가 낸다)
+end
+
 -- 들켰다: 변신 시각을 정한다(Config.Doppel.TransformDelay: 10~30초 뒤, 그때 플레이어가 가까이 있어야 변신)
 function Monster.discover(self: Monster, p: Player)
 	if self.discoveredBy or self.form ~= "Disguise" then
@@ -4080,10 +4095,10 @@ function Monster.disguiseTick(self: Monster, now: number)
 		self.hum:MoveTo(my)
 		return
 	end
-	-- 가짜 음파 소리(클라이언트가 이 자리에서 음파 소리만 낸다)
+	-- 가짜 음파: 플레이어처럼 진짜 음파를 쏜다(모두에게 파동·소리가 보이고 들린다. 괴물을 부르지는 않는다)
 	if now >= self.nextPing then
 		self.nextPing = now + between(cfg.FakePingEvery)
-		self.model:SetAttribute("FakePing", now)
+		self:fakeSonar()
 	end
 	if #self.waypoints == 0 or self:follow() then
 		if not self:pathTo(self:randomNode(my)) then
@@ -4095,7 +4110,7 @@ end
 
 -- 도플갱어를 진짜 아바타로 입힌다(친구 목록의 사람, 없으면 지금 플레이어 중 한 명 — 혼자면 내 모습).
 -- 아바타 몸(R15 파트·장신구)을 모델 바로 아래로 옮기고(속성 DisguisePart), 관절을 우리 루트에 잇는다.
--- 몸은 투명(음파에만 상자 선으로 보이고, 들키면 클라이언트가 팀원처럼 아바타 윤곽선으로 계속 보여 준다)
+-- 몸은 그대로 보인다: 클라이언트가 팀원과 똑같이 늘 흰 윤곽선을 씌운다(Mates). 음파 선은 그리지 않는다(플레이어처럼)
 local WALK_ANIM = "rbxassetid://507777826" -- 로블록스 기본 R15 걷기
 local IDLE_ANIM = "rbxassetid://507766388" -- 로블록스 기본 R15 서 있기
 function Monster.applyAvatar(self: Monster, desc: HumanoidDescription, who: string): boolean
@@ -4158,10 +4173,8 @@ function Monster.applyAvatar(self: Monster, desc: HumanoidDescription, who: stri
 					d.CanQuery = false
 					d.CanTouch = false
 					d.CastShadow = false
-					d.Transparency = 1
+					-- (투명하게 하지 않는다: 들키기 전에도 팀원처럼 늘 그 사람 모습으로 보인다)
 					CollectionService:AddTag(d, tag)
-				elseif d:IsA("Decal") then
-					d.Transparency = 1
 				end
 			end
 		end
@@ -9705,12 +9718,7 @@ local function watchMonster(m: Instance)
 			end
 	end))
 	-- 도플갱어: 가짜 음파 소리, 사람 모습이 터질 때 소리
-	table.insert(conns, model:GetAttributeChangedSignal("FakePing"):Connect(function()
-		local root = model.PrimaryPart
-		if root then
-			Audio.play("Sonar", root, 0.02, 0.9)
-		end
-	end))
+	-- (가짜 음파 소리는 SonarPulse 로 진짜 음파처럼 난다)
 	table.insert(conns, model:GetAttributeChangedSignal("Form"):Connect(function()
 		local root = model.PrimaryPart
 		local form = model:GetAttribute("Form")
@@ -10927,7 +10935,10 @@ local Reveal = require(script.Parent:WaitForChild("Reveal"))
 local MobileUI = require(script.Parent:WaitForChild("MobileUI"))
 Pulses.onReach = MapView.onReach
 -- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 10초 동안 지금 모습 그대로 보이게(굳은 잔상 선은 그리지 않는다)
-World.skipMonster = Reveal.has
+-- (사람 모습 도플갱어는 팀원처럼 윤곽선으로 늘 보이므로 음파 선을 그리지 않는다)
+World.skipMonster = function(m: Model): boolean
+	return Reveal.has(m) or Reveal.disguised(m)
+end
 Audio.stepAudible = Reveal.active -- (괴물 발소리는 음파에 걸린 동안만)
 Pulses.onStart = function(origin: Vector3)
 	DoppelFx.onPulse(origin)
@@ -11029,8 +11040,18 @@ local function charOf(userId: number): Model?
 	return p and p.Character
 end
 
-SonarPulse.OnClientEvent:Connect(function(userId: number, origin: Vector3)
+SonarPulse.OnClientEvent:Connect(function(userId: number, origin: Vector3, fromModel: Model?)
 	if typeof(origin) ~= "Vector3" then
+		return
+	end
+	if userId == 0 then
+		-- 도플갱어의 가짜 음파: 팀원 음파와 똑같이 보이고 들린다(그 몸은 파동에서 뺀다)
+		local cam = workspace.CurrentCamera
+		if cam and (cam.CFrame.Position - origin).Magnitude > Config.Sonar.RemoteViewDistance then
+			return
+		end
+		Pulses.start(origin, if typeof(fromModel) == "Instance" then fromModel else nil, false)
+		Audio.sonar(false, origin)
 		return
 	end
 	local cam = workspace.CurrentCamera
@@ -11891,20 +11912,42 @@ local function wanted(p: Player): Model?
 	return p.Character
 end
 
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TAG = require(ReplicatedStorage.Shared.Config).Tags.Monster
+
+local function outline(target: Model): Highlight
+	local hl = Instance.new("Highlight")
+	hl.Name = NAME
+	hl.Adornee = target
+	hl.FillTransparency = 1
+	hl.OutlineColor = Color3.new(1, 1, 1)
+	hl.OutlineTransparency = 0.3
+	hl.DepthMode = Enum.HighlightDepthMode.Occluded
+	hl.Parent = target
+	return hl
+end
+
 local function sync()
+	-- 사람 모습 도플갱어(진짜 아바타)도 팀원과 똑같이 늘 윤곽선으로 보인다. 터지면 지운다
+	for _, inst in CollectionService:GetTagged(TAG) do
+		if inst:IsA("Model") then
+			local m = inst :: Model
+			local want = m:GetAttribute("Form") == "Disguise" and m:GetAttribute("AvatarOf") ~= nil
+			local h = m:FindFirstChild(NAME)
+			if want and not h then
+				outline(m)
+			elseif h and not want then
+				h:Destroy()
+			end
+		end
+	end
 	for _, p in Players:GetPlayers() do
 		local char = p.Character
 		local want = wanted(p)
 		local h = char and char:FindFirstChild(NAME) :: Highlight?
 		if want and not h then
-			local hl = Instance.new("Highlight")
-			hl.Name = NAME
-			hl.Adornee = want
-			hl.FillTransparency = 1
-			hl.OutlineColor = Color3.new(1, 1, 1)
-			hl.OutlineTransparency = 0.3
-			hl.DepthMode = Enum.HighlightDepthMode.Occluded
-			hl.Parent = want
+			outline(want)
 		elseif h and not want then
 			h:Destroy()
 		end
@@ -13186,11 +13229,16 @@ local function wallsBetween(a: Vector3, b: Vector3): number
 	return n
 end
 
+-- 진짜 아바타를 입은 사람 모습 도플갱어: 늘 보인다(Mates 가 팀원처럼 윤곽선). 음파로 따로 드러낼 필요가 없다
+function Reveal.disguised(m: Model): boolean
+	return m:GetAttribute("Form") == "Disguise" and m:GetAttribute("AvatarOf") ~= nil
+end
+
 function Reveal.onPulse(origin: Vector3)
 	local now = os.clock()
 	for _, inst in CollectionService:GetTagged(TAGS.Monster) do
 		local m = inst :: Model
-		if m:IsA("Model") and m.PrimaryPart then
+		if m:IsA("Model") and m.PrimaryPart and not Reveal.disguised(m) then
 			local p = m.PrimaryPart.Position
 			local d = (p - origin).Magnitude
 			if d <= S.Radius + 3 and wallsBetween(origin, p) <= 1 then
