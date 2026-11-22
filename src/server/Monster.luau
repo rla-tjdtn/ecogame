@@ -22,7 +22,7 @@ Monster.isSafe = function(_pos: Vector3): boolean
 	return false
 end
 
-export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase" | "Disguise"
+export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase" | "Disguise" | "Dormant" | "Look"
 
 -- ── 챕터별 머리 도형: 1 삼각형 · 2 사각형 · 3 원 · 4 별 · 5 육각형 (그 이후는 처음부터 반복) ──
 -- cy: 머리 중심 높이, eye = {x, y, 반지름}, mouth = {반폭, 윗입술 y, 깊이}, 좌표는 머리 중심 기준
@@ -289,6 +289,180 @@ local function buildBeast(model: Model, root: BasePart, cf: CFrame)
 	}, "Joint", folder)
 end
 
+-- ── 꽃괴물 ──
+-- 확정 시안(꽃괴물): 줄기처럼 휜 긴 목, 잎맥 같은 갈비뼈의 마른 몸, 무릎 아래까지 늘어진 팔과 뿌리처럼 갈라진 손가락,
+-- 뒤로 꺾인 다리와 뿌리 같은 발. 머리는 평소 고개 숙인 튤립 봉오리(Bud), 깨어나면 뾰족한 꽃잎 6장이 젖혀지고
+-- 가운데 작은 눈 7개가 모인 머리(Bloom). 키 약 8.5스터드. 루트 가운데 기준 바닥 y = -4 (HipHeight 3).
+-- 좌표는 시안 그림(픽셀, 몸 가운데 x=180, 바닥 y=396, 36.2px = 1스터드)에서 옮긴다. 앞 = -Z
+-- 봉오리·펼친 머리는 둘 다 만들어 두고 음파 대상 태그를 바꿔 낀다(도플갱어 입과 같은 방식)
+local FLOWER_HIP = 3.0
+local function buildFlower(cf: CFrame): Model
+	local model = Instance.new("Model")
+	model.Name = "Flower"
+	model:SetAttribute(Config.Tags.Dynamic, true)
+	model:SetAttribute("State", "Dormant")
+	model:SetAttribute("Form", "Bud")
+	model:SetAttribute("BodyVersion", 1)
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1)
+	root.Transparency = 1
+	root.CanCollide = true
+	root.CanTouch = false
+	root.CFrame = cf
+	root.Parent = model
+	model.PrimaryPart = root
+	local folder = Instance.new("Folder")
+	folder.Name = "Body"
+	folder.Parent = model
+	local S = 36.2
+	local parts: { BasePart } = {}
+	local groups: { [string]: { BasePart } } = {}
+	local group: string? = nil
+	local mark: string? = nil -- "Bud" / "Bloom"
+	local function P(px: number, py: number, z: number): Vector3
+		return Vector3.new((px - 180) / S, (396 - py) / S - 4, z)
+	end
+	local function seg(a: Vector3, b: Vector3, r: number, name: string?)
+		local shape = if (b - a).Magnitude > r * 4 then "Line" else "Disc"
+		local p = Kit.cylinder(folder, cf:PointToWorldSpace(a), cf:PointToWorldSpace(b), r, { shape = shape, name = name, tag = mark ~= "Bloom" })
+		if mark then
+			p:SetAttribute(mark, true)
+		end
+		table.insert(parts, p)
+		if group then
+			groups[group] = groups[group] or {}
+			table.insert(groups[group], p)
+		end
+	end
+	local function flat(z: number): (number) -> number
+		return function(_py: number): number
+			return z
+		end
+	end
+	local function bez(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, n: number, zf: (number) -> number, r: number?)
+		local prev = P(x0, y0, zf(y0))
+		for i = 1, n do
+			local t = i / n
+			local u = 1 - t
+			local x = u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3
+			local y = u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3
+			local p = P(x, y, zf(y))
+			seg(prev, p, r or 0.035)
+			prev = p
+		end
+	end
+	local function line(x0: number, y0: number, x1: number, y1: number, zf: (number) -> number, r: number?)
+		seg(P(x0, y0, zf(y0)), P(x1, y1, zf(y1)), r or 0.035)
+	end
+	local body = flat(-0.2)
+	-- 어깨로 이어지는 목 밑동, 솟은 어깨
+	bez(170, 196, 166, 210, 162, 222, 160, 236, 2, body)
+	bez(190, 196, 194, 210, 198, 222, 200, 236, 2, body)
+	bez(160, 236, 150, 238, 142, 242, 138, 250, 2, body)
+	bez(200, 236, 210, 238, 218, 242, 222, 250, 2, body)
+	-- 몸통(좁아지는 허리) + 가운데 줄기선 + 잎맥 같은 갈비뼈 3쌍
+	bez(142, 250, 144, 280, 152, 305, 164, 318, 3, body)
+	line(164, 318, 196, 318, body)
+	bez(196, 318, 208, 305, 216, 280, 218, 250, 3, body)
+	line(180, 246, 180, 312, flat(-0.25), 0.025)
+	for _, y in { 258, 274, 290 } do
+		local w = if y == 290 then 18 else 24
+		bez(180, y, 174, y + 4, 180 - w * 0.6, y + 4, 180 - w, y, 2, flat(-0.25), 0.022)
+		bez(180, y, 186, y + 4, 180 + w * 0.6, y + 4, 180 + w, y, 2, flat(-0.25), 0.022)
+	end
+	-- 팔: 무릎 아래까지, 뿌리처럼 갈라진 손가락
+	local function armZ(py: number): number
+		return -0.25 - math.clamp((py - 250) / 140, 0, 1) * 0.45
+	end
+	for _, s in { -1, 1 } do
+		local function X(px: number): number
+			return 180 + (px - 180) * -s -- (s = -1: 왼쪽 그대로, 1: 좌우 뒤집기)
+		end
+		group = "Arm" .. s
+		bez(X(138), 250, X(124), 280, X(118), 305, X(120), 330, 2, armZ)
+		bez(X(120), 330, X(118), 350, X(116), 362, X(114), 372, 2, armZ)
+		bez(X(114), 372, X(110), 380, X(104), 388, X(100), 394, 2, armZ, 0.026)
+		line(X(114), 372, X(114), 396, armZ, 0.026)
+		bez(X(114), 372, X(118), 380, X(124), 386, X(130), 390, 2, armZ, 0.026)
+		line(X(108), 384, X(94), 384, armZ, 0.022)
+	end
+	-- 다리: 뒤로 꺾이고 뿌리 같은 발
+	local function legZ(py: number): number
+		return if py < 360 then -0.2 - (py - 318) / 42 * 0.35 else -0.55 + (py - 360) / 36 * 0.6
+	end
+	for _, s in { -1, 1 } do
+		local function X(px: number): number
+			return 180 + (px - 180) * -s
+		end
+		group = "Leg" .. s
+		bez(X(168), 318, X(162), 338, X(166), 352, X(174), 360, 2, legZ)
+		bez(X(174), 360, X(168), 372, X(160), 384, X(152), 392, 2, legZ)
+		line(X(152), 392, X(138), 395, legZ, 0.026)
+		line(X(152), 392, X(148), 397, legZ, 0.026)
+		line(X(152), 392, X(160), 396, legZ, 0.026)
+	end
+	group = nil
+	-- 머리(평소): 줄기처럼 휜 목 끝에 고개 숙인 튤립 봉오리
+	mark = "Bud"
+	local function budZ(py: number): number
+		return -0.35 - math.clamp((198 - py) / 110, 0, 1) * 0.55
+	end
+	bez(180, 198, 186, 176, 196, 160, 210, 150, 3, budZ)
+	bez(210, 150, 200, 132, 204, 106, 222, 96, 3, budZ)
+	bez(222, 96, 238, 104, 244, 128, 236, 148, 3, budZ)
+	bez(236, 148, 228, 158, 218, 158, 210, 150, 2, budZ)
+	bez(222, 96, 220, 116, 220, 136, 224, 154, 2, budZ, 0.022)
+	bez(212, 110, 216, 124, 218, 140, 220, 156, 2, budZ, 0.022)
+	bez(232, 108, 230, 124, 230, 140, 228, 154, 2, budZ, 0.022)
+	line(222, 96, 220, 88, budZ, 0.022)
+	line(222, 96, 226, 89, budZ, 0.022)
+	-- 머리(깨어나면): 곧게 선 목 끝에 뾰족한 꽃잎 6장이 젖혀지고 가운데 작은 눈 7개
+	mark = "Bloom"
+	local headZ = flat(-0.95)
+	bez(180, 198, 180, 180, 182, 166, 186, 156, 2, function(py)
+		return -0.35 - math.clamp((198 - py) / 42, 0, 1) * 0.55
+	end)
+	local hx, hy = 186, 128
+	for k = 0, 5 do
+		local a = math.rad(k * 60)
+		local function R(x: number, y: number): (number, number)
+			return hx + x * math.cos(a) - y * math.sin(a), hy + x * math.sin(a) + y * math.cos(a)
+		end
+		local x0, y0 = R(-4, -6)
+		local x1, y1 = R(-10, -24)
+		local x2, y2 = R(-8, -46)
+		local x3, y3 = R(0, -62)
+		bez(x0, y0, x1, y1, x2, y2, x3, y3, 2, headZ, 0.03)
+		local u1, v1 = R(8, -46)
+		local u2, v2 = R(10, -24)
+		local u3, v3 = R(4, -6)
+		bez(x3, y3, u1, v1, u2, v2, u3, v3, 2, headZ, 0.03)
+		local m0, n0 = R(0, -14)
+		local m1, n1 = R(0, -52)
+		line(m0, n0, m1, n1, headZ, 0.02)
+		for _, t in { { 6, -30, 11, -32 }, { 6, -40, 11, -43 } } do
+			local a0, b0 = R(t[1], t[2])
+			local a1, b1 = R(t[3], t[4])
+			line(a0, b0, a1, b1, headZ, 0.02)
+		end
+	end
+	for _, e in { { 0, 0, 0.09 }, { -8, -6, 0.06 }, { 8, -6, 0.06 }, { -10, 4, 0.055 }, { 10, 4, 0.055 }, { -3, 10, 0.05 }, { 3, 10, 0.05 } } do
+		seg(P(hx + e[1], hy + e[2], -1.0), P(hx + e[1], hy + e[2], -1.06), e[3], "FEye")
+	end
+	mark = nil
+	rig(model, root, cf, parts, groups, {
+		["Arm-1"] = P(138, 250, -0.25),
+		["Arm1"] = P(222, 250, -0.25),
+		["Leg-1"] = P(168, 318, -0.2),
+		["Leg1"] = P(192, 318, -0.2),
+	}, "Joint", folder)
+	makeHumanoid(model, FLOWER_HIP, 0)
+	CollectionService:AddTag(model, Config.Tags.Monster)
+	CollectionService:AddTag(model, Config.Tags.Flower)
+	return model
+end
+
 local function buildDoppel(cf: CFrame): Model
 	local model = Instance.new("Model")
 	model.Name = "Doppel"
@@ -529,10 +703,12 @@ end
 -- kind = "doppel" 이면 도플갱어(사람 모습으로 시작). 배회 지점(spawnPos)은 바닥 + 3
 function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> (), stage: number?, kind: string?): Monster
 	local isDoppel = kind == "doppel"
-	local cfg: any = if isDoppel
+	local isFlower = kind == "flower"
+	local own: any = if isDoppel then Config.Doppel elseif isFlower then Config.Flower else nil
+	local cfg: any = if own
 		then setmetatable({}, {
 			__index = function(_, k)
-				local v = (Config.Doppel :: any)[k]
+				local v = own[k]
 				if v ~= nil then
 					return v
 				end
@@ -540,7 +716,10 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 			end,
 		})
 		else MC
-	local model = if isDoppel then buildDoppel(CFrame.new(spawnPos + Vector3.new(0, 0.1, 0))) else buildModel(CFrame.new(spawnPos + Vector3.new(0, 2.2, 0)), stage or 1)
+	local model = if isDoppel
+		then buildDoppel(CFrame.new(spawnPos + Vector3.new(0, 0.1, 0)))
+		elseif isFlower then buildFlower(CFrame.new(spawnPos + Vector3.new(0, 1.1, 0)))
+		else buildModel(CFrame.new(spawnPos + Vector3.new(0, 2.2, 0)), stage or 1)
 	model.Parent = parent
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
 	pcall(function()
@@ -591,8 +770,8 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 		joints = {},
 		phase = 0,
 		animT = 0,
-		kind = if isDoppel then "doppel" else "main",
-		form = if isDoppel then "Disguise" else "Beast",
+		kind = if isDoppel then "doppel" elseif isFlower then "flower" else "main",
+		form = if isDoppel then "Disguise" elseif isFlower then "Bud" else "Beast",
 		cfg = cfg,
 		discoveredBy = nil,
 		transformAt = 0,
@@ -603,9 +782,11 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 		tracks = nil,
 	}, Monster)
 	-- 괴물마다 자기 소리(Config.MonsterVoices): 메인 괴물은 스테이지(머리 모양) 번호, 도플갱어는 "Doppel"
-	model:SetAttribute("Voice", if isDoppel then "Doppel" else tostring(((stage or 1) - 1) % 5 + 1))
+	model:SetAttribute("Voice", if isDoppel then "Doppel" elseif isFlower then "Flower" else tostring(((stage or 1) - 1) % 5 + 1))
 	if isDoppel then
 		self:setState("Disguise")
+	elseif isFlower then
+		self:setState("Dormant")
 	end
 	for _, name in { "Leg-1", "Leg1", "Arm-1", "Arm1" } do
 		local motor = root:FindFirstChild("Joint" .. name) :: Motor6D?
@@ -671,6 +852,8 @@ function Monster.setState(self: Monster, s: State)
 	local speed = cfg.WanderSpeed
 	if s == "Disguise" then
 		speed = cfg.WalkSpeed
+	elseif s == "Dormant" or s == "Look" then
+		speed = 0
 	elseif s == "Investigate" or s == "Search" then
 		speed = cfg.InvestigateSpeed
 	elseif s == "Chase" then
@@ -884,6 +1067,10 @@ function Monster.hear(self: Monster, pos: Vector3, radius: number, source: Playe
 	if kind == "Door" and source == nil then
 		return -- 괴물이 연 문 소리(괴물끼리 서로 문 소리에 끌려다니지 않게)
 	end
+	if self.kind == "flower" then
+		self:flowerHear(pos, radius, kind)
+		return
+	end
 	if self.form ~= "Beast" then
 		-- 사람 모습일 때는 소리에 반응하지 않는다. 다만 가까이서 쏜 음파에 모습이 드러나면 들킨 것
 		if self.form == "Disguise" and kind == "Sonar" and source then
@@ -974,6 +1161,10 @@ end
 function Monster.tick(self: Monster)
 	local now = os.clock()
 	if now < self.startAt then
+		return
+	end
+	if self.kind == "flower" then
+		self:flowerTick(now)
 		return
 	end
 	if self.form == "Disguise" then
@@ -1485,9 +1676,157 @@ function Monster.setMaw(self: Monster, open: boolean)
 	self.model:SetAttribute("BodyVersion", ((self.model:GetAttribute("BodyVersion") :: number?) or 1) + 1)
 end
 
+-- ── 꽃괴물: 가만히 서 있다가 음파를 들으면 머리를 펼치고 쏜 곳으로 달려간다 ──
+-- 머리 펼치기/닫기: 음파 대상 태그를 봉오리(Bud) ↔ 펼친 머리(Bloom) 선으로 바꿔 낀다
+function Monster.setBloom(self: Monster, open: boolean)
+	local want = if open then "Open" else "Bud"
+	if self.form == want then
+		return
+	end
+	self.form = want
+	local tag = Config.Tags.Renderable
+	local body = self.model:FindFirstChild("Body")
+	if body then
+		for _, p in body:GetChildren() do
+			if p:IsA("BasePart") then
+				local on = if p:GetAttribute("Bloom") then open elseif p:GetAttribute("Bud") then not open else nil
+				if on == true then
+					CollectionService:AddTag(p, tag)
+				elseif on == false then
+					CollectionService:RemoveTag(p, tag)
+				end
+			end
+		end
+	end
+	self.model:SetAttribute("Form", want)
+	self.model:SetAttribute("BodyVersion", ((self.model:GetAttribute("BodyVersion") :: number?) or 1) + 1)
+end
+
+-- 달려갈 곳: 음파 쏜 자리(안전 구역 안이면 그 앞, 바닥 위)
+local function rushGoal(self: Monster, pos: Vector3): Vector3
+	if Monster.isSafe(pos) then
+		return self:nearestOutside(pos) or pos
+	end
+	return pos
+end
+
+function Monster.flowerHear(self: Monster, pos: Vector3, radius: number, kind: string)
+	if kind ~= "Sonar" or not self.alive or os.clock() < self.startAt then
+		return
+	end
+	if not SoundBus.canHear(pos, self.root.Position, radius) then
+		return
+	end
+	local goal = rushGoal(self, pos)
+	self.goal = goal
+	self.waypoints = {}
+	if self.state == "Dormant" then
+		-- 깨어난다: 쉿(Alert 특수 소리) + 꽃잎을 펼친다, 펼치는 동안은 멈춰 있다
+		self:note("woke to sonar")
+		self:setBloom(true)
+		self.alertUntil = os.clock() + self.cfg.WakeTime
+		self:setState("Alert")
+	elseif self.state == "Look" then
+		self:setState("Chase")
+	end
+	-- (달리는 중이면 목표만 바뀐다)
+end
+
+function Monster.flowerTick(self: Monster, now: number)
+	local cfg = self.cfg
+	local my = self.root.Position
+	local st = self.state
+	if st == "Dormant" then
+		self.hum:MoveTo(my)
+		return
+	end
+	-- 달리거나 두리번거리는 중, 바로 앞(벽 없이)에 플레이어가 있으면 덤빈다
+	if st == "Chase" or st == "Look" then
+		for _, e in alivePlayers() do
+			local p = e.root.Position
+			if (p - my).Magnitude <= cfg.GrabRange and math.abs(p.Y - my.Y) < 7 and self:lineOfSight(p) then
+				self.goal = p
+				self.waypoints = {}
+				if st == "Look" then
+					self:setState("Chase")
+					st = "Chase"
+				end
+				self.hum:MoveTo(p)
+				return
+			end
+		end
+	end
+	if st == "Alert" then
+		self.hum:MoveTo(my)
+		if now >= self.alertUntil then
+			self:setState("Chase")
+		end
+		return
+	end
+	if st == "Chase" then
+		local goal = self.goal
+		if not goal then
+			self:setState("Look")
+			self.searchUntil = now + between(cfg.LookAround)
+			return
+		end
+		local flat = Vector3.new(goal.X - my.X, 0, goal.Z - my.Z).Magnitude
+		if flat < 4 then
+			-- 도착: 아무도 없다 → 두리번
+			self:note("arrived, looking around")
+			self.waypoints = {}
+			self.goal = nil
+			self:setState("Look")
+			self.searchUntil = now + between(cfg.LookAround)
+			return
+		end
+		if #self.waypoints == 0 then
+			if not self:pathTo(goal) then
+				-- 갈 수 없는 곳: 가장 가까운 배회 지점으로
+				local best, bd = nil, math.huge
+				for _, n in self.nodes do
+					local dd = (n - goal).Magnitude
+					if dd < bd and not Monster.isSafe(n) then
+						best, bd = n, dd
+					end
+				end
+				if best and (best - goal).Magnitude > 0.5 then
+					self.goal = best
+				else
+					self.goal = nil
+				end
+				return
+			end
+		end
+		self:follow()
+		Doors.openNear(my + self.root.CFrame.LookVector * 2, 6, my)
+		self:checkStuck(true)
+		return
+	end
+	if st == "Look" then
+		self.hum:MoveTo(my)
+		-- 두리번: 조금씩 몸을 돌린다
+		self.root.CFrame = self.root.CFrame * CFrame.Angles(0, math.rad(math.random(-25, 25)), 0)
+		if now >= self.searchUntil then
+			-- 머리를 닫고 그 자리에서 다시 기다린다
+			self:note("closing, dormant")
+			self:setBloom(false)
+			self:setState("Dormant")
+		end
+		return
+	end
+	-- (그 밖의 상태가 되면 기다림으로)
+	self:setBloom(false)
+	self:setState("Dormant")
+end
+
 -- 잡기 판정(매 프레임)
 function Monster.checkCatch(self: Monster)
-	if not self.alive or os.clock() < self.startAt or self.form ~= "Beast" then
+	if not self.alive or os.clock() < self.startAt then
+		return
+	end
+	-- 도플갱어는 괴물 모습일 때만, 꽃괴물은 머리를 펼쳤을 때만 잡는다
+	if (self.kind == "doppel" and self.form ~= "Beast") or (self.kind == "flower" and self.form ~= "Open") then
 		return
 	end
 	local my = self.root.Position

@@ -232,11 +232,11 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	elseif kind == "LifeLost" then
 		-- 잡혔지만 목숨이 남았다: 점프스케어 → 잠깐 검은 화면 → 시작 방에서 다시(캐릭터가 생기면 화면이 걷힌다)
 		if data.userId == player.UserId then
-			if data.why == "monster" or data.why == "doppel" then
+			if data.why == "monster" or data.why == "doppel" or data.why == "flower" then
 				JumpScare.play(function()
 					-- 잡은 괴물의 자기 괴성(도플갱어 / 그 스테이지 메인 괴물)
 					local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
-					local voice = if data.why == "doppel" then "Doppel" else tostring((math.max(1, si) - 1) % 5 + 1)
+					local voice = if data.why == "doppel" then "Doppel" elseif data.why == "flower" then "Flower" else tostring((math.max(1, si) - 1) % 5 + 1)
 					Audio.play(Audio.voiceName(voice, "Scream") or "MonsterAlert", nil, 0.03, 0.8)
 				end, data.why)
 				task.wait(JumpScare.Duration)
@@ -249,12 +249,12 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 			UI.hint(string.format("%s 님이 잡혔다 — 남은 목숨 %d", if who then who.DisplayName else "팀원", data.lives), 4)
 		end
 	elseif kind == "Died" then
-		if data.userId == player.UserId and (data.why == "monster" or data.why == "doppel") then
+		if data.userId == player.UserId and (data.why == "monster" or data.why == "doppel" or data.why == "flower") then
 			-- 점프스케어: 괴물 얼굴이 확 뜬 뒤 YOU DIED (도플갱어는 머리~배가 세로로 벌어진 입)
 			JumpScare.play(function()
 				-- 잡은 괴물의 자기 괴성(도플갱어 / 그 스테이지 메인 괴물)
 				local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
-				local voice = if data.why == "doppel" then "Doppel" else tostring((math.max(1, si) - 1) % 5 + 1)
+				local voice = if data.why == "doppel" then "Doppel" elseif data.why == "flower" then "Flower" else tostring((math.max(1, si) - 1) % 5 + 1)
 				Audio.play(Audio.voiceName(voice, "Scream") or "MonsterAlert", nil, 0.03, 0.8)
 			end, data.why)
 			task.wait(JumpScare.Duration)

@@ -288,7 +288,7 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 			local own = voiceOf(model, "Steps")
 			if own then
 				-- 그 괴물 자기 걸음 소리(발 끌기·나무 딱딱·손톱 톡톡·쿵·곤충 걸음)
-				Audio.play(own, root, 0.06, vol)
+				Audio.play(own, root, 0.06, vol, if model:GetAttribute("Voice") == "Flower" then 0.75 else nil)
 			else
 				local small = model:GetAttribute("Form") ~= nil
 				Audio.play("MonsterStep", root, 0.08, vol * (if small then 0.85 else 1), if small then 1.25 else nil)
@@ -345,6 +345,27 @@ local function watchMonster(m: Instance)
 	end))
 	table.insert(conns, model:GetAttributeChangedSignal("Form"):Connect(function()
 		local root = model.PrimaryPart
+		local form = model:GetAttribute("Form")
+		if root and model:GetAttribute("Voice") == "Flower" then
+			-- 꽃괴물: 꽃잎이 펼쳐질 때 뼈·살 소리 → 다 펼치면 질척, 닫을 때는 낮은 질척
+			if form == "Open" then
+				local n = Audio.voiceName("Flower", "Unfold")
+				if n then
+					Audio.play(n, root, 0.03)
+				end
+				task.delay((Config :: any).Flower.WakeTime, function()
+					local q = Audio.voiceName("Flower", "Squelch")
+					if q and root.Parent then
+						Audio.play(q, root, 0.03)
+					end
+				end)
+			elseif form == "Bud" then
+				local q = Audio.voiceName("Flower", "Squelch")
+				if q then
+					Audio.play(q, root, 0.03, 0.7, 0.75)
+				end
+			end
+		end
 		if root and model:GetAttribute("Form") == "Bursting" then
 			-- 도플갱어 자기 소리: 살 찢어짐 + 뼈 우두둑(없으면 낮게 꺾이는 소리)
 			local def = (Config :: any).MonsterVoices and (Config :: any).MonsterVoices[model:GetAttribute("Voice")]

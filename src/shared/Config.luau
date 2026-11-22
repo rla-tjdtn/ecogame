@@ -125,6 +125,26 @@ Config.Doppel = {
 	EyeLinger = 1.2, -- 음파 선이 사라진 뒤에도 눈이 이만큼 더 남는다(초)
 }
 
+-- ─────────────────────────────── 꽃괴물(서브 괴물) ───────────────────────────────
+-- 스테이지마다 한 마리. 평소엔 봉오리 머리를 닫고 가만히 서 있다(돌아다니지 않는다).
+-- 누가 음파를 쏘면(들리는 거리 안, 벽마다 줄어듦) 쉿 소리와 함께 꽃잎 6장을 펼치고 쏜 곳으로 달려간다.
+-- 도착해서 아무도 없으면 두리번거리다 머리를 닫고 그 자리에서 다시 기다린다(음파를 쏠수록 조금씩 다가온다).
+Config.Flower = {
+	Enabled = true,
+	PerStage = 1,
+	StartDelay = 6,
+	SpawnDistance = { 40, 120 }, -- 시작점에서 이 거리 사이
+	WakeTime = 0.8, -- 꽃잎이 펼쳐지는 동안(멈춰 있음)
+	ChaseSpeed = 16, -- 음파 쏜 곳으로 달려가는 속도(걷기 10 < 16 < 달리기 18)
+	WanderSpeed = 0, -- (돌아다니지 않는다)
+	InvestigateSpeed = 0,
+	LookAround = { 2, 3 }, -- 도착 뒤 두리번거리는 시간(초)
+	GrabRange = 7, -- 달리거나 두리번거리는 중 이 거리 안의 플레이어(벽 없이)에게 덤빈다
+	CatchDistance = 3.2,
+	AgentRadius = 1.5,
+	AgentHeight = 8.5,
+}
+
 -- ─────────────────────────────── 라운드 ───────────────────────────────
 Config.Round = {
 	FirstStartDelay = 2,
@@ -559,6 +579,8 @@ Config.MonsterVoices = {
 	["4"] = { Name = "별", Scream = { 78248585425234 }, Steps = { 137748804042134 } }, -- 쿵 걸음
 	["5"] = { Name = "육각", Scream = { 123342966944903 }, Steps = { 119059498928351 } }, -- 곤충 걸음
 	Doppel = { Name = "도플갱어", Scream = { 102508063645161 }, Burst = { 85832788832876, 74039555089610 } }, -- 지직거리는 괴성 / 살 찢어짐 + 뼈 우두둑
+	-- 꽃괴물: 깨어날 때 쉿(Special), 꽃잎 펼칠 때 뼈·살(Unfold), 다 펼치면 질척(Squelch, 닫을 때도 낮게), 달려갈 때 괴성, 걸음은 손톱 톡톡을 낮게
+	Flower = { Name = "꽃괴물", Scream = { 74933650585675 }, Special = { 132007379899903 }, Unfold = { 103473951609932 }, Squelch = { 125203001018778 }, Steps = { 134919568490352 } },
 }
 -- 소리 종류별 크기(괴성은 Config.MonsterLoudness 배)·자르는 길이(초)
 Config.VoiceMix = {
@@ -566,13 +588,15 @@ Config.VoiceMix = {
 	Steps = { Volume = 0.7, Cut = 1.2 },
 	Special = { Volume = 0.9, Cut = 2.5 },
 	Burst = { Volume = 1.2, Cut = 2.5 },
+	Unfold = { Volume = 1.0, Cut = 1.3 },
+	Squelch = { Volume = 1.0, Cut = 1.0 },
 }
 for v, def in Config.MonsterVoices do
 	for kind, mix in Config.VoiceMix do
 		local ids = (def :: any)[kind]
 		if ids then
 			for k, id in ids do
-				local loud = if kind == "Scream" or kind == "Burst" then Config.MonsterLoudness else 1
+				local loud = if kind == "Scream" or kind == "Burst" or kind == "Unfold" then Config.MonsterLoudness else 1
 				;(Config.Sounds :: any)["Voice_" .. v .. "_" .. kind .. "_" .. k] = {
 					Id = "rbxassetid://" .. id,
 					Volume = mix.Volume * loud,
@@ -592,6 +616,7 @@ Config.Tags = {
 	Door = "SonarDoor",
 	Monster = "Monster",
 	Doppel = "Doppel", -- 도플갱어(Monster 태그도 함께 붙는다)
+	Flower = "Flower", -- 꽃괴물(Monster 태그도 함께 붙는다)
 	AmbientEmitter = "AmbientEmitter",
 	HideSpot = "HideSpot",
 	SearchSpot = "SearchSpot",

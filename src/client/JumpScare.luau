@@ -228,7 +228,77 @@ local function drawDoppel()
 	end
 end
 
--- 얼굴을 띄운다(이미 떠 있으면 무시). kind = "doppel" 이면 도플갱어 얼굴
+-- 꽃괴물: 뾰족한 꽃잎 6장(바깥 가시)이 화면 가득 펼쳐지고 가운데 작은 눈 7개
+local function drawFlower()
+	for _, c in face:GetChildren() do
+		if c:IsA("Frame") then
+			c:Destroy()
+		end
+	end
+	local size = face.AbsoluteSize.X
+	if size < 10 then
+		size = math.min(back.AbsoluteSize.X, back.AbsoluteSize.Y) * 0.95
+	end
+	local thick = math.max(4, size * 0.011)
+	local function px(x: number, y: number): Vector2
+		-- 꽃 가운데가 화면 가운데, 꽃잎 길이 62 가 화면 반쯤
+		return Vector2.new((0.5 + x / 140) * size, (0.5 + y / 140) * size)
+	end
+	local function line(ax: number, ay: number, bx: number, by: number, w: number?)
+		local a, b = px(ax, ay), px(bx, by)
+		local d = b - a
+		local fr = Instance.new("Frame")
+		fr.BackgroundColor3 = WHITE
+		fr.BorderSizePixel = 0
+		fr.AnchorPoint = Vector2.new(0.5, 0.5)
+		fr.Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
+		fr.Size = UDim2.fromOffset(d.Magnitude + (w or thick), w or thick)
+		fr.Rotation = math.deg(math.atan2(d.Y, d.X))
+		fr.Parent = face
+	end
+	local function bez(p0: { number }, p1: { number }, p2: { number }, p3: { number }, n: number, w: number?)
+		local ax, ay = p0[1], p0[2]
+		for i = 1, n do
+			local t = i / n
+			local u = 1 - t
+			local x = u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1]
+			local y = u * u * u * p0[2] + 3 * u * u * t * p1[2] + 3 * u * t * t * p2[2] + t * t * t * p3[2]
+			line(ax, ay, x, y, w)
+			ax, ay = x, y
+		end
+	end
+	local function dot(x: number, y: number, r: number)
+		local c = px(x, y)
+		local fr = Instance.new("Frame")
+		fr.BackgroundColor3 = WHITE
+		fr.AnchorPoint = Vector2.new(0.5, 0.5)
+		fr.Position = UDim2.fromOffset(c.X, c.Y)
+		fr.Size = UDim2.fromOffset(r * 2 * size / 140, r * 2 * size / 140)
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(1, 0)
+		corner.Parent = fr
+		fr.Parent = face
+	end
+	for k = 0, 5 do
+		local a = math.rad(k * 60 + 30)
+		local function R(x: number, y: number): { number }
+			return { x * math.cos(a) - y * math.sin(a), x * math.sin(a) + y * math.cos(a) }
+		end
+		bez(R(-4, -6), R(-10, -24), R(-8, -46), R(0, -62), 8)
+		bez(R(0, -62), R(8, -46), R(10, -24), R(4, -6), 8)
+		local m0, m1 = R(0, -14), R(0, -52)
+		line(m0[1], m0[2], m1[1], m1[2], thick * 0.6)
+		for _, t in { { 6, -30, 11, -32 }, { 6, -40, 11, -43 }, { -6, -30, -11, -32 }, { -6, -40, -11, -43 } } do
+			local q0, q1 = R(t[1], t[2]), R(t[3], t[4])
+			line(q0[1], q0[2], q1[1], q1[2], thick * 0.7)
+		end
+	end
+	for _, e in { { 0, 0, 3.4 }, { -8, -6, 2.3 }, { 8, -6, 2.3 }, { -10, 4, 2.1 }, { 10, 4, 2.1 }, { -3, 10, 1.8 }, { 3, 10, 1.8 } } do
+		dot(e[1], e[2], e[3])
+	end
+end
+
+-- 얼굴을 띄운다(이미 떠 있으면 무시). kind = "doppel" 이면 도플갱어 얼굴, "flower" 면 꽃괴물
 local busy = false
 function JumpScare.play(scream: (() -> ())?, kind: string?)
 	if busy then
@@ -240,6 +310,8 @@ function JumpScare.play(scream: (() -> ())?, kind: string?)
 	gui.Enabled = true
 	if kind == "doppel" then
 		drawDoppel()
+	elseif kind == "flower" then
+		drawFlower()
 	else
 		draw(SPECS[((math.max(1, si) - 1) % #SPECS) + 1])
 	end

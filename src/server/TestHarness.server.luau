@@ -52,6 +52,7 @@ ReplicatedStorage:SetAttribute("ForceMode", if args.Test == "lobby" then "Lobby"
 Config.Monster.StartDelay = 1e6
 Config.Lives.PerStage = 1 -- (예전 테스트는 한 번 잡히면 죽는 것을 전제: lives 테스트에서만 3개)
 Config.SafeZone.Enabled = false -- (예전 테스트는 시작 방에서 괴물을 시험한다: lives 테스트에서만 켠다)
+Config.Flower.StartDelay = 1e6 -- (꽃괴물도 멈춰 둔다)
 Config.Doppel.StartDelay = 1e6 -- (도플갱어도 멈춰 둔다: doppel 테스트에서만 움직인다)
 Config.Key.Required = false -- (열쇠 시험은 core 에서 따로 켠다)
 Config.Round.ResultSeconds = 2

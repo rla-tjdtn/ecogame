@@ -26,6 +26,7 @@ Round.lastBuildMs = 0
 Round.info = nil :: Builder.StageInfo?
 Round.monsters = {} :: { any }
 Round.doppels = {} :: { any } -- 도플갱어(서브 괴물): 메인 괴물 수와 따로 센다
+Round.flowers = {} :: { any } -- 꽃괴물(서브 괴물)
 Round.autoLoop = true -- 테스트가 끌 수 있다
 Round.lastOutcome = "" :: string
 Round.events = {} :: { string }
@@ -328,6 +329,10 @@ local function clearMonsters()
 		m:destroy()
 	end
 	table.clear(Round.doppels)
+	for _, m in Round.flowers do
+		m:destroy()
+	end
+	table.clear(Round.flowers)
 	monsterFolder:ClearAllChildren()
 end
 
@@ -434,6 +439,30 @@ function Round.spawnMonsters(count: number)
 		end
 		note("doppels " .. D.PerStage)
 	end
+	-- 꽃괴물: 시작점에서 떨어진(안전 구역 밖) 곳에 가만히 서 있게
+	local F = Config.Flower
+	if F.Enabled and Round.stageIndex > 0 then
+		local spots = {}
+		for _, n in info.nodes do
+			local d = (n - spawnPos).Magnitude
+			if d >= F.SpawnDistance[1] and d <= F.SpawnDistance[2] and not Round.inSafe(n) then
+				table.insert(spots, n)
+			end
+		end
+		if #spots == 0 then
+			spots = candidates
+		end
+		for _ = 1, F.PerStage do
+			local pick = spots[math.random(1, #spots)]
+			local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
+				Round.kill(player, "flower")
+			end, Round.stageIndex, "flower")
+			m.route = info.route
+			table.insert(Round.flowers, m)
+			m:run()
+		end
+		note("flowers " .. F.PerStage)
+	end
 end
 
 function Round.startStage(i: number)
@@ -529,6 +558,10 @@ RunService.Heartbeat:Connect(function(dt)
 		m:checkCatch()
 		m:animate(dt)
 	end
+	for _, m in Round.flowers do
+		m:checkCatch()
+		m:animate(dt)
+	end
 	local info = Round.info
 	if not info then
 		return
@@ -590,6 +623,9 @@ SoundBus.listen(function(pos, radius, source, kind)
 		m:hear(pos, radius, source, kind)
 	end
 	for _, m in Round.doppels do
+		m:hear(pos, radius, source, kind)
+	end
+	for _, m in Round.flowers do
 		m:hear(pos, radius, source, kind)
 	end
 end)
