@@ -8782,7 +8782,25 @@ local function doppelTest()
 		local dressed = dd and waitFor(function()
 			return dd.model:GetAttribute("AvatarOf") ~= nil
 		end, 12)
-		check("doppelganger wears a real avatar (a friend, or a player)", dressed ~= nil and dd.tracks ~= nil, dd and tostring(dd.model:GetAttribute("AvatarOf")))
+		check("doppelganger wears a real avatar (a friend, or a player)", dressed ~= nil and dd.tracks ~= nil, dd and tostring(dd.model:GetAttribute("AvatarOf")))		-- 들키기 전에도 몸이 보인다(투명하지 않은 아바타 파트)
+		local shown, total = 0, 0
+		if dd then
+			for _, c in dd.model:GetChildren() do
+				if c:GetAttribute("DisguisePart") and c:IsA("BasePart") then
+					total += 1
+					if c.Transparency < 1 then
+						shown += 1
+					end
+				end
+			end
+		end
+		check("disguise avatar is visible before any sonar", total > 0 and shown == total, string.format("%d/%d", shown, total))
+		-- 가짜 음파: 진짜 음파처럼 클라이언트에 SonarPulse 로 간다
+		local before = dd and dd.model:GetAttribute("FakePing")
+		if dd then
+			dd:fakeSonar()
+		end
+		check("doppelganger fires a fake sonar pulse", dd ~= nil and dd.model:GetAttribute("FakePing") ~= before)
 	end
 	-- 1스테이지 시작 방에서: 플레이어 tile(2,2), 도플갱어 tile(4,4) (약 23스터드: 보이는 거리 밖, 음파 거리 안)
 	Round.startStage(1)
