@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local Config = require(ReplicatedStorage.Shared.Config)
+local MobileUI = require(script.Parent:WaitForChild("MobileUI")) -- (휴대폰 화면 버튼: 달리기·웅크리기)
 
 local MV = Config.Move
 local SetMoveMode = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("SetMoveMode") :: RemoteEvent
@@ -28,11 +29,11 @@ local function wantedMode(): string
 	if UserInputService:GetFocusedTextBox() then
 		return "Walk"
 	end
-	local crouch = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+	local crouch = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) or MobileUI.crouch
 	if crouch then
 		return "Crouch"
 	end
-	local run = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+	local run = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift) or MobileUI.run
 	if run then
 		return "Run"
 	end

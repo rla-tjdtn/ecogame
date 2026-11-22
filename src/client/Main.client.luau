@@ -23,6 +23,7 @@ local JumpScare = require(script.Parent:WaitForChild("JumpScare"))
 local SearchLook = require(script.Parent:WaitForChild("SearchLook"))
 local DoppelFx = require(script.Parent:WaitForChild("DoppelFx"))
 local Reveal = require(script.Parent:WaitForChild("Reveal"))
+local MobileUI = require(script.Parent:WaitForChild("MobileUI"))
 Pulses.onReach = MapView.onReach
 -- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 10초 동안 지금 모습 그대로 보이게(굳은 잔상 선은 그리지 않는다)
 World.skipMonster = Reveal.has
@@ -198,6 +199,39 @@ ProximityPromptService.PromptShown:Connect(function(prompt)
 	end
 end)
 
+-- ── 휴대폰 화면 버튼(MobileUI) 연결: 키보드·마우스와 같은 동작 ──
+MobileUI.spectating = spectating
+MobileUI.onSonar = function()
+	if spectating() then
+		spectateIndex += 1
+	else
+		fire()
+	end
+end
+MobileUI.canInteract = function(): boolean
+	return SearchLook.target() ~= nil or shownPrompt ~= nil
+end
+MobileUI.onInteract = function()
+	-- 조준한 서랍·뚜껑이 먼저(E 와 같다), 아니면 지금 안내 중인 문·숨는 곳
+	if SearchLook.target() then
+		SearchLook.use()
+		return
+	end
+	local pr = shownPrompt
+	if pr then
+		pr:InputHoldBegin()
+		task.delay(0.1, function()
+			pr:InputHoldEnd()
+		end)
+	end
+end
+MobileUI.onMap = function()
+	MapView.toggle()
+end
+MobileUI.onMenu = function()
+	LobbyUI.setMenu(not LobbyUI.state().menuOpen)
+end
+
 -- ── 라운드 이벤트 ──
 local function resetCamera()
 	local cam = workspace.CurrentCamera
@@ -223,9 +257,9 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		UI.hideOverlay(false)
 		UI.setStage(data.name)
 		if data.stage == 1 then
-			task.delay(2.5, UI.hint, "좌클릭 — 음파      Shift — 달리기      Ctrl — 웅크리기", 7)
+			task.delay(2.5, UI.hint, if MobileUI.state().enabled then "음파 버튼 — 음파      달리기 · 웅크리기 버튼은 눌러서 켜고 끄기" else "좌클릭 — 음파      Shift — 달리기      Ctrl — 웅크리기", 7)
 		end
-		task.delay(if data.stage == 1 then 10 else 2.5, UI.hint, "상자와 서랍(E)을 뒤져 열쇠를 찾아야 출구가 열린다", 6)
+		task.delay(if data.stage == 1 then 10 else 2.5, UI.hint, if MobileUI.state().enabled then "상자와 서랍(상호작용 버튼)을 뒤져 열쇠를 찾아야 출구가 열린다" else "상자와 서랍(E)을 뒤져 열쇠를 찾아야 출구가 열린다", 6)
 	elseif kind == "DoppelBurst" then
 		-- 도플갱어의 사람 모습이 터진다(조각이 흩날림)
 		DoppelFx.burst(data)
@@ -284,7 +318,7 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		UI.hideOverlay(false)
 		UI.setSpectate(nil)
 		UI.setStage("로비")
-		task.delay(1.5, UI.hint, "Tab — 방 메뉴      좌클릭 — 음파      Q — 지도", 7)
+		task.delay(1.5, UI.hint, if MobileUI.state().enabled then "방 메뉴 버튼 — 방 만들기·참가      음파 버튼 — 음파" else "Tab — 방 메뉴      좌클릭 — 음파      Q — 지도", 7)
 	elseif kind == "KeyFound" then
 		UI.hint((if data.userId == player.UserId then "열쇠를 찾았다" else (data.by .. " 님이 열쇠를 찾았다")) .. " — 이제 출구가 열린다", 5)
 	elseif kind == "SearchResult" then

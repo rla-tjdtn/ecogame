@@ -9780,6 +9780,7 @@ local JumpScare = require(script.Parent:WaitForChild("JumpScare"))
 local SearchLook = require(script.Parent:WaitForChild("SearchLook"))
 local DoppelFx = require(script.Parent:WaitForChild("DoppelFx"))
 local Reveal = require(script.Parent:WaitForChild("Reveal"))
+local MobileUI = require(script.Parent:WaitForChild("MobileUI"))
 Pulses.onReach = MapView.onReach
 -- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 10초 동안 지금 모습 그대로 보이게(굳은 잔상 선은 그리지 않는다)
 World.skipMonster = Reveal.has
@@ -9955,6 +9956,39 @@ ProximityPromptService.PromptShown:Connect(function(prompt)
 	end
 end)
 
+-- ── 휴대폰 화면 버튼(MobileUI) 연결: 키보드·마우스와 같은 동작 ──
+MobileUI.spectating = spectating
+MobileUI.onSonar = function()
+	if spectating() then
+		spectateIndex += 1
+	else
+		fire()
+	end
+end
+MobileUI.canInteract = function(): boolean
+	return SearchLook.target() ~= nil or shownPrompt ~= nil
+end
+MobileUI.onInteract = function()
+	-- 조준한 서랍·뚜껑이 먼저(E 와 같다), 아니면 지금 안내 중인 문·숨는 곳
+	if SearchLook.target() then
+		SearchLook.use()
+		return
+	end
+	local pr = shownPrompt
+	if pr then
+		pr:InputHoldBegin()
+		task.delay(0.1, function()
+			pr:InputHoldEnd()
+		end)
+	end
+end
+MobileUI.onMap = function()
+	MapView.toggle()
+end
+MobileUI.onMenu = function()
+	LobbyUI.setMenu(not LobbyUI.state().menuOpen)
+end
+
 -- ── 라운드 이벤트 ──
 local function resetCamera()
 	local cam = workspace.CurrentCamera
@@ -9980,9 +10014,9 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		UI.hideOverlay(false)
 		UI.setStage(data.name)
 		if data.stage == 1 then
-			task.delay(2.5, UI.hint, "좌클릭 — 음파      Shift — 달리기      Ctrl — 웅크리기", 7)
+			task.delay(2.5, UI.hint, if MobileUI.state().enabled then "음파 버튼 — 음파      달리기 · 웅크리기 버튼은 눌러서 켜고 끄기" else "좌클릭 — 음파      Shift — 달리기      Ctrl — 웅크리기", 7)
 		end
-		task.delay(if data.stage == 1 then 10 else 2.5, UI.hint, "상자와 서랍(E)을 뒤져 열쇠를 찾아야 출구가 열린다", 6)
+		task.delay(if data.stage == 1 then 10 else 2.5, UI.hint, if MobileUI.state().enabled then "상자와 서랍(상호작용 버튼)을 뒤져 열쇠를 찾아야 출구가 열린다" else "상자와 서랍(E)을 뒤져 열쇠를 찾아야 출구가 열린다", 6)
 	elseif kind == "DoppelBurst" then
 		-- 도플갱어의 사람 모습이 터진다(조각이 흩날림)
 		DoppelFx.burst(data)
@@ -10041,7 +10075,7 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		UI.hideOverlay(false)
 		UI.setSpectate(nil)
 		UI.setStage("로비")
-		task.delay(1.5, UI.hint, "Tab — 방 메뉴      좌클릭 — 음파      Q — 지도", 7)
+		task.delay(1.5, UI.hint, if MobileUI.state().enabled then "방 메뉴 버튼 — 방 만들기·참가      음파 버튼 — 음파" else "Tab — 방 메뉴      좌클릭 — 음파      Q — 지도", 7)
 	elseif kind == "KeyFound" then
 		UI.hint((if data.userId == player.UserId then "열쇠를 찾았다" else (data.by .. " 님이 열쇠를 찾았다")) .. " — 이제 출구가 열린다", 5)
 	elseif kind == "SearchResult" then
@@ -10629,6 +10663,183 @@ return Mates
       </Item>
       <Item class="ModuleScript" referent="47">
         <Properties>
+          <string name="Name">MobileUI</string>
+          <string name="Source"><![CDATA[--!strict
+-- 휴대폰·태블릿용 화면 버튼(터치 기기에서만 보인다. PC 조작은 그대로).
+-- 이동·점프·시점은 로블록스 기본 터치 조작(왼쪽 조이스틱·점프 버튼·화면 끌기)을 그대로 쓴다.
+--   음파(좌클릭)        → 크게 "음파" (관전 중이면 "다음 사람")
+--   달리기(Shift)·웅크리기(Ctrl) → 눌러서 켜고 끄기(둘 중 하나만)
+--   상호작용(E)        → 서랍·상자·문·숨는 곳을 볼 때만 나타난다
+--   지도(Q)            → 지도 열기/닫기
+--   방 메뉴(Tab)       → 로비에서만
+-- 실제 동작은 Main 이 콜백(onSonar 등)으로 연결한다.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local MobileUI = {}
+MobileUI.run = false
+MobileUI.crouch = false
+MobileUI.onSonar = nil :: (() -> ())?
+MobileUI.onInteract = nil :: (() -> ())?
+MobileUI.canInteract = nil :: (() -> boolean)?
+MobileUI.onMap = nil :: (() -> ())?
+MobileUI.onMenu = nil :: (() -> ())?
+MobileUI.spectating = nil :: (() -> boolean)?
+
+local player = Players.LocalPlayer
+
+-- 터치 기기인가(키보드가 없는 휴대폰·태블릿). 속성 ForceMobileUI 로 PC 에서도 켜 볼 수 있다(테스트)
+local function isTouch(): boolean
+	if player:GetAttribute("ForceMobileUI") then
+		return true
+	end
+	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "MobileUI"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 25 -- (지도(20)·방 메뉴(10) 위: 지도를 연 채로도 닫을 수 있게. 점프스케어(50) 아래)
+gui.Enabled = false
+
+local WHITE = Color3.fromRGB(235, 235, 235)
+local DIM = Color3.fromRGB(20, 20, 20)
+
+local function button(name: string, text: string, size: number, pos: UDim2, textSize: number): TextButton
+	local b = Instance.new("TextButton")
+	b.Name = name
+	b.Text = text
+	b.AnchorPoint = Vector2.new(0.5, 0.5)
+	b.Position = pos
+	b.Size = UDim2.fromOffset(size, size)
+	b.BackgroundColor3 = DIM
+	b.BackgroundTransparency = 0.35
+	b.TextColor3 = WHITE
+	b.Font = Enum.Font.GothamMedium
+	b.TextSize = textSize
+	b.AutoButtonColor = true
+	b.Active = true
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1, 0)
+	corner.Parent = b
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = WHITE
+	stroke.Transparency = 0.4
+	stroke.Thickness = 2
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = b
+	b.Parent = gui
+	return b
+end
+
+-- 오른쪽 아래(로블록스 점프 버튼 위·왼쪽): 음파가 가장 크고 엄지가 닿기 쉬운 곳
+local sonarBtn = button("Sonar", "음파", 104, UDim2.new(1, -185, 1, -120), 22)
+local runBtn = button("Run", "달리기", 66, UDim2.new(1, -300, 1, -95), 15)
+local crouchBtn = button("Crouch", "웅크리기", 66, UDim2.new(1, -290, 1, -180), 14)
+local useBtn = button("Use", "E\n상호작용", 76, UDim2.new(1, -185, 1, -245), 14)
+local mapBtn = button("Map", "지도", 56, UDim2.new(1, -60, 0, 110), 15)
+local menuBtn = button("Menu", "방 메뉴", 70, UDim2.new(1, -70, 0, 190), 14)
+
+local function paintToggle(b: TextButton, on: boolean)
+	b.BackgroundColor3 = if on then Color3.fromRGB(230, 230, 230) else DIM
+	b.TextColor3 = if on then Color3.fromRGB(10, 10, 10) else WHITE
+end
+
+sonarBtn.Activated:Connect(function()
+	if MobileUI.onSonar then
+		MobileUI.onSonar()
+	end
+end)
+runBtn.Activated:Connect(function()
+	MobileUI.run = not MobileUI.run
+	if MobileUI.run then
+		MobileUI.crouch = false
+	end
+	paintToggle(runBtn, MobileUI.run)
+	paintToggle(crouchBtn, MobileUI.crouch)
+end)
+crouchBtn.Activated:Connect(function()
+	MobileUI.crouch = not MobileUI.crouch
+	if MobileUI.crouch then
+		MobileUI.run = false
+	end
+	paintToggle(runBtn, MobileUI.run)
+	paintToggle(crouchBtn, MobileUI.crouch)
+end)
+useBtn.Activated:Connect(function()
+	if MobileUI.onInteract then
+		MobileUI.onInteract()
+	end
+end)
+mapBtn.Activated:Connect(function()
+	if MobileUI.onMap then
+		MobileUI.onMap()
+	end
+end)
+menuBtn.Activated:Connect(function()
+	if MobileUI.onMenu then
+		MobileUI.onMenu()
+	end
+end)
+
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- 상황에 맞게 보이기(0.15초마다)
+local acc = 0
+RunService.Heartbeat:Connect(function(dt)
+	acc += dt
+	if acc < 0.15 then
+		return
+	end
+	acc = 0
+	local on = isTouch()
+	gui.Enabled = on
+	if not on then
+		return
+	end
+	local mode = ReplicatedStorage:GetAttribute("Mode")
+	local lobby = mode == "Lobby"
+	local playing = mode == "Game" and ReplicatedStorage:GetAttribute("RoundState") == "Playing"
+	local alive = player:GetAttribute("Status") == "Alive"
+	local spect = MobileUI.spectating ~= nil and MobileUI.spectating()
+	sonarBtn.Visible = lobby or playing
+	sonarBtn.Text = if spect then "다음\n사람" else "음파"
+	runBtn.Visible = alive and (lobby or playing)
+	crouchBtn.Visible = alive and (lobby or playing)
+	useBtn.Visible = alive and MobileUI.canInteract ~= nil and MobileUI.canInteract()
+	mapBtn.Visible = playing
+	menuBtn.Visible = lobby
+	-- 죽거나 스테이지가 바뀌면 달리기·웅크리기 해제
+	if not alive and (MobileUI.run or MobileUI.crouch) then
+		MobileUI.run = false
+		MobileUI.crouch = false
+		paintToggle(runBtn, false)
+		paintToggle(crouchBtn, false)
+	end
+end)
+
+-- (테스트) 보이는 버튼 이름
+function MobileUI.state()
+	local shown = {}
+	for _, c in gui:GetChildren() do
+		if c:IsA("TextButton") and c.Visible then
+			table.insert(shown, c.Name)
+		end
+	end
+	table.sort(shown)
+	return { enabled = gui.Enabled, buttons = shown, run = MobileUI.run, crouch = MobileUI.crouch }
+end
+
+return MobileUI
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="48">
+        <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
 -- 이동(걷기/달리기/웅크리기)과 1인칭 카메라 효과(아주 약한 헤드밥, 웅크릴 때 시점 낮춤, 추격 중 미세한 긴장감).
@@ -10639,6 +10850,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local Config = require(ReplicatedStorage.Shared.Config)
+local MobileUI = require(script.Parent:WaitForChild("MobileUI")) -- (휴대폰 화면 버튼: 달리기·웅크리기)
 
 local MV = Config.Move
 local SetMoveMode = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("SetMoveMode") :: RemoteEvent
@@ -10660,11 +10872,11 @@ local function wantedMode(): string
 	if UserInputService:GetFocusedTextBox() then
 		return "Walk"
 	end
-	local crouch = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+	local crouch = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) or MobileUI.crouch
 	if crouch then
 		return "Crouch"
 	end
-	local run = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+	local run = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift) or MobileUI.run
 	if run then
 		return "Run"
 	end
@@ -10728,7 +10940,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="48">
+      <Item class="LocalScript" referent="49">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -10736,7 +10948,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="49">
+      <Item class="ModuleScript" referent="50">
         <Properties>
           <string name="Name">Reveal</string>
           <string name="Source"><![CDATA[--!strict
@@ -10953,7 +11165,7 @@ return Reveal
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="50">
+      <Item class="ModuleScript" referent="51">
         <Properties>
           <string name="Name">SearchLook</string>
           <string name="Source"><![CDATA[--!strict
@@ -11045,7 +11257,7 @@ return SearchLook
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="51">
+      <Item class="ModuleScript" referent="52">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -11341,7 +11553,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="52">
+      <Item class="ModuleScript" referent="53">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -11788,7 +12000,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="53">
+      <Item class="ModuleScript" referent="54">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -12367,7 +12579,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="54">
+      <Item class="ModuleScript" referent="55">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -12580,7 +12792,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="55">
+  <Item class="Workspace" referent="56">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
