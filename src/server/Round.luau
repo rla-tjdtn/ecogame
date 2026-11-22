@@ -391,41 +391,61 @@ local function clearMonsters()
 	monsterFolder:ClearAllChildren()
 end
 
--- 도플갱어가 흉내 낼 사람: 참가자들의 친구 목록에서 한 명(진짜 아바타). 친구를 못 가져오면 지금 플레이어 중 한 명(혼자면 내 모습)
+-- 도플갱어가 흉내 낼 사람:
+--  · 여럿이 할 때: 지금 같이 플레이 중인 친구들(참가자) 중 한 명의 실제 외형(진짜 친구와 헷갈리게)
+--  · 혼자 할 때: 내 친구 목록 중 한 명의 아바타, 못 가져오면 내 모습
 function Round.pickDisguise(): (HumanoidDescription?, string?)
-	local friends: { { id: number, name: string } } = {}
-	for _, p in Round.participants() do
-		if p.UserId > 0 then
-			local ok, pages = pcall(function()
-				return Players:GetFriendsAsync(p.UserId)
-			end)
-			if ok and pages then
-				for _, fr in (pages :: FriendPages):GetCurrentPage() do
-					table.insert(friends, { id = fr.Id, name = fr.DisplayName or fr.Username })
+	local function applied(p: Player): HumanoidDescription?
+		local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+		if not hum then
+			return nil
+		end
+		local ok, desc = pcall(function()
+			return hum:GetAppliedDescription()
+		end)
+		return if ok then desc else nil
+	end
+	local ps = Round.participants()
+	if #ps >= 2 then
+		local order = table.clone(ps)
+		for i = #order, 2, -1 do
+			local j = math.random(1, i)
+			order[i], order[j] = order[j], order[i]
+		end
+		for _, p in order do
+			local desc = applied(p)
+			if desc then
+				return desc, p.DisplayName
+			end
+		end
+		return nil, nil
+	end
+	-- 혼자: 친구 목록에서
+	local me = ps[1]
+	if me and me.UserId > 0 then
+		local ok, pages = pcall(function()
+			return Players:GetFriendsAsync(me.UserId)
+		end)
+		if ok and pages then
+			local friends = {}
+			for _, fr in (pages :: FriendPages):GetCurrentPage() do
+				table.insert(friends, { id = fr.Id, name = fr.DisplayName or fr.Username })
+			end
+			for _ = 1, math.min(4, #friends) do
+				local fr = table.remove(friends, math.random(1, #friends))
+				local ok2, desc = pcall(function()
+					return Players:GetHumanoidDescriptionFromUserId(fr.id)
+				end)
+				if ok2 and desc then
+					return desc, fr.name
 				end
 			end
 		end
 	end
-	for _ = 1, math.min(4, #friends) do
-		local fr = table.remove(friends, math.random(1, #friends)) :: { id: number, name: string }
-		local ok, desc = pcall(function()
-			return Players:GetHumanoidDescriptionFromUserId(fr.id)
-		end)
-		if ok and desc then
-			return desc, fr.name
-		end
-	end
-	local ps = Round.participants()
-	for _ = 1, #ps do
-		local p = ps[math.random(1, #ps)]
-		local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
-		if hum then
-			local ok, desc = pcall(function()
-				return hum:GetAppliedDescription()
-			end)
-			if ok and desc then
-				return desc, p.DisplayName
-			end
+	if me then
+		local desc = applied(me)
+		if desc then
+			return desc, me.DisplayName
 		end
 	end
 	return nil, nil
@@ -547,13 +567,15 @@ function Round.spawnMonsters(count: number)
 			-- 진짜 사람(친구 또는 플레이어)의 아바타로 갈아입힌다(가져오는 데 잠깐 걸린다)
 			task.spawn(function()
 				for _ = 1, 20 do
-					local desc, who = Round.pickDisguise()
-					if desc and who then
-						if m:applyAvatar(desc, who) then
-							note("doppel looks like " .. who)
-						end
+					if not m.alive or m.form ~= "Disguise" then
 						return
 					end
+					local desc, who = Round.pickDisguise()
+					if desc and who and m:applyAvatar(desc, who) then
+						note("doppel looks like " .. who)
+						return
+					end
+					-- (아직 캐릭터가 없거나 입히기에 실패: 잠깐 뒤 다시)
 					task.wait(0.5) -- (플레이어 캐릭터가 아직 안 생겼다)
 				end
 			end)
