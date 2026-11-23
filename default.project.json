@@ -13,7 +13,8 @@
         "RoomAction": { "$className": "RemoteEvent" },
         "SearchAction": { "$className": "RemoteEvent" },
         "MapShare": { "$className": "RemoteEvent" },
-        "KeyHint": { "$className": "RemoteEvent" }
+        "KeyHint": { "$className": "RemoteEvent" },
+        "LookShare": { "$className": "RemoteEvent" }
       }
     },
     "ServerScriptService": {

@@ -38,6 +38,16 @@ local accepted: { [Player]: number } = {}
 local Sonar = {}
 Sonar.accepted = accepted
 
+-- ── 시선 공유(관전용): 각 플레이어가 보내는 카메라 방향(좌우 yaw·위아래 pitch, 라디안)을 속성으로 퍼뜨린다 ──
+local LookShare = Remotes:WaitForChild("LookShare") :: RemoteEvent
+LookShare.OnServerEvent:Connect(function(player: Player, yaw: any, pitch: any)
+	if type(yaw) ~= "number" or type(pitch) ~= "number" or yaw ~= yaw or pitch ~= pitch then
+		return
+	end
+	player:SetAttribute("LookYaw", math.clamp(yaw, -10, 10))
+	player:SetAttribute("LookPitch", math.clamp(pitch, -1.5, 1.5))
+end)
+
 SonarFire.OnServerEvent:Connect(function(player: Player)
 	if player:GetAttribute("Status") ~= "Alive" or player:GetAttribute("Hidden") then
 		return

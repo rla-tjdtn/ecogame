@@ -386,6 +386,24 @@ end)
 -- 관전 카메라 보간 상태
 local specCF: CFrame? = nil
 local specTarget: Player? = nil
+-- 내 시선(카메라 방향)을 초당 최대 10번, 바뀌었을 때만 서버로 보낸다(관전하는 사람이 내 시점 그대로 본다)
+local LookShare = Remotes:WaitForChild("LookShare") :: RemoteEvent
+local lookSentAt, lookYaw, lookPitch = 0, 99, 99
+local function shareLook(now: number)
+	local cam = workspace.CurrentCamera
+	if not cam or now - lookSentAt < 0.1 or player:GetAttribute("Status") ~= "Alive" then
+		return
+	end
+	local lv = cam.CFrame.LookVector
+	local yaw = math.atan2(-lv.X, -lv.Z)
+	local pitch = math.asin(math.clamp(lv.Y, -1, 1))
+	local dy = math.abs((yaw - lookYaw + math.pi) % (2 * math.pi) - math.pi)
+	if dy < 0.03 and math.abs(pitch - lookPitch) < 0.03 then
+		return
+	end
+	lookSentAt, lookYaw, lookPitch = now, yaw, pitch
+	LookShare:FireServer(yaw, pitch)
+end
 RunService.RenderStepped:Connect(function(dt)
 	local now = os.clock()
 	-- 마우스 커서: 1인칭에서는 숨긴다(조준점만). 로비 메뉴(Tab)를 열었을 때만 보인다
@@ -406,6 +424,7 @@ RunService.RenderStepped:Connect(function(dt)
 		table.remove(luaTimes, 1)
 	end
 	UI.setCooldown((now - lastFire) / Config.Sonar.Cooldown)
+	shareLook(now)
 	-- 관전 카메라: 살아 있는 동료의 1인칭 시점
 	local cam = workspace.CurrentCamera
 	if spectating() and cam then
@@ -418,7 +437,11 @@ RunService.RenderStepped:Connect(function(dt)
 			local head = troot
 			if head then
 				cam.CameraType = Enum.CameraType.Scriptable
-				local want = head.CFrame * CFrame.new(0, 1.6, 0)
+				-- 그 사람의 실제 카메라 방향(공유된 좌우·위아래 시선). 아직 없으면 몸이 향한 방향
+				local eye = head.Position + Vector3.new(0, 1.6, 0)
+				local yaw = t:GetAttribute("LookYaw") :: number?
+				local pitch = (t:GetAttribute("LookPitch") :: number?) or 0
+				local want = if yaw then CFrame.new(eye) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch, 0, 0) else head.CFrame * CFrame.new(0, 1.6, 0)
 				if specTarget ~= t or not specCF or (specCF.Position - want.Position).Magnitude > 12 then
 					specCF = want
 					specTarget = t
