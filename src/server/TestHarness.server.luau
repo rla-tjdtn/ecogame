@@ -2095,6 +2095,38 @@ local function probe()
 	end
 end
 
+local function flowerSpot()
+	-- 꽃괴물은 Config.Flower.Stages(하수도)에만, 그 스테이지에선 맵 한가운데쯤(시작점에서 떨어진 곳)에 나오는지
+	for i = 1, #Config.Stages do
+		local want = table.find(Config.Flower.Stages, Config.Stages[i].Id) ~= nil
+		for _ = 1, (if want then 3 else 1) do
+			Round.startStage(i)
+			task.wait(0.5)
+			if not want then
+				check("stage " .. i .. " has no flower", #Round.flowers == 0, tostring(#Round.flowers))
+				break
+			end
+			local info = Round.info
+			local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
+			for _, n in info.nodes do
+				x0, x1 = math.min(x0, n.X), math.max(x1, n.X)
+				z0, z1 = math.min(z0, n.Z), math.max(z1, n.Z)
+			end
+			local size = math.max(x1 - x0, z1 - z0)
+			local f = Round.flowers[1]
+			if not f then
+				check("stage " .. i .. " flower exists", false)
+				break
+			end
+			local fp = f.root.Position
+			local mid = math.sqrt((fp.X - (x0 + x1) / 2) ^ 2 + (fp.Z - (z0 + z1) / 2) ^ 2)
+			local fromStart = (fp - info.spawns[1].Position).Magnitude
+			check("stage " .. i .. " flower near map middle", mid <= size * 0.2 and fromStart >= 90,
+				string.format("toMid %.0f (map %.0f) fromStart %.0f", mid, size, fromStart))
+		end
+	end
+end
+
 task.spawn(function()
 	local ok, err = pcall(function()
 		if args.Test == "dense" then
@@ -2119,6 +2151,8 @@ task.spawn(function()
 			seal()
 		elseif args.Test == "doppel" then
 			doppelTest()
+		elseif args.Test == "flowerspot" then
+			flowerSpot()
 		elseif args.Test == "chase" then
 			chaseMotion()
 		elseif args.Test == "lives" then

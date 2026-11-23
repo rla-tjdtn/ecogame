@@ -582,18 +582,38 @@ function Round.spawnMonsters(count: number)
 		end
 		note("doppels " .. D.PerStage)
 	end
-	-- 꽃괴물: 시작점에서 떨어진(안전 구역 밖) 곳에 가만히 서 있게
+	-- 꽃괴물: 늘 맵 한가운데쯤(안전 구역 밖, 시작점에서 떨어진 곳)에 가만히 서 있게
 	local F = Config.Flower
-	if F.Enabled and Round.stageIndex > 0 then
-		local spots = {}
+	local stageDef = Config.Stages[Round.stageIndex]
+	if F.Enabled and stageDef and table.find(F.Stages, stageDef.Id) then
+		local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
 		for _, n in info.nodes do
-			local d = (n - spawnPos).Magnitude
-			if d >= F.SpawnDistance[1] and d <= F.SpawnDistance[2] and not Round.inSafe(n) then
-				table.insert(spots, n)
+			x0, x1 = math.min(x0, n.X), math.max(x1, n.X)
+			z0, z1 = math.min(z0, n.Z), math.max(z1, n.Z)
+		end
+		local cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
+		local function toMid(n: Vector3): number
+			return math.sqrt((n.X - cx) ^ 2 + (n.Z - cz) ^ 2)
+		end
+		local pool = {}
+		for _, n in info.nodes do
+			if (n - spawnPos).Magnitude >= F.SpawnDistance[1] and not Round.inSafe(n) then
+				table.insert(pool, n)
 			end
 		end
-		if #spots == 0 then
-			spots = candidates
+		if #pool == 0 then
+			pool = candidates
+		end
+		table.sort(pool, function(a, b)
+			return toMid(a) < toMid(b)
+		end)
+		-- 가운데에서 가까운 순으로, 맵 크기의 MidRadius 안(최소 몇 곳은 확보)
+		local limit = math.max(x1 - x0, z1 - z0) * F.MidRadius
+		local spots = {}
+		for i, n in pool do
+			if toMid(n) <= limit or i <= 6 then
+				table.insert(spots, n)
+			end
 		end
 		for _ = 1, F.PerStage do
 			local pick = spreadPick(spots, placed, MONSTER_GAP)
@@ -602,6 +622,8 @@ function Round.spawnMonsters(count: number)
 				Round.kill(player, "flower")
 			end, Round.stageIndex, "flower")
 			m.route = info.route
+			;(m :: any).home = pick -- 쫓아갔다가 이 자리로 돌아온다
+			;(m :: any).keepOut = spawnPos -- 시작점 둘레로는 들어오지 않는다
 			table.insert(Round.flowers, m)
 			m:run()
 		end

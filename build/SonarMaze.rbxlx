@@ -59,45 +59,50 @@
       </Item>
       <Item class="RemoteEvent" referent="7">
         <Properties>
-          <string name="Name">MapShare</string>
+          <string name="Name">LookShare</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="8">
         <Properties>
-          <string name="Name">RoomAction</string>
+          <string name="Name">MapShare</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="9">
         <Properties>
-          <string name="Name">RoundEvent</string>
+          <string name="Name">RoomAction</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="10">
         <Properties>
-          <string name="Name">SearchAction</string>
+          <string name="Name">RoundEvent</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="11">
         <Properties>
-          <string name="Name">SetMoveMode</string>
+          <string name="Name">SearchAction</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="12">
         <Properties>
-          <string name="Name">SonarFire</string>
+          <string name="Name">SetMoveMode</string>
         </Properties>
       </Item>
       <Item class="RemoteEvent" referent="13">
+        <Properties>
+          <string name="Name">SonarFire</string>
+        </Properties>
+      </Item>
+      <Item class="RemoteEvent" referent="14">
         <Properties>
           <string name="Name">SonarPulse</string>
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="14">
+    <Item class="Folder" referent="15">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">Config</string>
           <string name="Source"><![CDATA[--!strict
@@ -110,7 +115,7 @@ local Config = {}
 Config.Sonar = {
 	Radius = 35, -- 음파가 퍼지는 최대 거리(스터드, 벽을 돌아가는 경로 길이 기준)
 	Cooldown = 1.5, -- 발사 간격(초) — 서버가 같은 값으로 검증한다
-	ServerTolerance = 0.12, -- 네트워크 지연 허용치(초)
+	ServerTolerance = 0.5, -- 네트워크 지연·몰림 허용치(초). 평균 간격은 그대로 Cooldown
 	WaveSpeed = 40, -- 파동 전진 속도(스터드/초): 35스터드 끝까지 약 0.9초
 	MonsterRevealSeconds = 10, -- 음파에 맞은 괴물은 이 시간 동안 지금 모습 그대로(움직이는 그대로) 보인다(Reveal.luau)
 	Hold = 3.5, -- 선이 나타난 뒤 완전히 사라질 때까지(초)
@@ -127,6 +132,7 @@ Config.Sonar = {
 	CellSize = 2, -- 파동 전파용 복셀 크기(스터드)
 	AttachDistance = 2.6, -- 선분이 이 거리 안의 빈 복셀을 통해 음파를 받는다
 	PoolSize = 4500, -- 동시에 존재할 수 있는 선 파트 최대 수(재사용)
+	MaxRemotePulses = 4, -- 동시에 퍼지는 팀원·도플갱어 음파 수 상한(넘으면 가장 오래된 것을 끝낸다)
 	RemoteViewDistance = 110, -- 다른 플레이어 음파를 그리는 최대 거리
 	RevealPerFrame = 360, -- 한 프레임에 새로 나타나게 할 선(조각) 수 상한(모든 음파 합계, 넘으면 다음 프레임으로)
 	ExpandBudget = 5000, -- 프레임당 파동 전파 연산량 상한(복셀 확장 수)
@@ -235,8 +241,12 @@ Config.Doppel = {
 Config.Flower = {
 	Enabled = true,
 	PerStage = 1,
+	Stages = { 3 }, -- 이 스테이지(Config.Stages 의 Id)에만 나온다: 3 하수도
 	StartDelay = 6,
 	SpawnDistance = { 100, 9999 }, -- 시작점에서 최소 이만큼(스터드) 떨어진 곳(맵 크기 약 350): 시작하자마자 마주치지 않게
+	MidRadius = 0.15, -- 맵 한가운데에서 맵 크기(긴 변)의 이 비율 안쪽에 나온다
+	KeepOut = 45, -- 시작점에서 이 거리(스터드) 안으로는 달려오지 않는다(시작 위치를 막아 못 나가는 일이 없게)
+	ReturnSpeed = 6, -- 두리번거린 뒤 머리를 닫고 원래 자리로 돌아가는 속도
 	WakeTime = 0.8, -- 꽃잎이 펼쳐지는 동안(멈춰 있음)
 	ChaseSpeed = 12, -- 음파 쏜 곳으로 달려가는 속도(걷기 10 < 12 < 달리기 18: 달리면 따돌릴 수 있다)
 	WanderSpeed = 0, -- (돌아다니지 않는다)
@@ -288,6 +298,11 @@ Config.Stages = {
 	{ Id = 3, Name = "STAGE 3 — 하수도", Module = "Stage3", Monsters = 2 },
 	{ Id = 4, Name = "STAGE 4 — 폐병원", Module = "Stage4", Monsters = 2 },
 	{ Id = 5, Name = "STAGE 5 — 심층 미로", Module = "Stage5", Monsters = 2 },
+	{ Id = 6, Name = "STAGE 6 — 호텔", Module = "Stage6", Monsters = 3 },
+	{ Id = 7, Name = "STAGE 7 — 학교", Module = "Stage7", Monsters = 4 },
+	{ Id = 8, Name = "STAGE 8 — 폐유치원", Module = "Stage8", Monsters = 4 },
+	{ Id = 9, Name = "STAGE 9 — 지하 주차장", Module = "Stage9", Monsters = 4 },
+	{ Id = 10, Name = "STAGE 10 — 폐영화관", Module = "Stage10", Monsters = 5 },
 }
 
 -- ─────────────────────────────── 사운드 ───────────────────────────────
@@ -734,7 +749,7 @@ return Config
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">MonsterFaces</string>
           <string name="Source"><![CDATA[--!strict
@@ -744,9 +759,13 @@ return Config
 -- extra 는 머리 밖(몸 좌표 그대로) — 2번 어깨의 작은 머리. 점프스케어는 extra 를 그리지 않는다.
 
 local Faces = {}
+-- 지금 메인 괴물 머리(모든 스테이지 공통). 1~5 는 예전 스테이지별 머리(지금은 쓰지 않음)
+Faces.BONE = 6
+-- 메인 괴물 바늘 이빨 색(사용자 확정: 흰 몸 · 흰 눈 · 붉은 이빨). 음파 선(SonarColor)과 점프스케어에 같이 쓴다
+Faces.TEETH = Color3.fromRGB(255, 42, 42)
 
 export type Pt = { number }
-export type Line = { pts: { Pt }, r: number, closed: boolean, dz: number }
+export type Line = { pts: { Pt }, r: number, closed: boolean, dz: number, tint: Color3? }
 export type Circle = { u: number, v: number, rad: number, dz: number, pupil: boolean }
 export type Face = { tx: number, ty: number, deg: number, scale: number, lines: { Line }, circles: { Circle }, extra: { Line }, extraCircles: { Circle } }
 
@@ -827,7 +846,29 @@ function Faces.build(shape: number): Face
 		end
 	end
 
-	if shape == 1 then
+	if shape == Faces.BONE then
+		-- 메인 괴물(사용자 확정, 모든 스테이지): 크게 뒤집힌 삼각 머리, 속이 빈 둥근 눈 둘,
+		-- 머리 안의 삼각 입 + 입 둘레에 촘촘히 박힌 가는 바늘 이빨(윗니 16 · 아랫니 17, 노트 main-monster-bone.svg 6차)
+		-- 좌표는 몸 시안 px(75px = 1스터드), 머리 가운데 기준
+		f.tx, f.ty = 342, 99
+		L({ { -114.5, -40.5 }, { 108, -71.5 }, { 6.5, 111 } }, 0.04, true)
+		C(-34.5, -21.5, 15)
+		C(30.5, -31.5, 15)
+		L({ { -62, 11 }, { 63, -10.5 }, { 6.5, 98.5 } }, 0.03, true, -0.02)
+		-- 바늘 이빨: 입 가장자리(x, y)에서 안쪽으로(SVG rotate 각도) len 만큼. 밑동 양 끝 → 끝 두 줄이 만나는 가시
+		local function needles(deg: number, list: { { number } })
+			local c, s = math.cos(math.rad(deg)), math.sin(math.rad(deg))
+			local w = 2.1
+			for _, q in list do
+				local x, y, len = q[1] - f.tx, q[2] - f.ty, q[3]
+				L({ { x - w * c, y - w * s }, { x + len * s, y - len * c }, { x + w * c, y + w * s } }, 0.012, false, -0.04)
+				f.lines[#f.lines].tint = Faces.TEETH
+			end
+		end
+		needles(170.24, { { 287.4, 108.7, 12 }, { 294.7, 107.5, 21 }, { 302.1, 106.2, 18 }, { 309.4, 104.9, 26 }, { 316.8, 103.7, 20 }, { 324.1, 102.4, 29 }, { 331.5, 101.1, 21 }, { 338.8, 99.9, 29 }, { 346.2, 98.6, 22 }, { 353.5, 97.4, 29 }, { 360.9, 96.1, 21 }, { 368.2, 94.8, 27 }, { 375.6, 93.6, 20 }, { 382.9, 92.3, 25 }, { 390.3, 91, 17 }, { 397.6, 89.8, 13 } })
+		needles(51.9, { { 287.6, 119.7, 12 }, { 295.2, 129.4, 18 }, { 302.8, 139.2, 16 }, { 310.4, 148.9, 20 }, { 318.1, 158.6, 14 }, { 325.7, 168.3, 16 }, { 333.3, 178.1, 10 }, { 340.9, 187.8, 8 } })
+		needles(-62.6, { { 399.4, 99.4, 10 }, { 393.7, 110.3, 17 }, { 388.1, 121.2, 20 }, { 382.4, 132.1, 16 }, { 376.8, 143, 21 }, { 371.1, 153.9, 16 }, { 365.5, 164.8, 17 }, { 359.8, 175.7, 12 }, { 354.2, 186.6, 8 } })
+	elseif shape == 1 then
 		-- 1 삼각: 기울어진 머리, 크기 다른 눈 5개, 머리 밖까지 찢어져 목까지 내려오는 입, 가슴까지 늘어진 혀
 		f.tx, f.ty, f.deg = -4, -256, -24
 		L({ { -30, 22 }, { -10, 23 }, { 9, 21 }, { 30, 22 }, { 15, -6 }, { 0, -34 }, { -16, -7 } }, 0.03, true)
@@ -939,7 +980,7 @@ return Faces
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">SonarGeometry</string>
           <string name="Source"><![CDATA[--!strict
@@ -1211,15 +1252,126 @@ return Geo
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="18">
+  <Item class="ServerScriptService" referent="19">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="19">
+    <Item class="Folder" referent="20">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="ModuleScript" referent="20">
+      <Item class="Folder" referent="21">
+        <Properties>
+          <string name="Name">Creatures</string>
+        </Properties>
+        <Item class="ModuleScript" referent="22">
+          <Properties>
+            <string name="Name">Rig</string>
+            <string name="Source"><![CDATA[--!strict
+-- 챕터 괴물 전용 뼈대(괴물마다 다른 뼈 구조). 공용 두 팔·두 다리 skeleton() 을 쓰지 않는다.
+-- 정의(def)는 괴물 모듈(Creatures/C*.luau)이 만든다:
+--   bones = { { name, parent?, joint: Vector3, tip: Vector3 } ... }   (루트 기준 좌표, 부모가 앞에 와야 함)
+--   lines = { { bone, a: Vector3, b: Vector3, r: number, red: boolean?, disc: boolean? } ... }  선(음파에 보이는 모서리)
+--   balls = { { bone, c: Vector3, r: number } ... }
+-- 각 선은 지정한 뼈에 정확히 붙는다(가까운 뼈 찾기 없음). 뼈는 Motor6D "B_<name>", 클라이언트가 Transform 으로 움직인다.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Kit = require(script.Parent.Parent.MapKit)
+local Faces = require(ReplicatedStorage.Shared.MonsterFaces)
+
+local Rig = {}
+
+export type Bone = { name: string, parent: string?, joint: Vector3, tip: Vector3 }
+export type Line = { bone: string, a: Vector3, b: Vector3, r: number, red: boolean?, disc: boolean? }
+export type Ball = { bone: string, c: Vector3, r: number, red: boolean? }
+export type Def = {
+	id: string,
+	bones: { Bone },
+	lines: { Line },
+	balls: { Ball }?,
+	floorY: number, -- 루트 가운데 기준 바닥 높이
+	mass: number?,
+}
+
+local function setup(p: BasePart)
+	p.Transparency = 1
+	p.CastShadow = false
+	p.Anchored = false
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.Massless = true
+end
+
+function Rig.build(model: Model, root: BasePart, cf: CFrame, def: Def): { [string]: BasePart }
+	local holder = Instance.new("Folder")
+	holder.Name = "Body"
+	holder.Parent = model
+	local parts: { [string]: BasePart } = {}
+	local joints: { [string]: Vector3 } = {}
+	for _, b in def.bones do
+		local pv = Instance.new("Part")
+		pv.Name = "Bone_" .. b.name
+		pv.Size = Vector3.new(0.2, 0.2, 0.2)
+		setup(pv)
+		pv:SetAttribute("SonarShape", "None")
+		pv:SetAttribute("Tip", b.tip - b.joint)
+		pv.CFrame = cf * CFrame.new(b.joint)
+		pv.Parent = holder
+		local parentPart: BasePart = if b.parent then parts[b.parent] else root
+		assert(parentPart, "bone parent must come first: " .. b.name)
+		local m = Instance.new("Motor6D")
+		m.Name = "B_" .. b.name
+		m.Part0 = parentPart
+		m.Part1 = pv
+		m.C0 = CFrame.new(b.joint - (if b.parent then joints[b.parent] else Vector3.zero))
+		m.C1 = CFrame.identity
+		m.Parent = pv
+		parts[b.name] = pv
+		joints[b.name] = b.joint
+	end
+	local function attach(p: BasePart, bone: string, red: boolean?)
+		setup(p)
+		if red then
+			p:SetAttribute("SonarColor", Faces.TEETH)
+		end
+		local bp = parts[bone]
+		assert(bp, "unknown bone " .. bone)
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = bp
+		w.Part1 = p
+		w.Parent = p
+	end
+	for _, l in def.lines do
+		local shape = if l.disc then "Disc" elseif (l.b - l.a).Magnitude > l.r * 4 then "Line" else "Disc"
+		local p = Kit.cylinder(holder, cf:PointToWorldSpace(l.a), cf:PointToWorldSpace(l.b), l.r, { shape = shape })
+		p.Name = "Line"
+		attach(p, l.bone, l.red)
+	end
+	for _, b in def.balls or {} do
+		local p = Kit.ball(holder, cf:PointToWorldSpace(b.c), b.r)
+		p.Name = "Ball"
+		attach(p, b.bone, b.red)
+	end
+	model:SetAttribute("Rig", 3)
+	model:SetAttribute("Creature", def.id)
+	model:SetAttribute("FloorY", def.floorY)
+	model:SetAttribute("Mass", def.mass or 1)
+	return parts
+end
+
+-- 2D 시안 좌표(px)를 3D 로: 정면 그림(x 가운데 cx, 바닥 y fy, px 당 스터드 k), z 는 직접
+function Rig.fromSheet(cx: number, fy: number, k: number, floorY: number): (number, number, number) -> Vector3
+	return function(x: number, y: number, z: number): Vector3
+		return Vector3.new((x - cx) * k, floorY + (fy - y) * k, z)
+	end
+end
+
+return Rig
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="ModuleScript" referent="23">
         <Properties>
           <string name="Name">Doors</string>
           <string name="Source"><![CDATA[--!strict
@@ -1412,7 +1564,7 @@ return Doors
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="24">
         <Properties>
           <string name="Name">Hiding</string>
           <string name="Source"><![CDATA[--!strict
@@ -1451,6 +1603,8 @@ local STYLES: { [string]: Style } = {
 	rusty = { w = 3.6, d = 3.0, h = 7.4, doors = 1, louvers = true, legs = false, crown = false, tilt = 0.035 }, -- 하수도: 찌그러진 정비 사물함
 	wardrobe = { w = 5.6, d = 3.4, h = 8.0, doors = 2, louvers = true, legs = true, crown = true, tilt = 0 }, -- 병원: 병실 옷장
 	closet = { w = 4.8, d = 3.4, h = 8.6, doors = 1, louvers = false, legs = false, crown = true, tilt = 0 }, -- 심층 미로: 낡은 벽장
+	hotelcloset = { w = 5.0, d = 3.2, h = 8.2, doors = 2, louvers = false, legs = true, crown = true, tilt = 0 }, -- 호텔: 객실 옷장
+	cubby = { w = 4.4, d = 3.0, h = 6.6, doors = 2, louvers = false, legs = true, crown = false, tilt = 0.02 }, -- 폐유치원: 낮은 어린이 사물함(몸을 웅크려 들어간다)
 }
 Hiding.Styles = STYLES
 
@@ -1661,7 +1815,7 @@ return Hiding
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="22">
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">Lobby</string>
           <string name="Source"><![CDATA[--!strict
@@ -1924,7 +2078,7 @@ return Lobby
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="23">
+      <Item class="Script" referent="26">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -1968,6 +2122,16 @@ local accepted: { [Player]: number } = {}
 local Sonar = {}
 Sonar.accepted = accepted
 
+-- ── 시선 공유(관전용): 각 플레이어가 보내는 카메라 방향(좌우 yaw·위아래 pitch, 라디안)을 속성으로 퍼뜨린다 ──
+local LookShare = Remotes:WaitForChild("LookShare") :: RemoteEvent
+LookShare.OnServerEvent:Connect(function(player: Player, yaw: any, pitch: any)
+	if type(yaw) ~= "number" or type(pitch) ~= "number" or yaw ~= yaw or pitch ~= pitch then
+		return
+	end
+	player:SetAttribute("LookYaw", math.clamp(yaw, -10, 10))
+	player:SetAttribute("LookPitch", math.clamp(pitch, -1.5, 1.5))
+end)
+
 SonarFire.OnServerEvent:Connect(function(player: Player)
 	if player:GetAttribute("Status") ~= "Alive" or player:GetAttribute("Hidden") then
 		return
@@ -1977,12 +2141,15 @@ SonarFire.OnServerEvent:Connect(function(player: Player)
 	if not head then
 		return
 	end
+	-- 간격 검증(여럿이 하거나 휴대폰이라 요청이 늦게·몰려 도착해도 정상 발사는 받아 준다):
+	-- "다음 발사 허용 시각"을 쌓아 가며, 그보다 ServerTolerance 까지 일찍 온 것은 받는다. 평균으로는 Cooldown 보다 빨리 쏠 수 없다
 	local now = os.clock()
-	local last = lastPulse[player] or -math.huge
-	if now - last < Config.Sonar.Cooldown - Config.Sonar.ServerTolerance then
+	local tat = lastPulse[player] or -math.huge
+	local cd = Config.Sonar.Cooldown
+	if now < tat - Config.Sonar.ServerTolerance then
 		return -- 간격 위반: 무시(시각 효과는 그 클라이언트에만 있고 괴물·다른 플레이어에게는 없음)
 	end
-	lastPulse[player] = now
+	lastPulse[player] = math.max(tat, now) + cd
 	accepted[player] = (accepted[player] or 0) + 1
 	local origin = head.Position
 	for _, other in Players:GetPlayers() do
@@ -2024,7 +2191,7 @@ task.spawn(Lobby.boot)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="24">
+      <Item class="ModuleScript" referent="27">
         <Properties>
           <string name="Name">MapKit</string>
           <string name="Source"><![CDATA[--!strict
@@ -2326,7 +2493,7 @@ return Kit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="28">
         <Properties>
           <string name="Name">Monster</string>
           <string name="Source"><![CDATA[--!strict
@@ -2358,9 +2525,9 @@ Monster.registry = {} :: { any }
 local SPREAD = 35 -- 배회 중 다른 괴물이 이 거리 안이면 반대쪽으로 간다
 local SHARE_SOUND = 25 -- 같은 소리를 이미 다른 괴물이 이 거리 안으로 조사하러 가면 따라가지 않는다
 
-export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase" | "Disguise" | "Dormant" | "Look"
+export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase" | "Disguise" | "Dormant" | "Look" | "Return"
 
--- ── 챕터별 머리: 1 삼각형 · 2 사각형 · 3 원 · 4 별 · 5 육각형 (그 이후는 처음부터 반복). 모양은 buildModel 안 ──
+-- ── 메인 괴물 몸: 모든 스테이지 같은 디자인(삼각 머리 구체관절, buildModel). 스테이지 번호(Voice)는 소리·추격 리듬만 바꾼다 ──
 
 -- ── 몸 조립 공통: 팔·다리 묶음은 관절(Motor6D)에, 나머지는 루트에 붙인다. 몸은 완전히 투명(음파에만 드러난다) ──
 -- prefix: 관절 이름 앞부분(같은 모델에 몸이 둘일 때 구분), holder: 관절 받침 파트를 둘 곳
@@ -2431,7 +2598,7 @@ export type Skeleton = {
 	neck: Vector3,
 	head: Vector3,
 	headEnd: Vector3,
-	legs: { [number]: { hip: Vector3, knee: Vector3, ankle: Vector3, toe: Vector3 } },
+	legs: { [number]: { hip: Vector3, knee: Vector3, ankle: Vector3, toe: Vector3, ball: Vector3? } }, -- ball: 발볼(있으면 발가락이 따로 접힌다)
 	arms: { [number]: { shoulder: Vector3, elbow: Vector3, mid: Vector3?, wrist: Vector3, tip: Vector3 } },
 	floorY: number,
 	mass: number, -- 무게(착지 충격·둔중함), 1 = 메인 괴물
@@ -2452,7 +2619,13 @@ local function skeleton(model: Model, root: BasePart, cf: CFrame, parts: { BaseP
 		local L = sk.legs[s]
 		bone("Thigh" .. s, "Pelvis", L.hip, L.knee)
 		bone("Shin" .. s, "Thigh" .. s, L.knee, L.ankle)
-		bone("Foot" .. s, "Shin" .. s, L.ankle, L.toe)
+		if L.ball then
+			-- 발등(발목 → 발볼) + 발가락(발볼 → 발끝): 걸을 때 발가락이 따로 접혔다 펴진다
+			bone("Foot" .. s, "Shin" .. s, L.ankle, L.ball)
+			bone("Toe" .. s, "Foot" .. s, L.ball, L.toe)
+		else
+			bone("Foot" .. s, "Shin" .. s, L.ankle, L.toe)
+		end
 		local A = sk.arms[s]
 		bone("Upper" .. s, "Chest", A.shoulder, A.elbow)
 		local last = "Upper" .. s
@@ -2497,8 +2670,8 @@ local function skeleton(model: Model, root: BasePart, cf: CFrame, parts: { BaseP
 		return (a + ab * t - p).Magnitude
 	end
 	local candidates: { [string]: { string } } = {
-		["Leg-1"] = { "Thigh-1", "Shin-1", "Foot-1" },
-		["Leg1"] = { "Thigh1", "Shin1", "Foot1" },
+		["Leg-1"] = { "Thigh-1", "Shin-1", "Foot-1", "Toe-1" },
+		["Leg1"] = { "Thigh1", "Shin1", "Foot1", "Toe1" },
 		["Arm-1"] = { "Upper-1", "Mid-1", "Fore-1", "Hand-1" },
 		["Arm1"] = { "Upper1", "Mid1", "Fore1", "Hand1" },
 	}
@@ -2817,51 +2990,176 @@ local function buildFlower(cf: CFrame): Model
 		seg(P(x0, y0, zf(y0)), P(x1, y1, zf(y1)), r or 0.035)
 	end
 	local body = flat(-0.2)
-	-- 어깨로 이어지는 목 밑동, 솟은 어깨
-	bez(170, 196, 166, 210, 162, 222, 160, 236, 2, body)
-	bez(190, 196, 194, 210, 198, 222, 200, 236, 2, body)
-	bez(160, 236, 150, 238, 142, 242, 138, 250, 2, body)
-	bez(200, 236, 210, 238, 218, 242, 222, 250, 2, body)
-	-- 몸통(좁아지는 허리) + 가운데 줄기선 + 잎맥 같은 갈비뼈 3쌍
-	bez(142, 250, 144, 280, 152, 305, 164, 318, 3, body)
-	line(164, 318, 196, 318, body)
-	bez(196, 318, 208, 305, 216, 280, 218, 250, 3, body)
-	line(180, 246, 180, 312, flat(-0.25), 0.025)
-	for _, y in { 258, 274, 290 } do
-		local w = if y == 290 then 18 else 24
-		bez(180, y, 174, y + 4, 180 - w * 0.6, y + 4, 180 - w, y, 2, flat(-0.25), 0.022)
-		bez(180, y, 186, y + 4, 180 + w * 0.6, y + 4, 180 + w, y, 2, flat(-0.25), 0.022)
+	-- 굶주린 몸통: 가시처럼 솟은 어깨뼈, 드러난 갈비뼈, 푹 꺼진 배, 마디 불거진 등뼈
+	local function knob(x: number, y: number, zf: (number) -> number, r: number)
+		local z = zf(y)
+		seg(P(x, y, z), P(x, y, z - 0.05), r)
 	end
-	-- 팔: 무릎 아래까지, 뿌리처럼 갈라진 손가락
+	bez(177, 190, 168, 206, 160, 222, 152, 228, 2, body, 0.035)
+	bez(152, 228, 146, 222, 140, 214, 132, 204, 2, body, 0.035)
+	line(132, 204, 140, 234, body, 0.03)
+	bez(140, 234, 136, 254, 140, 272, 152, 282, 2, body, 0.035)
+	bez(152, 282, 164, 290, 166, 304, 160, 318, 2, body, 0.035)
+	bez(180, 240, 166.5, 241.6, 151.5, 248.8, 153, 256, 2, flat(-0.25), 0.024)
+	bez(180, 251, 164.7, 252.8, 147.7, 260.9, 149.4, 269, 2, flat(-0.25), 0.024)
+	bez(180, 262, 165.6, 263.8, 149.6, 271.9, 151.2, 280, 2, flat(-0.25), 0.024)
+	bez(180, 273, 169.2, 274.4, 157.2, 280.7, 158.4, 287, 2, flat(-0.25), 0.024)
+	bez(183, 190, 192, 206, 200, 222, 208, 228, 2, body, 0.035)
+	bez(208, 228, 214, 222, 220, 214, 228, 204, 2, body, 0.035)
+	line(228, 204, 220, 234, body, 0.03)
+	bez(220, 234, 224, 254, 220, 272, 208, 282, 2, body, 0.035)
+	bez(208, 282, 196, 290, 194, 304, 200, 318, 2, body, 0.035)
+	bez(180, 240, 193.5, 241.6, 208.5, 248.8, 207, 256, 2, flat(-0.25), 0.024)
+	bez(180, 251, 195.3, 252.8, 212.3, 260.9, 210.6, 269, 2, flat(-0.25), 0.024)
+	bez(180, 262, 194.4, 263.8, 210.4, 271.9, 208.8, 280, 2, flat(-0.25), 0.024)
+	bez(180, 273, 190.8, 274.4, 202.8, 280.7, 201.6, 287, 2, flat(-0.25), 0.024)
+	line(180, 232, 180, 318, flat(-0.25), 0.025)
+	knob(180, 240, flat(-0.25), 0.05)
+	knob(180, 252, flat(-0.25), 0.05)
+	knob(180, 264, flat(-0.25), 0.05)
+	knob(180, 276, flat(-0.25), 0.05)
+	knob(180, 288, flat(-0.25), 0.05)
+	knob(180, 300, flat(-0.25), 0.05)
+	knob(180, 312, flat(-0.25), 0.05)
+	-- 팔: 바깥으로 꺾인 팔꿈치(뼈 가시) 아래로 무릎까지 늘어진 앙상한 팔
+	-- 손: 거미 다리처럼 벌어진 긴 손가락 4개(마디 3개 + 갈고리 손톱)와 몸 쪽으로 꺾인 엄지
 	local function armZ(py: number): number
 		return -0.25 - math.clamp((py - 250) / 140, 0, 1) * 0.45
 	end
-	for _, s in { -1, 1 } do
-		local function X(px: number): number
-			return 180 + (px - 180) * -s -- (s = -1: 왼쪽 그대로, 1: 좌우 뒤집기)
+	group = "Arm-1"
+	bez(140, 234, 124, 248, 108, 268, 98, 290, 2, armZ, 0.04)
+	knob(98, 290, armZ, 0.08)
+	line(98, 290, 86, 282, armZ, 0.028)
+	line(98, 290, 90, 298, armZ, 0.024)
+	bez(98, 290, 98, 306, 102, 320, 108, 330, 2, armZ, 0.035)
+	bez(102, 292, 106, 306, 110, 318, 112, 328, 2, armZ, 0.022)
+	knob(108, 330, armZ, 0.065)
+	line(108, 330, 96.3, 344, armZ, 0.026)
+	knob(96.3, 344, armZ, 0.045)
+	line(96.3, 344, 85.9, 359, armZ, 0.024)
+	knob(85.9, 359, armZ, 0.036)
+	line(85.9, 359, 79.4, 374, armZ, 0.022)
+	knob(79.4, 374, armZ, 0.03)
+	line(79.4, 374, 85.4, 386, armZ, 0.018)
+	line(108, 330, 102.6, 344, armZ, 0.026)
+	knob(102.6, 344, armZ, 0.045)
+	line(102.6, 344, 97.8, 361.3, armZ, 0.024)
+	knob(97.8, 361.3, armZ, 0.036)
+	line(97.8, 361.3, 94.8, 378.5, armZ, 0.022)
+	knob(94.8, 378.5, armZ, 0.03)
+	line(94.8, 378.5, 100.8, 392.3, armZ, 0.018)
+	line(108, 330, 108.9, 344, armZ, 0.026)
+	knob(108.9, 344, armZ, 0.045)
+	line(108.9, 344, 109.7, 360.5, armZ, 0.024)
+	knob(109.7, 360.5, armZ, 0.036)
+	line(109.7, 360.5, 110.2, 377, armZ, 0.022)
+	knob(110.2, 377, armZ, 0.03)
+	line(110.2, 377, 104.2, 390.2, armZ, 0.018)
+	line(108, 330, 114.3, 344, armZ, 0.026)
+	knob(114.3, 344, armZ, 0.045)
+	line(114.3, 344, 119.9, 357.5, armZ, 0.024)
+	knob(119.9, 357.5, armZ, 0.036)
+	line(119.9, 357.5, 123.4, 371, armZ, 0.022)
+	knob(123.4, 371, armZ, 0.03)
+	line(123.4, 371, 117.4, 381.8, armZ, 0.018)
+	line(108, 330, 122, 336, armZ, 0.024)
+	knob(122, 336, armZ, 0.04)
+	line(122, 336, 130, 350, armZ, 0.022)
+	line(130, 350, 126, 360, armZ, 0.018)
+	group = "Arm1"
+	bez(220, 234, 236, 248, 252, 268, 262, 290, 2, armZ, 0.04)
+	knob(262, 290, armZ, 0.08)
+	line(262, 290, 274, 282, armZ, 0.028)
+	line(262, 290, 270, 298, armZ, 0.024)
+	bez(262, 290, 262, 306, 258, 320, 252, 330, 2, armZ, 0.035)
+	bez(258, 292, 254, 306, 250, 318, 248, 328, 2, armZ, 0.022)
+	knob(252, 330, armZ, 0.065)
+	line(252, 330, 263.7, 344, armZ, 0.026)
+	knob(263.7, 344, armZ, 0.045)
+	line(263.7, 344, 274.1, 359, armZ, 0.024)
+	knob(274.1, 359, armZ, 0.036)
+	line(274.1, 359, 280.6, 374, armZ, 0.022)
+	knob(280.6, 374, armZ, 0.03)
+	line(280.6, 374, 274.6, 386, armZ, 0.018)
+	line(252, 330, 257.4, 344, armZ, 0.026)
+	knob(257.4, 344, armZ, 0.045)
+	line(257.4, 344, 262.2, 361.3, armZ, 0.024)
+	knob(262.2, 361.3, armZ, 0.036)
+	line(262.2, 361.3, 265.2, 378.5, armZ, 0.022)
+	knob(265.2, 378.5, armZ, 0.03)
+	line(265.2, 378.5, 259.2, 392.3, armZ, 0.018)
+	line(252, 330, 251.1, 344, armZ, 0.026)
+	knob(251.1, 344, armZ, 0.045)
+	line(251.1, 344, 250.3, 360.5, armZ, 0.024)
+	knob(250.3, 360.5, armZ, 0.036)
+	line(250.3, 360.5, 249.8, 377, armZ, 0.022)
+	knob(249.8, 377, armZ, 0.03)
+	line(249.8, 377, 255.8, 390.2, armZ, 0.018)
+	line(252, 330, 245.7, 344, armZ, 0.026)
+	knob(245.7, 344, armZ, 0.045)
+	line(245.7, 344, 240.1, 357.5, armZ, 0.024)
+	knob(240.1, 357.5, armZ, 0.036)
+	line(240.1, 357.5, 236.6, 371, armZ, 0.022)
+	knob(236.6, 371, armZ, 0.03)
+	line(236.6, 371, 242.6, 381.8, armZ, 0.018)
+	line(252, 330, 238, 336, armZ, 0.024)
+	knob(238, 336, armZ, 0.04)
+	line(238, 336, 230, 350, armZ, 0.022)
+	line(230, 350, 234, 360, armZ, 0.018)
+	group = nil
+	-- 하반신: 다리 없이 몸통이 그대로 땅에 박혀 있다. 허리 아래가 굵어지며 바닥으로 파고들고,
+	-- 밑동에서 뿌리·촉수가 바닥을 따라 사방으로 꿈틀대며 뻗는다
+	-- (뼈대의 다리는 보이지 않는 채로 남겨 걸음 리듬만 쓴다. 바닥 쪽 선은 루트에 붙여 땅에 고정)
+	do
+		local function ground(n0: number)
+			for k = n0 + 1, #parts do
+				parts[k]:SetAttribute("Ground", true)
+			end
 		end
-		group = "Arm" .. s
-		bez(X(138), 250, X(124), 280, X(118), 305, X(120), 330, 2, armZ)
-		bez(X(120), 330, X(118), 350, X(116), 362, X(114), 372, 2, armZ)
-		bez(X(114), 372, X(110), 380, X(104), 388, X(100), 394, 2, armZ, 0.026)
-		line(X(114), 372, X(114), 396, armZ, 0.026)
-		bez(X(114), 372, X(118), 380, X(124), 386, X(130), 390, 2, armZ, 0.026)
-		line(X(108), 384, X(94), 384, armZ, 0.022)
+		-- 허리 → 땅으로 파고드는 밑동(위쪽 절반은 골반, 아래쪽 절반은 땅에 붙는다)
+		for _, s in { -1, 1 } do
+			local function X(px: number): number
+				return 180 + (px - 180) * -s
+			end
+			bez(X(160), 318, X(158), 330, X(156), 344, X(154), 356, 2, body)
+			local n0 = #parts
+			bez(X(154), 356, X(152), 370, X(146), 384, X(134), 396, 3, body)
+			ground(n0)
+		end
+		-- 밑동 껍질의 결(세로 주름)
+		for _, x in { 166, 174, 186, 194 } do
+			line(x, 324, x + (x - 180) * 0.15, 352, flat(-0.25), 0.02)
+			local n0 = #parts
+			line(x + (x - 180) * 0.15, 356, x + (x - 180) * 0.6, 394, flat(-0.25), 0.02)
+			ground(n0)
+		end
+		-- 땅을 따라 사방으로 뻗은 뿌리 촉수(길이·휘는 방향이 제각각), 끝은 살짝 들려 꿈틀
+		local n0 = #parts
+		for k, c in { { 0, 2.6, 1 }, { 50, 1.9, -1 }, { 95, 2.4, 1 }, { 140, 1.6, -1 }, { 185, 2.8, 1 }, { 230, 2.0, -1 }, { 275, 2.3, 1 }, { 320, 1.7, -1 } } do
+			local a, len, s = math.rad(c[1]), c[2], c[3]
+			local dir = Vector3.new(math.sin(a), 0, math.cos(a))
+			local side = Vector3.new(dir.Z, 0, -dir.X)
+			local base = P(180, 394, -0.2) + dir * 0.55
+			local prev = base
+			local n = 6
+			for i = 1, n do
+				local t = i / n
+				local lift = if i == n then 0.25 else 0.04 * math.sin(t * math.pi)
+				local p = base + dir * (len * t) + side * (s * math.sin(t * math.pi * 1.5) * 0.35) + Vector3.new(0, lift, 0)
+				seg(prev, p, 0.055 * (1 - t * 0.75))
+				prev = p
+			end
+			-- 곁가지 하나
+			if k % 2 == 1 then
+				local m = base + dir * (len * 0.5)
+				seg(m, m + (dir + side * s * 1.2).Unit * 0.6 + Vector3.new(0, 0.05, 0), 0.02)
+			end
+		end
+		ground(n0)
 	end
-	-- 다리: 뒤로 꺾이고 뿌리 같은 발
+	-- 뼈대용 다리 위치(보이는 선은 없음)
 	local function legZ(py: number): number
 		return if py < 360 then -0.2 - (py - 318) / 42 * 0.35 else -0.55 + (py - 360) / 36 * 0.6
-	end
-	for _, s in { -1, 1 } do
-		local function X(px: number): number
-			return 180 + (px - 180) * -s
-		end
-		group = "Leg" .. s
-		bez(X(168), 318, X(162), 338, X(166), 352, X(174), 360, 2, legZ)
-		bez(X(174), 360, X(168), 372, X(160), 384, X(152), 392, 2, legZ)
-		line(X(152), 392, X(138), 395, legZ, 0.026)
-		line(X(152), 392, X(148), 397, legZ, 0.026)
-		line(X(152), 392, X(160), 396, legZ, 0.026)
 	end
 	group = nil
 	-- 머리(평소): 줄기처럼 휜 목 끝에 고개 숙인 튤립 봉오리
@@ -2869,36 +3167,73 @@ local function buildFlower(cf: CFrame): Model
 	local function budZ(py: number): number
 		return -0.35 - math.clamp((198 - py) / 110, 0, 1) * 0.55
 	end
-	bez(180, 198, 186, 176, 196, 160, 210, 150, 3, budZ)
-	bez(210, 150, 200, 132, 204, 106, 222, 96, 3, budZ)
-	bez(222, 96, 238, 104, 244, 128, 236, 148, 3, budZ)
-	bez(236, 148, 228, 158, 218, 158, 210, 150, 2, budZ)
-	bez(222, 96, 220, 116, 220, 136, 224, 154, 2, budZ, 0.022)
-	bez(212, 110, 216, 124, 218, 140, 220, 156, 2, budZ, 0.022)
-	bez(232, 108, 230, 124, 230, 140, 228, 154, 2, budZ, 0.022)
-	line(222, 96, 220, 88, budZ, 0.022)
-	line(222, 96, 226, 89, budZ, 0.022)
+	bez(180, 190, 186, 172, 196, 158, 210, 150, 3, budZ, 0.04)
+	-- 봉오리 덩어리는 목 끝(210,150)을 기준으로 크게(BUD_K 배)
+	local BUD_K = 1.9
+	local function bb(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, n: number, r: number?)
+		local function k(x: number, y: number): (number, number)
+			return 210 + (x - 210) * BUD_K, 150 + (y - 150) * BUD_K
+		end
+		local a0, b0 = k(x0, y0)
+		local a1, b1 = k(x1, y1)
+		local a2, b2 = k(x2, y2)
+		local a3, b3 = k(x3, y3)
+		bez(a0, b0, a1, b1, a2, b2, a3, b3, n, budZ, r)
+	end
+	-- 바깥 윤곽(꽃잎 겹이 보이게 양옆 두 장 + 가운데 한 장)
+	bb(210, 150, 200, 132, 204, 106, 222, 96, 4, 0.04)
+	bb(222, 96, 238, 104, 244, 128, 236, 148, 4, 0.04)
+	bb(236, 148, 228, 158, 218, 158, 210, 150, 3, 0.04)
+	bb(210, 150, 194, 138, 198, 112, 216, 99, 3, 0.03)
+	bb(236, 148, 252, 136, 248, 112, 228, 99, 3, 0.03)
+	-- 꽃잎 겹선(봉오리 결)
+	bb(222, 96, 220, 116, 220, 136, 224, 154, 3, 0.026)
+	bb(212, 110, 216, 124, 218, 140, 220, 156, 3, 0.026)
+	bb(232, 108, 230, 124, 230, 140, 228, 154, 3, 0.026)
+	-- 꼭대기 뾰족한 끝 + 밑동을 감싼 꽃받침 3장
+	bb(222, 96, 221, 92, 220, 90, 219, 84, 1, 0.026)
+	bb(222, 96, 223, 92, 225, 90, 227, 85, 1, 0.026)
+	bb(210, 150, 204, 156, 200, 160, 196, 166, 1, 0.026)
+	bb(223, 156, 223, 160, 223, 163, 223, 168, 1, 0.026)
+	bb(236, 148, 242, 154, 246, 158, 250, 164, 1, 0.026)
 	-- 머리(깨어나면): 곧게 선 목 끝에 뾰족한 꽃잎 6장이 젖혀지고 가운데 작은 눈 7개
 	mark = "Bloom"
 	local headZ = flat(-0.95)
-	bez(180, 198, 180, 180, 182, 166, 186, 156, 2, function(py)
-		return -0.35 - math.clamp((198 - py) / 42, 0, 1) * 0.55
+	bez(180, 190, 180, 172, 182, 154, 186, 138, 3, function(py)
+		return -0.35 - math.clamp((198 - py) / 60, 0, 1) * 0.55
 	end)
-	local hx, hy = 186, 128
+	local hx, hy = 186, 104
+	local PK = 1.75 -- 꽃잎 크기(원래의 배)
+	-- 안쪽 겹: 바깥 꽃잎 사이로 짧은 꽃잎 6장
+	for k = 0, 5 do
+		local a = math.rad(k * 60 + 30)
+		local function R(x: number, y: number): (number, number)
+			x, y = x * PK * 0.55, y * PK * 0.55
+			return hx + x * math.cos(a) - y * math.sin(a), hy + x * math.sin(a) + y * math.cos(a)
+		end
+		local x0, y0 = R(-5, -8)
+		local x1, y1 = R(-12, -30)
+		local x2, y2 = R(0, -60)
+		local u1, v1 = R(12, -30)
+		local u2, v2 = R(5, -8)
+		bez(x0, y0, x1, y1, x1, y1, x2, y2, 2, flat(-0.9), 0.028)
+		bez(x2, y2, u1, v1, u1, v1, u2, v2, 2, flat(-0.9), 0.028)
+	end
 	for k = 0, 5 do
 		local a = math.rad(k * 60)
 		local function R(x: number, y: number): (number, number)
+			x, y = x * PK, y * PK
 			return hx + x * math.cos(a) - y * math.sin(a), hy + x * math.sin(a) + y * math.cos(a)
 		end
 		local x0, y0 = R(-4, -6)
 		local x1, y1 = R(-10, -24)
 		local x2, y2 = R(-8, -46)
 		local x3, y3 = R(0, -62)
-		bez(x0, y0, x1, y1, x2, y2, x3, y3, 2, headZ, 0.03)
+		bez(x0, y0, x1, y1, x2, y2, x3, y3, 3, headZ, 0.04)
 		local u1, v1 = R(8, -46)
 		local u2, v2 = R(10, -24)
 		local u3, v3 = R(4, -6)
-		bez(x3, y3, u1, v1, u2, v2, u3, v3, 2, headZ, 0.03)
+		bez(x3, y3, u1, v1, u2, v2, u3, v3, 3, headZ, 0.04)
 		local m0, n0 = R(0, -14)
 		local m1, n1 = R(0, -52)
 		line(m0, n0, m1, n1, headZ, 0.02)
@@ -2909,7 +3244,8 @@ local function buildFlower(cf: CFrame): Model
 		end
 	end
 	for _, e in { { 0, 0, 0.09 }, { -8, -6, 0.06 }, { 8, -6, 0.06 }, { -10, 4, 0.055 }, { 10, 4, 0.055 }, { -3, 10, 0.05 }, { 3, 10, 0.05 } } do
-		seg(P(hx + e[1], hy + e[2], -1.0), P(hx + e[1], hy + e[2], -1.06), e[3], "FEye")
+		local ex, ey, er = e[1] * 1.5, e[2] * 1.5, e[3] * 1.5
+		seg(P(hx + ex, hy + ey, -1.0), P(hx + ex, hy + ey, -1.06), er, "FEye")
 	end
 	mark = nil
 	-- 전신 뼈대(키 크고 가는 몸: 긴 목·긴 팔의 휘청임)
@@ -2918,18 +3254,26 @@ local function buildFlower(cf: CFrame): Model
 		waist = P(180, 280, -0.2),
 		neck = P(180, 236, -0.2),
 		head = P(180, 198, -0.35),
-		headEnd = P(196, 132, -0.9),
+		headEnd = P(190, 104, -0.9),
 		legs = {
 			[-1] = { hip = P(168, 318, -0.2), knee = P(174, 360, legZ(360)), ankle = P(152, 392, legZ(392)), toe = P(138, 395, -0.6) },
 			[1] = { hip = P(192, 318, -0.2), knee = P(186, 360, legZ(360)), ankle = P(208, 392, legZ(392)), toe = P(222, 395, -0.6) },
 		},
 		arms = {
-			[-1] = { shoulder = P(138, 250, armZ(250)), elbow = P(120, 330, armZ(330)), wrist = P(114, 372, armZ(372)), tip = P(114, 396, armZ(396)) },
-			[1] = { shoulder = P(222, 250, armZ(250)), elbow = P(240, 330, armZ(330)), wrist = P(246, 372, armZ(372)), tip = P(246, 396, armZ(396)) },
+			[-1] = { shoulder = P(140, 234, armZ(234)), elbow = P(98, 290, armZ(290)), wrist = P(108, 330, armZ(330)), tip = P(108, 390, armZ(390)) },
+			[1] = { shoulder = P(220, 234, armZ(234)), elbow = P(262, 290, armZ(290)), wrist = P(252, 330, armZ(330)), tip = P(252, 390, armZ(390)) },
 		},
 		floorY = -4,
 		mass = 0.7,
 	}, folder)
+	for _, p in parts do
+		if p:GetAttribute("Ground") then
+			local w = p:FindFirstChildOfClass("WeldConstraint")
+			if w then
+				w.Part0 = root -- 땅에 박힌 부분은 상체가 흔들려도 바닥에 그대로
+			end
+		end
+	end
 	makeHumanoid(model, FLOWER_HIP, 0)
 	CollectionService:AddTag(model, Config.Tags.Monster)
 	CollectionService:AddTag(model, Config.Tags.Flower)
@@ -2960,7 +3304,7 @@ local function buildDoppel(cf: CFrame): Model
 end
 
 -- ── 모델 ──
-local function buildModel(cf: CFrame, stage: number): Model
+local function buildModel(cf: CFrame, _stage: number): Model
 	local model = Instance.new("Model")
 	model.Name = "Monster"
 	model:SetAttribute(Config.Tags.Dynamic, true)
@@ -2995,202 +3339,179 @@ local function buildModel(cf: CFrame, stage: number): Model
 	local function seg(a: Vector3, b: Vector3, r: number)
 		-- 음파에는 한 획으로: 막대는 가운데 선 하나(Line), 얇은 원판은 원 하나(Disc)
 		local shape = if (b - a).Magnitude > r * 4 then "Line" else "Disc"
-		add(Kit.cylinder(model, at(a), at(b), r, { shape = shape }))
-	end
-	-- 손으로 그린 듯 흔들리는 선(결정적 난수라 매번 같은 모양)
-	local seed = 0
-	local function rnd(): number
-		seed += 1
-		local x = math.sin(seed * 12.9898) * 43758.5453
-		return x - math.floor(x) - 0.5
-	end
-	local function ink(a: Vector3, b: Vector3, r: number)
-		local d = b - a
-		local len = d.Magnitude
-		local dir = d.Unit
-		local k = math.min(1, len / 2) -- 짧은 선일수록 덜 삐져나오게
-		a = a - dir * (0.05 + 0.08 * (rnd() + 0.5)) * k
-		b = b + dir * (0.05 + 0.08 * (rnd() + 0.5)) * k
-		local n = math.max(2, math.floor(len / 1.6))
-		local prev = a
-		for i = 1, n do
-			local p = a:Lerp(b, i / n)
-			if i < n then
-				p += Vector3.new(rnd() * 0.07, rnd() * 0.04, rnd() * 0.07)
-			end
-			seg(prev, p, r)
-			prev = p
-		end
+		local p = Kit.cylinder(model, at(a), at(b), r, { shape = shape })
+		add(p)
+		return p
 	end
 	local V3 = Vector3.new
-	-- ── 기괴한 3차 시안(사용자 확정, 노트 main-monster-v3.svg) ──
-	-- 시안 좌표(px): 발바닥 y = 0, 위로 갈수록 -, 26px = 1스터드. 바닥 y = -5, 앞 = -Z
-	local PX = 26
+	-- ── 사용자 확정 디자인(노트 main-monster-bone.svg, 모든 스테이지 공통) ──
+	-- 뒤집힌 삼각 머리(둥근 눈 둘 + 위아래 이빨 입) · 속이 빈 관 뼈 · 구체관절 · 손발 모두 마디 손가락 4개 + 발톱
+	-- 시안 좌표(px): 가운데 x = 335, 발톱 끝(바닥) y = 852, 아래로 +y, 75px = 1스터드. 바닥 y = -5, 앞 = -Z
+	local PX = 75
 	type Pt = { number }
 	local function S(x: number, y: number, z: number): Vector3
-		return V3(x / PX, -5 - y / PX, z)
+		return V3((x - 335) / PX, -5 + (852 - y) / PX, z)
 	end
-	-- 몸 깊이: 위로 갈수록 앞으로 숙인다(엉덩이 0 → 어깨 -0.35 → 목 끝 -0.8)
-	local function bodyZ(y: number): number
-		local h = -y
-		if h <= 143 then
-			return 0
-		elseif h <= 196 then
-			return -0.35 * (h - 143) / 53
-		end
-		return -0.35 - 0.45 * math.min(1, (h - 196) / 38)
+	-- 한 획 선. ra/rb 만큼 양 끝을 잘라 관절 공 안으로 들어가지 않게
+	local function line(a: Vector3, b: Vector3, r: number, ra: number?, rb: number?)
+		local u = (b - a).Unit
+		seg(a + u * (ra or 0), b - u * (rb or 0), r)
 	end
-	-- 몸 선(손그림처럼 흔들림): 시안 점들을 잇는다
-	local function bodyLine(pts: { Pt }, r: number, closed: boolean?)
+	-- 관 뼈: 가는 원통(음파에는 보는 쪽 실루엣 2줄 + 끝 가로선 = 속이 빈 관). 양 끝은 관절 공 겉면까지만
+	local BONE_R, BALL_R, KNUCKLE_R = 0.08, 0.15, 0.06
+	local function bone(a: Vector3, b: Vector3)
+		local u = (b - a).Unit
+		add(Kit.cylinder(model, at(a + u * BALL_R), at(b - u * BALL_R), BONE_R))
+	end
+	-- 구체관절: 어느 쪽에서 봐도 원
+	local function ball(p: Vector3, r: number)
+		add(Kit.ball(model, at(p), r))
+	end
+	local function poly(pts: { Pt }, closed: boolean, z: number, r: number)
 		local n = #pts
 		for i = 1, (if closed then n else n - 1) do
 			local a, b = pts[i], pts[i % n + 1]
-			ink(S(a[1], a[2], bodyZ(a[2])), S(b[1], b[2], bodyZ(b[2])), r)
+			seg(S(a[1], a[2], z), S(b[1], b[2], z), r)
 		end
 	end
-	-- 가는 선(흔들림 없이 한 토막: 선 수를 아낀다)
-	local function thin(pts: { Pt }, r: number, zf: (number) -> number)
-		for i = 1, #pts - 1 do
-			local a, b = pts[i], pts[i + 1]
-			seg(S(a[1], a[2], zf(a[2])), S(b[1], b[2], zf(b[2])), r)
+	local function curve(p0: Pt, c: Pt, p1: Pt, n: number, z: number, r: number)
+		local pts: { Pt } = {}
+		for i = 0, n do
+			local t = i / n
+			local u = 1 - t
+			table.insert(pts, { u * u * p0[1] + 2 * u * t * c[1] + t * t * p1[1], u * u * p0[2] + 2 * u * t * c[2] + t * t * p1[2] })
 		end
-	end
-	local function disc(x: number, y: number, z: number, radPx: number)
-		local p = S(x, y, z)
-		seg(p, p + V3(0, 0, -0.02), radPx / PX)
+		poly(pts, false, z, r)
 	end
 
-	-- 몸통: 사다리꼴 + 어깨에서 가슴으로 겹치는 선 + 안쪽 갈비뼈 3쌍 + 점선 척추
-	bodyLine({ { -23, -196 }, { -21, -180 }, { -19, -162 }, { -17, -143 } }, 0.03)
-	bodyLine({ { 23, -196 }, { 21, -179 }, { 19, -161 }, { 17, -143 } }, 0.03)
-	bodyLine({ { -25, -196 }, { -8, -198 }, { 8, -195 }, { 25, -197 } }, 0.03)
-	bodyLine({ { -18, -143 }, { 0, -141 }, { 18, -144 } }, 0.03)
-	bodyLine({ { -23, -193 }, { -12, -182 }, { -4, -170 } }, 0.025)
-	bodyLine({ { 23, -193 }, { 13, -181 }, { 4, -170 } }, 0.025)
-	for _, rib in { { -176, -175 }, { -164, -163 }, { -153, -152 } } do
-		for _, s in { -1, 1 } do
-			thin({ { 15 * s, rib[1] }, { 8 * s, rib[1] + 4 }, { 2 * s, rib[2] } }, 0.018, bodyZ)
-		end
+	-- 몸통: 목 · 어깨 가로대 · 좁아지는 사다리꼴 몸통 · 휘어진 갈비뼈 5줄 · 육각 골반
+	line(S(335, 200, -0.15), S(335, 213, 0), 0.03)
+	line(S(287.5, 212, 0), S(392.5, 212, 0), 0.03, BALL_R, BALL_R)
+	poly({ { 300, 215 }, { 380, 215 }, { 355, 300 }, { 322.5, 300 } }, true, 0, 0.03)
+	curve({ 308, 230 }, { 318, 262 }, { 326, 296 }, 3, -0.02, 0.022)
+	for _, rib in { { 318, 228, 345, 242, 372, 226 }, { 321, 242, 346, 254, 369, 240 }, { 324, 256, 346, 266, 366, 254 }, { 327, 269, 346, 278, 362, 268 }, { 330, 282, 346, 289, 358, 281 } } do
+		curve({ rib[1], rib[2] }, { rib[3], rib[4] }, { rib[5], rib[6] }, 3, -0.03, 0.03)
 	end
-	for _, sp in { { 0, -190, 1, -184 }, { 1, -178, -1, -172 }, { -1, -165, 1, -159 }, { 1, -153, 0, -148 } } do
-		thin({ { sp[1], sp[2] }, { sp[3], sp[4] } }, 0.016, bodyZ)
-	end
-	-- 길고 지그재그로 꺾인 목
-	bodyLine({ { -5, -196 }, { -9, -206 }, { -4, -214 }, { -9, -224 }, { -6, -232 } }, 0.028)
-	bodyLine({ { 5, -196 }, { 2, -208 }, { 8, -216 }, { 3, -226 }, { 6, -234 } }, 0.028)
+	poly({ { 322.5, 300 }, { 355, 300 }, { 362.5, 317.5 }, { 352.5, 335 }, { 325, 335 }, { 315, 317.5 } }, true, 0, 0.03)
 
-	-- 팔: 마디 3개, 손목이 바닥 가까이. 양팔 길이가 조금 다르다. 관절 = 작은 원. 발톱 5개는 바닥을 긁는다
-	local function armZ(y: number): number
-		return -0.35 - 0.65 * math.clamp((-194 - y) / 154, 0, 1)
+	-- 팔·다리: 왼쪽(s = -1) 시안 좌표, 오른쪽은 좌우 대칭(x → 670 - x)
+	-- 손·발: 손목(발목)에서 마디 손가락 4개. { 첫 마디 x, y, 둘째 마디 x, y, 발톱 끝 x, y }
+	local HAND = { { 180, 512.5, 150, 535, 140, 585 }, { 190, 519, 162.5, 565, 160, 617.5 }, { 202.5, 520, 195, 567.5, 202.5, 612.5 }, { 215, 516, 239, 544, 244, 592.5 } }
+	-- 손가락은 아래로 갈수록 앞으로 굽고, 발가락은 발목에서 앞으로 뻗어 발톱 끝이 바닥에 닿는다
+	local function handZ(y: number): number
+		return -0.15 - 0.45 * math.clamp((y - 462.5) / 155, 0, 1)
 	end
-	local ARMS = {
-		[-1] = { pts = { { -23, -194 }, { -34, -168 }, { -46, -140 }, { -48, -115 }, { -52, -90 }, { -57, -65 }, { -62, -40 } }, knobs = { { -46, -140 }, { -52, -90 } }, claws = { { -70, -22, -88, -2 }, { -67, -18, -75, -2 }, { -62, -16, -60, -2 }, { -56, -18, -48, -2 }, { -52, -24, -38, -4 } } },
-		[1] = { pts = { { 23, -194 }, { 37, -170 }, { 50, -146 }, { 51, -120 }, { 54, -96 }, { 60, -72 }, { 66, -48 } }, knobs = { { 50, -146 }, { 54, -96 } }, claws = { { 74, -30, 92, -2 }, { 70, -26, 78, -2 }, { 66, -24, 64, -2 }, { 60, -26, 52, -2 }, { 56, -32, 42, -8 } } },
-	}
-	-- 다리: 오른 다리는 무릎이 뒤로 꺾여 짧다(절뚝임). 작은 삼각 발
-	local LEGS = {
-		[-1] = { pts = { { -10, -143 }, { -14, -110 }, { -18, -78 }, { -13, -42 }, { -9, -6 } }, foot = { { -9, -6 }, { -21, 0 }, { -4, 0 } }, knob = { 0, 0 } },
-		[1] = { pts = { { 10, -143 }, { 19, -114 }, { 25, -86 }, { 12, -50 }, { 12, -8 } }, foot = { { 12, -8 }, { 24, -1 }, { 7, -1 } }, knob = { 25, -86 } },
-	}
-	local function legZ(y: number): number
-		return if y > -100 and y < -60 then 0.15 else 0
+	local function digits(w: Vector3, list: { { number } }, P: (number, number, number) -> Vector3, zf: (number) -> number): Vector3
+		local sum = Vector3.zero
+		for _, d in list do
+			local k1 = P(d[1], d[2], zf(d[2]))
+			local k2 = P(d[3], d[4], zf(d[4]))
+			local tip = P(d[5], d[6], zf(d[6]))
+			line(w, k1, 0.025, BALL_R, KNUCKLE_R)
+			line(k1, k2, 0.025, KNUCKLE_R, KNUCKLE_R)
+			ball(k1, KNUCKLE_R)
+			ball(k2, KNUCKLE_R)
+			-- 발톱: 끝으로 갈수록 가늘어지는 가시(두 줄이 끝에서 만난다)
+			local dir = (tip - k2).Unit
+			local side = dir:Cross(Vector3.zAxis)
+			if side.Magnitude < 0.1 then
+				side = dir:Cross(Vector3.xAxis)
+			end
+			side = side.Unit * 0.04
+			local base = k2 + dir * KNUCKLE_R
+			seg(base + side, tip, 0.015)
+			seg(base - side, tip, 0.015)
+			sum += tip
+		end
+		return sum / #list
 	end
-	local hexArms = ((stage - 1) % 5) + 1 == 5
+	type LimbJ = { a: Vector3, b: Vector3, c: Vector3, tip: Vector3, ball: Vector3? }
+	local armJ: { [number]: LimbJ } = {}
+	local legJ: { [number]: LimbJ } = {}
 	for _, s in { -1, 1 } do
+		local function P(x: number, y: number, z: number): Vector3
+			return S(if s < 0 then x else 670 - x, y, z)
+		end
 		group = "Arm" .. s
-		local A = ARMS[s]
-		for i = 1, #A.pts - 1 do
-			local a, b = A.pts[i], A.pts[i + 1]
-			ink(S(a[1], a[2], armZ(a[2])), S(b[1], b[2], armZ(b[2])), 0.03)
-		end
-		for _, k in A.knobs do
-			disc(k[1], k[2], armZ(k[2]) - 0.03, 2.2)
-		end
-		local w = A.pts[#A.pts]
-		local wz = armZ(w[2])
-		for _, c in A.claws do
-			thin({ w, { c[1], c[2] }, { c[3], c[4] } }, 0.016, function(y: number): number
-				return wz - 0.1 * math.clamp((y - w[2]) / 40, 0, 1)
-			end)
-		end
-		if hexArms then
-			-- 5 육각: 어깨 아래에서 짧은 팔이 한 쌍 더(발톱 3개). 가슴에 붙는다(팔 뼈가 아니라)
-			group = nil
-			local e = { { 20 * s, -178 }, { 34 * s, -158 }, { 40 * s, -132 }, { 46 * s, -112 } }
-			thin(e, 0.025, function(y: number): number
-				return -0.4 - 0.3 * math.clamp((-178 - y) / 66, 0, 1)
-			end)
-			local h = e[4]
-			for _, dx in { -6, 0, 6 } do
-				thin({ h, { h[1] + dx * s, h[2] + 14 } }, 0.014, function(_y: number): number
-					return -0.7
-				end)
-			end
-		end
+		local sh, el, wr = P(287.5, 211.5, 0), P(252.5, 332.5, 0.2), P(202.5, 462.5, -0.15)
+		bone(sh, el)
+		bone(el, wr)
+		ball(el, BALL_R)
+		ball(wr, BALL_R)
+		armJ[s] = { a = sh, b = el, c = wr, tip = digits(wr, HAND, P, handZ) }
 		group = "Leg" .. s
-		local L = LEGS[s]
-		for i = 1, #L.pts - 1 do
-			local a, b = L.pts[i], L.pts[i + 1]
-			ink(S(a[1], a[2], legZ(a[2])), S(b[1], b[2], legZ(b[2])), 0.03)
+		local hip, kn, an = P(310, 333.5, 0), P(287.5, 480, -0.3), P(260, 715, 0.1)
+		bone(hip, kn)
+		bone(kn, an)
+		ball(kn, BALL_R)
+		ball(an, BALL_R)
+		-- 발: 발목에서 앞아래로 내려가는 발등뼈 → 바닥의 발볼(구체관절) → 앞으로 바닥을 따라 뻗은 마디 발가락 4개 + 발톱,
+		-- 발목 뒤로 뒤꿈치 발톱 하나. (발볼에서 발가락이 따로 접힌다)
+		local ballP = P(262, 836, -0.55)
+		bone(an, ballP)
+		ball(ballP, BALL_R * 0.8)
+		local sum = Vector3.zero
+		for _, dx in { -30, -10, 10, 30 } do
+			local k1 = P(262 + dx * 0.45, 845, -0.95)
+			local k2 = P(262 + dx * 0.8, 848, -1.35)
+			local tip = P(262 + dx, 852, -1.8)
+			line(ballP, k1, 0.03, BALL_R * 0.8, KNUCKLE_R)
+			line(k1, k2, 0.028, KNUCKLE_R, KNUCKLE_R)
+			ball(k1, KNUCKLE_R)
+			ball(k2, KNUCKLE_R)
+			local dir = (tip - k2).Unit
+			local side = dir:Cross(Vector3.yAxis).Unit * 0.045
+			local base = k2 + dir * KNUCKLE_R
+			seg(base + side, tip, 0.015)
+			seg(base - side, tip, 0.015)
+			sum += tip
 		end
-		if L.knob[1] ~= 0 then
-			disc(L.knob[1], L.knob[2], 0.12, 2)
-		end
-		local f = L.foot
-		for i = 1, 3 do
-			local a, b = f[i], f[i % 3 + 1]
-			seg(S(a[1], a[2], if i == 2 then -0.45 else 0.1), S(b[1], b[2], if i == 1 then -0.45 else 0.1), 0.025)
-		end
+		-- 뒤꿈치 발톱(발목 뒤로 꺾여 바닥을 찌름)
+		local heel = P(262, 772, 0.5)
+		line(an, heel, 0.028, BALL_R, KNUCKLE_R)
+		ball(heel, KNUCKLE_R)
+		seg(heel, P(262, 846, 0.72), 0.018)
+		legJ[s] = { a = hip, b = kn, c = an, tip = sum / 4, ball = ballP }
+		group = nil
+		ball(sh, BALL_R)
+		ball(hip, BALL_R * 0.9)
 	end
-	group = nil
 
-	-- ── 머리: 공용 모양(MonsterFaces, 점프스케어 얼굴과 같다). 시안 좌표 변환 translate → rotate → scale ──
-	type Map = (number, number) -> (number, number)
-	local function T(tx: number, ty: number, deg: number, sc: number): Map
-		local c, s = math.cos(math.rad(deg)), math.sin(math.rad(deg))
-		return function(u: number, v: number): (number, number)
-			u, v = u * sc, v * sc
-			return tx + u * c - v * s, ty + u * s + v * c
-		end
+	-- ── 머리: 공용 모양(MonsterFaces.BONE, 점프스케어 얼굴과 같다) ──
+	local face = Faces.build(Faces.BONE)
+	local HZ = -0.25 -- 머리 면의 깊이(조금 앞으로)
+	local function hp(u: number, v: number, dz: number): Vector3
+		return S(face.tx + u, face.ty + v, HZ + dz)
 	end
-	local HZ = -1.0 -- 머리 면의 깊이(앞으로 나와 있다)
-	local function drawFace(M: Map, MS: number, lines: { Faces.Line }, circles: { Faces.Circle })
-		local function hp(u: number, v: number, dz: number): Vector3
-			local x, y = M(u, v)
-			return S(x, y, HZ + dz)
-		end
-		for _, l in lines do
-			local n = #l.pts
-			for i = 1, (if l.closed then n else n - 1) do
-				local a, b = l.pts[i], l.pts[i % n + 1]
-				seg(hp(a[1], a[2], l.dz), hp(b[1], b[2], l.dz), l.r)
+	for _, l in face.lines do
+		local n = #l.pts
+		for i = 1, (if l.closed then n else n - 1) do
+			local a, b = l.pts[i], l.pts[i % n + 1]
+			local p = seg(hp(a[1], a[2], l.dz), hp(b[1], b[2], l.dz), l.r)
+			if l.tint then
+				p:SetAttribute("SonarColor", l.tint) -- 붉은 바늘 이빨
 			end
 		end
-		for _, c in circles do
-			local p = hp(c.u, c.v, c.dz)
-			seg(p, p + V3(0, 0, -0.02), c.rad * MS / PX)
-		end
 	end
-	local face = Faces.build(((stage - 1) % 5) + 1)
-	drawFace(T(face.tx, face.ty, face.deg, face.scale), face.scale, face.lines, face.circles)
-	drawFace(T(0, 0, 0, 1), 1, face.extra, face.extraCircles)
-	-- 전신 뼈대: 관절 위치는 시안 좌표 그대로(팔은 마디 3개, 오른 다리는 무릎이 뒤로 꺾여 짧다)
-	local function armJ(x: number, y: number): Vector3
-		return S(x, y, armZ(y))
+	for _, c in face.circles do
+		local p = hp(c.u, c.v, c.dz)
+		seg(p, p + V3(0, 0, -0.02), c.rad / PX)
 	end
+
+	-- 전신 뼈대: 관절 위치는 시안 좌표 그대로(팔은 마디 2개, 무릎은 앞으로 굽는다)
 	skeleton(model, root, cf, parts, groupParts, {
-		pelvis = S(0, -143, 0),
-		waist = S(0, -170, bodyZ(-170)),
-		neck = S(0, -196, -0.35),
-		head = S(0, -232, -0.8),
-		headEnd = S(face.tx, face.ty, HZ),
+		pelvis = S(338.75, 318, 0),
+		waist = S(340, 262, 0),
+		neck = S(340, 212, 0),
+		head = S(335, 202, -0.15),
+		headEnd = S(face.tx, face.ty - 40, HZ),
 		legs = {
-			[-1] = { hip = S(-10, -143, 0), knee = S(-18, -78, 0.15), ankle = S(-9, -6, 0), toe = S(-21, 0, -0.45) },
-			[1] = { hip = S(10, -143, 0), knee = S(25, -86, 0.15), ankle = S(12, -8, 0), toe = S(24, -1, -0.45) },
+			[-1] = { hip = legJ[-1].a, knee = legJ[-1].b, ankle = legJ[-1].c, toe = legJ[-1].tip, ball = legJ[-1].ball },
+			[1] = { hip = legJ[1].a, knee = legJ[1].b, ankle = legJ[1].c, toe = legJ[1].tip, ball = legJ[1].ball },
 		},
 		arms = {
-			[-1] = { shoulder = armJ(-23, -194), elbow = armJ(-46, -140), mid = armJ(-52, -90), wrist = armJ(-62, -40), tip = S(-62, -2, armZ(-40) - 0.1) },
-			[1] = { shoulder = armJ(23, -194), elbow = armJ(50, -146), mid = armJ(54, -96), wrist = armJ(66, -48), tip = S(66, -2, armZ(-48) - 0.1) },
+			[-1] = { shoulder = armJ[-1].a, elbow = armJ[-1].b, wrist = armJ[-1].c, tip = armJ[-1].tip },
+			[1] = { shoulder = armJ[1].a, elbow = armJ[1].b, wrist = armJ[1].c, tip = armJ[1].tip },
 		},
 		floorY = -5,
 		mass = 1,
@@ -3422,6 +3743,8 @@ function Monster.setState(self: Monster, s: State)
 		speed = cfg.ChaseSpeed
 	elseif s == "Alert" then
 		speed = 0
+	elseif s == "Return" then
+		speed = cfg.ReturnSpeed or cfg.WanderSpeed
 	end
 	self.hum.WalkSpeed = speed
 	if s ~= "Chase" and self.mawOpen then
@@ -4340,9 +4663,28 @@ function Monster.setBloom(self: Monster, open: boolean)
 end
 
 -- 달려갈 곳: 음파 쏜 자리(안전 구역 안이면 그 앞, 바닥 위)
+-- 꽃괴물이 들어가면 안 되는 곳: 안전 구역, 그리고 시작점 둘레(KeepOut) — 시작 위치를 막아 못 나가게 되지 않게
+local function flowerBanned(self: Monster, p: Vector3): boolean
+	if Monster.isSafe(p) then
+		return true
+	end
+	local ko = (self :: any).keepOut
+	return ko ~= nil and Vector3.new(p.X - ko.X, 0, p.Z - ko.Z).Magnitude < self.cfg.KeepOut
+end
+
 local function rushGoal(self: Monster, pos: Vector3): Vector3
-	if Monster.isSafe(pos) then
-		return self:nearestOutside(pos) or pos
+	if flowerBanned(self, pos) then
+		-- 소리 난 곳에서 가장 가까운, 들어가도 되는 지점까지만 온다
+		local best, bd = nil, math.huge
+		for _, n in self.nodes do
+			if not flowerBanned(self, n) then
+				local d = (n - pos).Magnitude
+				if d < bd then
+					best, bd = n, d
+				end
+			end
+		end
+		return best or self:nearestOutside(pos) or pos
 	end
 	return pos
 end
@@ -4365,6 +4707,11 @@ function Monster.flowerHear(self: Monster, pos: Vector3, radius: number, kind: s
 		self:setState("Alert")
 	elseif self.state == "Look" then
 		self:setState("Chase")
+	elseif self.state == "Return" then
+		-- 돌아가던 중: 다시 펼치고 달려간다
+		self:setBloom(true)
+		self.alertUntil = os.clock() + self.cfg.WakeTime
+		self:setState("Alert")
 	end
 	-- (달리는 중이면 목표만 바뀐다)
 end
@@ -4423,7 +4770,7 @@ function Monster.flowerTick(self: Monster, now: number)
 				local best, bd = nil, math.huge
 				for _, n in self.nodes do
 					local dd = (n - goal).Magnitude
-					if dd < bd and not Monster.isSafe(n) then
+					if dd < bd and not flowerBanned(self, n) then
 						best, bd = n, dd
 					end
 				end
@@ -4445,11 +4792,40 @@ function Monster.flowerTick(self: Monster, now: number)
 		-- 두리번: 조금씩 몸을 돌린다
 		self.root.CFrame = self.root.CFrame * CFrame.Angles(0, math.rad(math.random(-25, 25)), 0)
 		if now >= self.searchUntil then
-			-- 머리를 닫고 그 자리에서 다시 기다린다
-			self:note("closing, dormant")
+			-- 머리를 닫고 원래 자리(맵 가운데쯤)로 걸어 돌아간다(가까우면 그 자리에서 기다린다)
 			self:setBloom(false)
-			self:setState("Dormant")
+			local home = (self :: any).home
+			if home and Vector3.new(home.X - my.X, 0, home.Z - my.Z).Magnitude > 6 then
+				self:note("closing, returning home")
+				self.goal = home
+				self.waypoints = {}
+				self:setState("Return")
+			else
+				self:note("closing, dormant")
+				self:setState("Dormant")
+			end
 		end
+		return
+	end
+	if st == "Return" then
+		local home = (self :: any).home
+		local flat = if home then Vector3.new(home.X - my.X, 0, home.Z - my.Z).Magnitude else 0
+		if not home or flat < 4 then
+			self:note("home, dormant")
+			self.waypoints = {}
+			self.goal = nil
+			self:setState("Dormant")
+			return
+		end
+		self.goal = home
+		if #self.waypoints == 0 and not self:pathTo(home) then
+			-- 길을 못 찾으면 그 자리에서 기다린다
+			self:setState("Dormant")
+			return
+		end
+		self:follow()
+		Doors.openNear(my + self.root.CFrame.LookVector * 2, 6, my)
+		self:checkStuck(false)
 		return
 	end
 	-- (그 밖의 상태가 되면 기다림으로)
@@ -4510,7 +4886,7 @@ return Monster
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="26">
+      <Item class="ModuleScript" referent="29">
         <Properties>
           <string name="Name">Props</string>
           <string name="Source"><![CDATA[--!strict
@@ -4755,11 +5131,191 @@ function Props.Cabinet(ctx, i: number, j: number)
 	Kit.box(m, CFrame.lookAt(face + Vector3.new(0, 0.6, 0), face + Vector3.new(0, 0.6, 0) - side) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(0.08, 3.4, 0.1), { blocks = false, collide = false })
 end
 
+-- ── 폐유치원 ──
+-- 모든 것이 어른 눈높이보다 낮다(작은 놀이기구 옆에 숨은 괴물이 오히려 커 보이게).
+
+-- 미끄럼틀(U): 벽 쪽 사다리 + 작은 발판 + 방 안쪽으로 내려오는 미끄럼 판
+function Props.Slide(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j) or Vector3.new(0, 0, -1)
+	local across = Vector3.new(side.Z, 0, -side.X)
+	local top = 4.6
+	local deck = p + side * 1.6
+	local m = Instance.new("Model")
+	m.Name = "Slide"
+	m.Parent = ctx.props
+	-- 발판 + 네 기둥 + 난간
+	Kit.box(m, CFrame.lookAt(deck + Vector3.new(0, top, 0), deck + Vector3.new(0, top, 0) + side), Vector3.new(2.8, 0.25, 2.6), { blocks = false })
+	for _, a in { -1, 1 } do
+		for _, b in { -1, 1 } do
+			local c = deck + across * (a * 1.3) + side * (b * 1.2)
+			Kit.cylinder(m, c, c + Vector3.new(0, top + 2.2, 0), 0.12, { blocks = false })
+		end
+		local r0 = deck + across * (a * 1.3) + Vector3.new(0, top + 1.6, 0)
+		Kit.cylinder(m, r0 - side * 1.2, r0 + side * 1.2, 0.07, { blocks = false, collide = false })
+	end
+	-- 작은 삼각 지붕
+	for _, a in { -1, 1 } do
+		local c = deck + across * (a * 0.75) + Vector3.new(0, top + 2.65, 0)
+		Kit.box(m, CFrame.lookAt(c, c + side) * CFrame.Angles(0, 0, a * 0.55), Vector3.new(1.75, 0.15, 2.8), { blocks = false, collide = false })
+	end
+	-- 사다리(벽 쪽)
+	local lad = deck + side * 1.25
+	for _, a in { -1, 1 } do
+		local c = lad + across * (a * 0.8)
+		Kit.cylinder(m, c, c + Vector3.new(0, top, 0), 0.08, { blocks = false })
+	end
+	for k = 1, 4 do
+		local c = lad + Vector3.new(0, k * top / 5, 0)
+		Kit.cylinder(m, c - across * 0.8, c + across * 0.8, 0.06, { blocks = false, collide = false })
+	end
+	-- 미끄럼 판(방 안쪽으로 비스듬히) + 양옆 턱
+	local a0 = deck - side * 1.3 + Vector3.new(0, top, 0)
+	local a1 = p - side * 3.6 + Vector3.new(0, 0.6, 0)
+	local mid = (a0 + a1) / 2
+	local len = (a1 - a0).Magnitude
+	local cf = CFrame.lookAt(mid, a1)
+	Kit.box(m, cf, Vector3.new(1.8, 0.15, len), { blocks = false })
+	for _, a in { -1, 1 } do
+		Kit.box(m, cf * CFrame.new(a * 0.95, 0.3, 0), Vector3.new(0.12, 0.6, len), { blocks = false, collide = false })
+	end
+	Kit.box(m, CFrame.lookAt(p + Vector3.new(0, 2.5, 0), p + Vector3.new(0, 2.5, 0) + side), Vector3.new(3, 5, 6.5), { invisible = true, tag = false })
+end
+
+-- 작은 책걸상(t): 무릎 높이 탁자 + 작은 의자 둘
+function Props.SmallDesk(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local yaw = ctx.hash(i, j, 3) * 0.5 - 0.25
+	local cf = CFrame.new(p) * CFrame.Angles(0, yaw, 0)
+	local m = Instance.new("Model")
+	m.Name = "SmallDesk"
+	m.Parent = ctx.props
+	Kit.box(m, cf * CFrame.new(0, 2.1, 0), Vector3.new(3.8, 0.18, 2.2), { blocks = false })
+	for _, x in { -1.7, 1.7 } do
+		for _, z in { -0.9, 0.9 } do
+			Kit.box(m, cf * CFrame.new(x, 1.0, z), Vector3.new(0.18, 2.0, 0.18), { blocks = false })
+		end
+	end
+	for k, s in { -1, 1 } do
+		local ch = cf * CFrame.new(s * 0.9, 0, 1.9) * CFrame.Angles(0, (ctx.hash(i, j, 5 + k) - 0.5) * 0.8, 0)
+		Kit.box(m, ch * CFrame.new(0, 1.1, 0), Vector3.new(1.1, 0.14, 1.1), { blocks = false })
+		Kit.box(m, ch * CFrame.new(0, 1.75, 0.5), Vector3.new(1.1, 1.0, 0.12), { blocks = false })
+		for _, x in { -0.45, 0.45 } do
+			for _, z in { -0.45, 0.45 } do
+				Kit.box(m, ch * CFrame.new(x, 0.55, z), Vector3.new(0.1, 1.1, 0.1), { blocks = false })
+			end
+		end
+	end
+	Kit.box(m, cf * CFrame.new(0, 1.2, 0.6), Vector3.new(3.8, 2.4, 3.6), { invisible = true, tag = false })
+end
+
+-- 장난감 더미(y): 뚜껑 열린 장난감 상자 + 쌓기 블록 + 공 + 곰 인형
+function Props.ToyPile(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j) or Vector3.new(0, 0, -1)
+	local across = Vector3.new(side.Z, 0, -side.X)
+	local h = ctx.hash(i, j, 7)
+	local c = p + side * (ctx.T / 2 - 1.4)
+	local m = Instance.new("Model")
+	m.Name = "ToyPile"
+	m.Parent = ctx.props
+	local box = CFrame.lookAt(c + Vector3.new(0, 0.9, 0), c + Vector3.new(0, 0.9, 0) - side)
+	Kit.box(m, box, Vector3.new(3.0, 1.8, 1.9), { blocks = false })
+	Kit.box(m, box * CFrame.new(0, 1.3, 1.1) * CFrame.Angles(-1.2, 0, 0), Vector3.new(3.0, 0.15, 1.9), { blocks = false, collide = false })
+	-- 블록 탑
+	local b0 = c - side * 2.0 + across * (if h < 0.5 then 1.4 else -1.4)
+	for k = 0, 2 do
+		local s = 0.9 - k * 0.12
+		Kit.box(m, CFrame.new(b0 + Vector3.new(0, s / 2 + k * 0.85, 0)) * CFrame.Angles(0, k * 0.5 + h, 0), Vector3.new(s, s, s), { blocks = false })
+	end
+	Kit.ball(m, c - side * 2.4 + across * (if h < 0.5 then -1.2 else 1.2) + Vector3.new(0, 0.6, 0), 0.6, { blocks = false, collide = false })
+	-- 곰 인형(상자 위에 기대 앉은 실루엣)
+	local t = c + across * 0.6 + Vector3.new(0, 1.8, 0) - side * 0.3
+	Kit.ball(m, t + Vector3.new(0, 0.55, 0), 0.55, { blocks = false, collide = false })
+	Kit.ball(m, t + Vector3.new(0, 1.4, 0), 0.42, { blocks = false, collide = false })
+	for _, s in { -1, 1 } do
+		Kit.ball(m, t + Vector3.new(0, 1.78, 0) + across * (s * 0.32), 0.16, { blocks = false, collide = false })
+	end
+	Kit.box(m, CFrame.lookAt(c - side * 0.6 + Vector3.new(0, 1.2, 0), c - side * 0.6 + Vector3.new(0, 1.2, 0) + side), Vector3.new(3.4, 2.4, 3.2), { invisible = true, tag = false })
+end
+
+-- 볼풀(G): 밟고 지나가는 칸. 공 몇 개 + 볼풀이 아닌 쪽 가장자리에 낮은 쿠션 턱(통과됨)
+function Props.BallPit(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = Instance.new("Model")
+	m.Name = "BallPit"
+	m.Parent = ctx.props
+	for k = 1, 5 do
+		local a, b, r = ctx.hash(i, j, 10 + k), ctx.hash(i, j, 20 + k), 0.45 + ctx.hash(i, j, 30 + k) * 0.2
+		Kit.ball(m, p + Vector3.new((a - 0.5) * 6.4, r + (k % 2) * 0.3, (b - 0.5) * 6.4), r, { blocks = false, collide = false })
+	end
+	for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+		local n = ctx.at(i + d[1], j + d[2])
+		if n ~= "G" and not ctx.isWall(i + d[1], j + d[2]) then
+			local v = Vector3.new(d[1], 0, d[2])
+			local e = p + v * (ctx.T / 2 - 0.4) + Vector3.new(0, 0.6, 0)
+			Kit.box(m, CFrame.lookAt(e, e + v), Vector3.new(ctx.T, 1.2, 0.8), { blocks = false, collide = false })
+		end
+	end
+end
+
+-- 낮잠 매트(N): 밟고 지나가는 얇은 매트 + 베개
+function Props.NapMat(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = Instance.new("Model")
+	m.Name = "NapMat"
+	m.Parent = ctx.props
+	local cf = CFrame.new(p) * CFrame.Angles(0, (ctx.hash(i, j, 4) - 0.5) * 0.25, 0)
+	Kit.box(m, cf * CFrame.new(0, 0.15, 0), Vector3.new(2.6, 0.3, 5.6), { blocks = false, collide = false })
+	Kit.box(m, cf * CFrame.new(0, 0.45, -2.2), Vector3.new(1.8, 0.35, 0.9), { blocks = false, collide = false })
+	if ctx.hash(i, j, 6) < 0.4 then
+		Kit.box(m, cf * CFrame.new(0.2, 0.4, 0.8) * CFrame.Angles(0, 0.3, 0), Vector3.new(2.4, 0.15, 2.6), { blocks = false, collide = false }) -- 흐트러진 이불
+	end
+end
+
+-- 작은 변기·세면대(j)
+function Props.KidToilet(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j) or Vector3.new(0, 0, -1)
+	local c = p + side * (ctx.T / 2 - 1.2)
+	local m = Instance.new("Model")
+	m.Name = "KidToilet"
+	m.Parent = ctx.props
+	if ctx.hash(i, j, 8) < 0.5 then
+		Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 1.9, 0), c + Vector3.new(0, 1.9, 0) - side), Vector3.new(1.6, 1.0, 0.5), { blocks = false })
+		Kit.cylinder(m, c - side * 0.9, c - side * 0.9 + Vector3.new(0, 1.0, 0), 0.65, { blocks = false })
+		Kit.cylinder(m, c - side * 0.9 + Vector3.new(0, 1.0, 0), c - side * 0.9 + Vector3.new(0, 1.15, 0), 0.75, { blocks = false })
+	else
+		Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 2.2, 0) - side * 0.4, c + Vector3.new(0, 2.2, 0) - side), Vector3.new(2.2, 0.4, 1.4), { blocks = false })
+		Kit.cylinder(m, c - side * 0.3, c - side * 0.3 + Vector3.new(0, 2.0, 0), 0.25, { blocks = false })
+		Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 4.2, 0) + side * 0.4, c + Vector3.new(0, 4.2, 0) - side), Vector3.new(1.8, 1.4, 0.08), { blocks = false, collide = false }) -- 낮은 거울
+	end
+	Kit.box(m, CFrame.lookAt(c - side * 0.5 + Vector3.new(0, 1.2, 0), c - side * 0.5 + Vector3.new(0, 1.2, 0) + side), Vector3.new(2.4, 2.4, 2.4), { invisible = true, tag = false })
+end
+
+-- 낮은 기어가는 통로(q): 어린이 키 높이로 내려온 천장 + 칸마다 둥근 테(통과됨, 괴물도 지나간다)
+function Props.LowTunnel(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = Instance.new("Model")
+	m.Name = "LowTunnel"
+	m.Parent = ctx.props
+	local low = 6.4
+	Kit.box(m, CFrame.new(p + Vector3.new(0, low + 0.15, 0)), Vector3.new(ctx.T, 0.3, ctx.T), { blocks = false, collide = false })
+	local ns = ctx.isWall(i - 1, j) and ctx.isWall(i + 1, j) -- 양옆이 벽이면 남북 통로
+	local along = if ns then Vector3.new(0, 0, 1) else Vector3.new(1, 0, 0)
+	local across = Vector3.new(along.Z, 0, -along.X)
+	for _, s in { -1, 1 } do
+		local c = p + across * (s * (ctx.T / 2 - 0.5))
+		Kit.cylinder(m, c, c + Vector3.new(0, low, 0), 0.18, { blocks = false, collide = false })
+	end
+	Kit.cylinder(m, p - across * (ctx.T / 2 - 0.5) + Vector3.new(0, low - 0.2, 0), p + across * (ctx.T / 2 - 0.5) + Vector3.new(0, low - 0.2, 0), 0.18, { blocks = false, collide = false })
+end
+
 return Props
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="27">
+      <Item class="ModuleScript" referent="30">
         <Properties>
           <string name="Name">Rejoin</string>
           <string name="Source"><![CDATA[--!strict
@@ -4873,7 +5429,7 @@ return Rejoin
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="28">
+      <Item class="ModuleScript" referent="31">
         <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[--!strict
@@ -5460,18 +6016,38 @@ function Round.spawnMonsters(count: number)
 		end
 		note("doppels " .. D.PerStage)
 	end
-	-- 꽃괴물: 시작점에서 떨어진(안전 구역 밖) 곳에 가만히 서 있게
+	-- 꽃괴물: 늘 맵 한가운데쯤(안전 구역 밖, 시작점에서 떨어진 곳)에 가만히 서 있게
 	local F = Config.Flower
-	if F.Enabled and Round.stageIndex > 0 then
-		local spots = {}
+	local stageDef = Config.Stages[Round.stageIndex]
+	if F.Enabled and stageDef and table.find(F.Stages, stageDef.Id) then
+		local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
 		for _, n in info.nodes do
-			local d = (n - spawnPos).Magnitude
-			if d >= F.SpawnDistance[1] and d <= F.SpawnDistance[2] and not Round.inSafe(n) then
-				table.insert(spots, n)
+			x0, x1 = math.min(x0, n.X), math.max(x1, n.X)
+			z0, z1 = math.min(z0, n.Z), math.max(z1, n.Z)
+		end
+		local cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
+		local function toMid(n: Vector3): number
+			return math.sqrt((n.X - cx) ^ 2 + (n.Z - cz) ^ 2)
+		end
+		local pool = {}
+		for _, n in info.nodes do
+			if (n - spawnPos).Magnitude >= F.SpawnDistance[1] and not Round.inSafe(n) then
+				table.insert(pool, n)
 			end
 		end
-		if #spots == 0 then
-			spots = candidates
+		if #pool == 0 then
+			pool = candidates
+		end
+		table.sort(pool, function(a, b)
+			return toMid(a) < toMid(b)
+		end)
+		-- 가운데에서 가까운 순으로, 맵 크기의 MidRadius 안(최소 몇 곳은 확보)
+		local limit = math.max(x1 - x0, z1 - z0) * F.MidRadius
+		local spots = {}
+		for i, n in pool do
+			if toMid(n) <= limit or i <= 6 then
+				table.insert(spots, n)
+			end
 		end
 		for _ = 1, F.PerStage do
 			local pick = spreadPick(spots, placed, MONSTER_GAP)
@@ -5480,6 +6056,8 @@ function Round.spawnMonsters(count: number)
 				Round.kill(player, "flower")
 			end, Round.stageIndex, "flower")
 			m.route = info.route
+			;(m :: any).home = pick -- 쫓아갔다가 이 자리로 돌아온다
+			;(m :: any).keepOut = spawnPos -- 시작점 둘레로는 들어오지 않는다
 			table.insert(Round.flowers, m)
 			m:run()
 		end
@@ -5763,7 +6341,7 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="29">
+      <Item class="ModuleScript" referent="32">
         <Properties>
           <string name="Name">Search</string>
           <string name="Source"><![CDATA[--!strict
@@ -5828,6 +6406,9 @@ local STYLES: { [string]: Style } = {
 	toolbox = { w = 3.4, h = 1.9, d = 2.0, kind = "lid", rows = 0, name = "공구함" }, -- 하수도
 	nightstand = { w = 2.6, h = 2.8, d = 2.2, kind = "drawers", rows = 2, name = "협탁" }, -- 병원
 	chest = { w = 3.6, h = 2.3, d = 2.4, kind = "lid", rows = 0, name = "궤짝" }, -- 심층 미로
+	dresser = { w = 3.8, h = 3.3, d = 2.4, kind = "drawers", rows = 3, name = "서랍장" }, -- 호텔: 객실 서랍장
+	safe = { w = 2.8, h = 2.6, d = 2.4, kind = "lid", rows = 0, name = "금고" }, -- 호텔: 객실 금고
+	toybox = { w = 3.4, h = 2.1, d = 2.4, kind = "lid", rows = 0, name = "장난감 상자" }, -- 폐유치원: 뚜껑 달린 장난감 상자
 }
 Search.Styles = STYLES
 
@@ -6118,7 +6699,7 @@ return Search
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="30">
+      <Item class="ModuleScript" referent="33">
         <Properties>
           <string name="Name">SoundBus</string>
           <string name="Source"><![CDATA[--!strict
@@ -6215,7 +6796,7 @@ return SoundBus
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="31">
+      <Item class="ModuleScript" referent="34">
         <Properties>
           <string name="Name">StageBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -6227,6 +6808,10 @@ return SoundBus
 --   D  문(복도를 가로지르는 벽 + 문)   A  아치 리브       O  기둥
 --   c  상자 더미      m  기계 설비     v  수직 배관 묶음  f  천장 환풍기
 --   p  구덩이(아래층) b  구덩이 위 철제 다리             s  계단(구덩이 ↔ 위층)
+--   1  2층 계단 아래 칸(바닥 0 → 6)   2  2층 계단 위 칸(6 → 12). 1 은 1층 칸, 2 는 2층 칸과 맞닿는다.
+-- 2층: layout.UpperRects 의 직사각형(타일 좌표 {i0, j0, i1, j1}) 안 칸은 바닥이 y=12(UP)이고 천장이 y=26.
+--   2층 칸은 1층 칸 위에 겹쳐 쌓지 않고 같은 격자의 다른 구역에 높게 짓는다(벽으로 막혀 있으니 음파로는 구별되지 않는다).
+--   center(i, j) 의 y 가 그 칸의 바닥 기준 높이라서, 소품 함수는 floorY·H 를 그대로 상대 높이로 쓰면 된다.
 -- 스테이지별 추가 타일은 레이아웃 모듈의 Props 함수로 짓는다(같은 ctx 를 받는다).
 
 local CollectionService = game:GetService("CollectionService")
@@ -6243,9 +6828,11 @@ local T = 8
 local H = 14
 local PIT_Y = -6
 local BOTTOM = -10
+local UP = 12 -- 2층 바닥 높이
 Builder.Tile = T
 Builder.Height = H
 Builder.PitY = PIT_Y
+Builder.Up = UP
 
 export type Layout = {
 	Rows: { string },
@@ -6256,6 +6843,7 @@ export type Layout = {
 	HideStyle: string?,
 	SearchStyle: string?, -- 상자·서랍(Z) 모양: drawers / crate / toolbox / nightstand / chest (Search.Styles) -- 숨는 곳(L) 모양: locker / tool / rusty / wardrobe / closet (Hiding.Styles)
 	Seed: number?,
+	UpperRects: { { number } }?, -- 2층 구역(타일 좌표 {i0, j0, i1, j1})
 }
 
 export type StageInfo = {
@@ -6310,10 +6898,39 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 	local function floorY(i: number, j: number): number
 		return if isPit(i, j) then PIT_Y else 0
 	end
-	-- 타일 (i, j) 의 가운데(바닥 높이 0 기준 x,z). i = 열(x), j = 행(z)
-	local function center(i: number, j: number): Vector3
-		return Vector3.new((i - 1) * T + T / 2, 0, (j - 1) * T + T / 2)
+	-- 2층 구역
+	local upperSet: { [number]: boolean } = {}
+	local hasUpper = false
+	for _, r in layout.UpperRects or {} do
+		for j = r[2], r[4] do
+			for i = r[1], r[3] do
+				upperSet[j * 1000 + i] = true
+				hasUpper = true
+			end
+		end
 	end
+	local function isFlight(i: number, j: number): boolean
+		local c = at(i, j)
+		return c == "1" or c == "2"
+	end
+	-- 이 칸의 바닥 기준 높이(1층 0, 계단 위 칸 6, 2층 12)
+	local function base(i: number, j: number): number
+		local c = at(i, j)
+		if c == "1" then
+			return 0
+		elseif c == "2" then
+			return UP / 2
+		end
+		return if upperSet[j * 1000 + i] then UP else 0
+	end
+	local function isUpper(i: number, j: number): boolean
+		return upperSet[j * 1000 + i] == true and not isFlight(i, j)
+	end
+	-- 타일 (i, j) 의 가운데(x,z, y = 그 칸의 바닥 기준 높이). i = 열(x), j = 행(z)
+	local function center(i: number, j: number): Vector3
+		return Vector3.new((i - 1) * T + T / 2, base(i, j), (j - 1) * T + T / 2)
+	end
+	local TOP = if hasUpper then UP + H else H
 
 	local folder = Instance.new("Folder")
 	folder.Name = name
@@ -6367,15 +6984,28 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 
 	-- 벽 덩어리, 위층 바닥(벽 아래 포함), 아래층 바닥, 천장
 	for _, r in merge(function(i, j) return isWall(i, j) end) do
-		rectSpan(r, 0, H, { name = "Wall" })
+		rectSpan(r, 0, TOP, { name = "Wall" })
 	end
-	for _, r in merge(function(i, j) return not isPit(i, j) end) do
+	for _, top in { 0, UP / 2, UP } do
+		for _, r in merge(function(i, j) return not isPit(i, j) and not isWall(i, j) and base(i, j) == top end) do
+			rectSpan(r, BOTTOM, top, { name = if top == UP then "UpperFloor" else "Floor" })
+		end
+	end
+	for _, r in merge(function(i, j) return isWall(i, j) end) do
 		rectSpan(r, BOTTOM, 0, { name = "Floor" })
 	end
 	for _, r in merge(function(i, j) return isPit(i, j) end) do
 		rectSpan(r, BOTTOM, PIT_Y, { name = "PitFloor" })
 	end
-	Kit.span(geo, Vector3.new(0, H, 0), Vector3.new(nx * T, H + 2, nz * T), { name = "Ceiling" })
+	if hasUpper then
+		-- 1층 천장(1층·구덩이 칸 위만) + 맨 위 천장(2층과 계단실 위)
+		for _, r in merge(function(i, j) return not isWall(i, j) and not isFlight(i, j) and not isUpper(i, j) end) do
+			rectSpan(r, H, H + 2, { name = "Ceiling" })
+		end
+		Kit.span(geo, Vector3.new(0, TOP, 0), Vector3.new(nx * T, TOP + 2, nz * T), { name = "Ceiling" })
+	else
+		Kit.span(geo, Vector3.new(0, H, 0), Vector3.new(nx * T, H + 2, nz * T), { name = "Ceiling" })
+	end
 
 	local dirs = {
 		{ di = 1, dj = 0, v = Vector3.new(1, 0, 0) },
@@ -6390,12 +7020,12 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 		exitCFrame = CFrame.new(),
 		exitSize = Vector3.new(6, 8, 6),
 		nodes = {},
-		bounds = { min = Vector3.new(0, BOTTOM, 0), max = Vector3.new(nx * T, H + 2, nz * T) },
+		bounds = { min = Vector3.new(0, BOTTOM, 0), max = Vector3.new(nx * T, TOP + 2, nz * T) },
 		route = nil,
 	}
 
 	-- ── 타일 경로(tools/check-layout.js 와 같은 규칙: 구덩이 = 아래층, 다리 = 위층, 계단 = 둘 다) ──
-	local passable: { [string]: boolean } = { ["."] = true, S = true, E = true, D = true, A = true, f = true, P = true, s = true }
+	local passable: { [string]: boolean } = { ["."] = true, S = true, E = true, D = true, A = true, f = true, P = true, s = true, ["1"] = true, ["2"] = true }
 	for k in pitSet do
 		passable[k] = true
 	end
@@ -6413,8 +7043,18 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 		end
 		return { 0 }
 	end
-	local function hasLevel(c: string, l: number): boolean
-		for _, x in levels(c) do
+	-- 층 번호: 0 = 1층, 1 = 구덩이(아래층), 2 = 2층. 계단 1 칸은 1층, 2 칸은 2층으로 치고 둘 사이를 건너면 층이 바뀐다
+	local function levelsAt(i: number, j: number): { number }
+		local c = at(i, j)
+		if c == "1" then
+			return { 0 }
+		elseif c == "2" or upperSet[j * 1000 + i] then
+			return { 2 }
+		end
+		return levels(c)
+	end
+	local function hasLevel(i: number, j: number, l: number): boolean
+		for _, x in levelsAt(i, j) do
 			if x == l then
 				return true
 			end
@@ -6424,10 +7064,9 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 	info.route = function(from: Vector3, to: Vector3, monster: boolean?): { Vector3 }?
 		local function tileOf(p: Vector3): (number, number, number)
 			local i, j = math.floor(p.X / T) + 1, math.floor(p.Z / T) + 1
-			local c = at(i, j)
-			local l = if p.Y < PIT_Y / 2 then 1 else 0
-			if not hasLevel(c, l) then
-				l = levels(c)[1]
+			local l = if p.Y < PIT_Y / 2 then 1 elseif p.Y > UP - 4 then 2 else 0
+			if not hasLevel(i, j, l) then
+				l = levelsAt(i, j)[1]
 			end
 			return i, j, l
 		end
@@ -6459,14 +7098,20 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 					table.insert(q, { i, j, 1 - l })
 				end
 			end
+			local here_c = at(i, j)
 			for _, d in dirs do
 				local ni, nj = i + d.di, j + d.dj
 				local c = at(ni, nj)
-				if passable[c] and not (monster and c == "n") and hasLevel(c, l) then
-					local nk = k(ni, nj, l)
+				local nl = l
+				-- 계단 아래 칸(1) ↔ 위 칸(2): 층이 바뀐다
+				if (here_c == "1" and c == "2") or (here_c == "2" and c == "1") then
+					nl = levelsAt(ni, nj)[1]
+				end
+				if passable[c] and not (monster and c == "n") and hasLevel(ni, nj, nl) then
+					local nk = k(ni, nj, nl)
 					if prev[nk] == nil then
 						prev[nk] = here
-						table.insert(q, { ni, nj, l })
+						table.insert(q, { ni, nj, nl })
 					end
 				end
 			end
@@ -6483,6 +7128,8 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 			local y = if l == 1 then PIT_Y else 0
 			if at(i, j) == "s" then
 				y = PIT_Y / 2
+			elseif isFlight(i, j) then
+				y = UP / 4 -- (계단 칸 가운데 높이: center 의 y 가 그 칸 아래 끝)
 			end
 			table.insert(out, 1, center(i, j) + Vector3.new(0, y + 0.5, 0))
 			cur = prev[cur]
@@ -6535,7 +7182,7 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 	for j = 1, nz do
 		for i = 1, nx do
 			local ch = at(i, j)
-			if ch ~= "#" then
+			if ch ~= "#" and not isFlight(i, j) then
 				local fy = floorY(i, j)
 				local c = center(i, j)
 				for _, d in wallSides(i, j) do
@@ -6791,6 +7438,24 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 					end
 				end
 			end
+			if ch == "1" or ch == "2" then
+				-- 2층 계단: 1 칸은 2 칸 쪽으로, 2 칸은 2층 칸 쪽으로 올라간다(칸마다 6스터드)
+				local up = dirs[1]
+				for _, d in dirs do
+					local ni, nj = i + d.di, j + d.dj
+					if (ch == "1" and at(ni, nj) == "2") or (ch == "2" and isUpper(ni, nj) and not isWall(ni, nj)) then
+						up = d
+					end
+				end
+				local bottom = c - up.v * (T / 2)
+				Kit.stairs(props, bottom, up.v, 6, UP / 2, T, 8)
+				-- 벽 쪽 손잡이(양옆)
+				local across = Vector3.new(up.v.Z, 0, -up.v.X)
+				for _, s in { -1, 1 } do
+					local a = bottom + across * s * 3.4
+					Kit.railing(props, a, a + up.v * T + Vector3.new(0, UP / 2, 0), 3.3, 2.7)
+				end
+			end
 			local pf = layout.Props and layout.Props[ch]
 			if pf then
 				pf(ctx, i, j)
@@ -6866,11 +7531,11 @@ return Builder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="32">
+      <Item class="Folder" referent="35">
         <Properties>
           <string name="Name">Stages</string>
         </Properties>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">Lobby</string>
             <string name="Source"><![CDATA[--!strict
@@ -6893,13 +7558,19 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">Stage1</string>
             <string name="Source"><![CDATA[--!strict
--- STAGE 1 — 지하 시설 (47x41칸, tools/gen-stages.js 로 생성, 방 안 구성·갈림길은 tools/redecorate.js)
--- 왼쪽 위는 원래 시작 구역(자동 테스트가 쓰는 칸) 그대로. 그 밖으로 기둥 홀, 기계실, 창고방, 구덩이 위 다리와 계단이 있는 방들,
--- 아치·문이 달린 구불구불한 정비 통로와 막다른 길. 출구까지 최단 약 150칸(걸어서 약 2분).
+-- STAGE 1 — 지하 시설 (47x43칸, tools/places/facility.js 로 생성)
+-- 출입 통제 구역(왼쪽 위): 경비 초소(시작)·검문 홀·탈의실·보안 사무실·출입 복도 — 자동 테스트가 쓰는 칸이라 모양을 지킨다.
+-- 위 띠(동쪽으로): 통제실(모니터 책상 줄)·기록 보관실(문 2개)·장비실(문 2개)·환기 설비실, 그 아래 본 복도.
+-- 가운데 띠(서쪽으로): 발전기 홀(발전기 넷, 콘크리트 기둥, 가장 큰 공간) → 기계실(기계 줄) 또는 1칸 정비 통로 → 장비 정비실.
+-- 서쪽 정비 통로(아치)로 내려가 아래 띠(동쪽으로): 창고(선반 줄)·구덩이 작업장(정비 구덩이 위 다리, 구덩이 계단)·
+-- 냉각 배관 구역(배관 벽 사이 좁은 통로) 또는 아래 복도 → 화물 엘리베이터(출구).
+-- 살짝 뒤틀린 곳: 본 복도 천장이 무너져 기록 보관실로 돌아가고, 서쪽 정비 통로 위쪽은 무너져 막혔으며(출입 복도에서 바로 못 내려감),
+-- 아래 복도도 무너져 창고 → 작업장으로 돌아간다. 막다른 방: 환기 설비실·배전함 칸·동쪽 비상 복도 끝·구덩이 바닥.
+-- 출구까지 최단 약 141칸.
 local Props = require(script.Parent.Parent.Props)
 return {
 	Seed = 11,
@@ -6909,58 +7580,356 @@ return {
 	Props = { T = Props.Desk },
 	Rows = {
 		"###############################################",
-		"#S..#.......#...f..##m.L#.....###mvmvmv.A.#####",
-		"#S..D..O.O..A..cc..##v..#.###A###.......#.#####",
-		"#...#.......#......##...#.#...Z.....T...#.....#",
-		"##A###A######.####D##Z..#.#.....#.......#.###.#",
-		"#...#....#....#....##...#.#.L.vm#.......#...#.#",
-		"#.c.#.##.#.##.#.m..###D##f##########D#####A##.#",
-		"#...A.#..A..#.A....##...D.A.cc#####m...m.m..#.#",
-		"###.###.#####.###.###.#####...#####.O..O..O.#.#",
-		"#.......#ppppppps..##.#####Z..A...#.........#.#",
-		"#.#####..bbbbbbbb..##A#########...#.O..O...L#.#",
-		"#.#...#.#ppppppps..##...#...T.D.............#.#",
-		"#.#.m.#..spppppp#..####.#L....#..Z#.O..O..O.#.#",
-		"#.#...D.#########D###.#.#..m.m#.L##.........#.#",
-		"#.##.##.#....#........#.#######A#####.###A###.#",
-		"#.......A.cc.A..O..##.....................###.#",
-		"#####.###.v..#.....#######.####.###D#####.###A#",
-		"#.....#.##D####.#####.......###.#mT..L###.....#",
-		"#.c.....#.......A..A........###.#.....A.#####.#",
-		"#############.#######pspbpsp###.#m....#......f#",
-		"##########E##.#######pppbppp###.#.....#.#######",
-		"#...........#.....###ppsbppp#...#..Z..D.#######",
-		"#####A#####.#####.###.......#.###.##A##########",
-		"#####....L#.###...###.......#.A...#.....#######",
-		"#####.....#.###.#####A###D###.##.##T....#######",
-		"#####.Z.vm#.###.........#.........#.....#mvmvm#",
-		"###########A###A###.###A#.O..O..O.#T....#.....#",
-		"#.........#.#.........#.#....f....#........T..#",
-		"#.#######.#.#Z...O..O.#.#.O..O..O.#A#####.....#",
-		"#.#.L.vm#.#.#.........#f#m...m.m..#....##.....#",
-		"#A#.....#.#.#.O..O..O.#.##############D####A###",
-		"#.#..T..#...#.........#...A...D...#.....f.....#",
-		"#.A.....#####.O..O..O.#.#########.#pspbppspppp#",
-		"#.#.....#####m...m.m..D.#.Z.vmvm#.#pppbppppppp#",
-		"#.#####################.#.......#.#ppsbppppppp#",
-		"#..A....###########.f.#.#...T...#.#...........#",
-		"#######.###########.#f#f#.........#v..T.......#",
-		"#.....D.............#.#.A....L..#.#m........c.#",
-		"#.###.###############.###########.####D########",
-		"#...#......A...................f.......########",
+		"#SS.#.......#.T.T.T.T.T#L.....Z#mm...mm#v...mm#",
+		"#SS.D..O.O..A..........#..c.c..#.......#v.....#",
+		"#...#.......#..........#..c.c..#...c...#..f...#",
+		"##A###A######..T.T.T.T.#...f...#L.....Z#......#",
+		"#..L#......Z#..........#..c.c..#.......#......#",
+		"#...#..T.T..#.....f....#.......#.......#......#",
+		"#..L#L.....c#L........Z#.......#.......#L....Z#",
+		"##D######D#####D####D####D###D###D###D####D####",
+		"#.........................##c...............###",
+		"#########................c##................###",
+		"###c###########################D######D###..###",
+		"###c#L.T.T.T...Z#..........v#v..........v#..###",
+		"##Z.#...........#.mm...mm..v#.mm...mm...v#..###",
+		"###A#...........D...........#.mm...mm....#..###",
+		"###.D...........#...........#............#..L##",
+		"###.#...........#L..#...#...#...#....#...#..###",
+		"###.#mm.....c.m.#.....f.....D............#..###",
+		"###.######D######...........#.mm..f...mm.#..###",
+		"###.######.##mZm#.mm.....mm.#.mm......mm.#..###",
+		"###A######A##...#v.........Z#............D..###",
+		"###.######.###A#######D######...#....#...#..###",
+		"#L..######.......A..A.......D............#..###",
+		"#...#########################............#c.###",
+		"#c..###########mm..........v#v.....L....Z#Z.###",
+		"###.#c......c##......#......###################",
+		"###A#......c.##..#.......#..###################",
+		"###.#..####..##...pppsppp...##v.........v######",
+		"###.D........D....ppppppp..Z##..........Z#c.Z##",
+		"###.#........##...bbbbbbb...##..###v###..#...##",
+		"###.#L.####..##...ppppppp...D.v..........#...##",
+		"###.#.......Z##Z..ppppppp...##......v....D...##",
+		"###.#........##...pppsppp..L######.#######...E#",
+		"###A#..####..##.............##L.........v#...##",
+		"###.#c.......##..#.......#..##..#v#####..#...##",
+		"###.#........##....c........##.......v...#...##",
+		"###.#Z......c##v..........mm##v.......Z.c#L.c##",
+		"###.####D############D##############D######D###",
+		"##.............c##..........................###",
+		"#c..............##c.........................###",
+		"#########################L#######Z#############",
+		"###############################################",
 		"###############################################",
 	},
 }
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="38">
+          <Properties>
+            <string name="Name">Stage10</string>
+            <string name="Source"><![CDATA[--!strict
+-- STAGE 10 — 폐영화관 (47x43칸, tools/places/cinema.js 로 생성)
+-- 실제 멀티플렉스 구조: 1층 맨 아래 로비 띠(매표소 = 시작, 매점 카운터 C·팝콘 기계 M·검표대 g·줄 세우기 기둥 r·포스터 F,
+-- 아래쪽에 남녀 화장실·청소도구함·직원 휴게실·창고) → 서쪽 넓은 복도 → 위쪽 메인 복도. 메인 복도 남쪽에 상영관 4개
+-- (1·3관 10칸 폭, 2·4관 7칸): 경사진 좌석 줄(u), 남쪽 스크린(W), 양옆 통로, 뒷문 2개(메인 복도), 앞문 2개(비상구 복도).
+-- 상영관 사이 직원 통로 2개가 메인 복도와 비상구 복도를 잇는다(고리). 2층(UpperRects) = 영사실 층: 영사 복도·북쪽 직원 통로,
+-- 그 사이 영사실 2(문 2개)·필름 보관실·긴 영사실 3(영사기 P 두 대, 문 3개)·직원 사무실(문 2개)·음향 기계실, 서쪽은 관리실·영사실 1·필름 창고(막다른 구역).
+-- 살짝 뒤틀린 곳: 메인 복도가 1관 옆에서 무너져 1관을 가로질러 비상구 복도 → 직원 통로로 돌아감, 동쪽 계단참은 무너진 잔해(막다른 곳),
+-- 2층 영사 복도가 영사실 3 앞에서 무너져 긴 영사실을 가로지르거나 북쪽 직원 통로로 돌아감, 서쪽 계단은 막다른 2층 관리실 구역으로만.
+-- 출구: 동쪽 비상계단으로 내려와 4관을 가로질러 비상구 복도 동쪽 끝. 출구까지 최단 약 155칸.
+local Props = require(script.Parent.Parent.Props)
+
+local function base(ctx: any, i: number, j: number): Vector3
+	return ctx.center(i, j) + Vector3.new(0, ctx.floorY(i, j), 0)
+end
+
+-- 가장 가까운 벽 방향(없으면 nil)
+local function wallDir(ctx: any, i: number, j: number): Vector3?
+	for _, d in { { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 } } do
+		if ctx.isWall(i + d[1], j + d[2]) then
+			return Vector3.new(d[1], 0, d[2])
+		end
+	end
+	return nil
+end
+
+-- ── 좌석 줄: 한 칸에 의자 3개. 스크린에서 멀수록 높은 단(계단식 객석) 위에 놓인다 ──
+local function seats(ctx: any, i: number, j: number, dz: number)
+	local Kit = ctx.Kit
+	local T = ctx.T
+	local p = base(ctx, i, j)
+	-- 스크린 쪽 벽까지 칸 수 → 단 높이
+	local n = 1
+	while n < 20 and not ctx.isWall(i, j + dz * n) do
+		n += 1
+	end
+	local h = math.max(0, n - 3) * 1.0
+	local face = Vector3.new(0, 0, dz) -- 의자가 바라보는 쪽(스크린)
+	local back = -face
+	local m = Instance.new("Model")
+	m.Name = "TheaterSeats"
+	m.Parent = ctx.props
+	if h > 0.05 then
+		Kit.box(m, CFrame.new(p + Vector3.new(0, h / 2, 0)), Vector3.new(T, h, T), { blocks = false, name = "SeatRiser" })
+	end
+	local y = p.Y + h
+	local row = Vector3.new(p.X, y, p.Z) + back * 0.8
+	-- 받침 + 방석 + 등받이(뒤로 살짝 젖힘)
+	Kit.box(m, CFrame.lookAt(row + Vector3.new(0, 0.7, 0), row + Vector3.new(0, 0.7, 0) + face), Vector3.new(T - 0.6, 1.4, 1.2), { blocks = false })
+	local cush = row + Vector3.new(0, 1.65, 0) - back * 0.2
+	Kit.box(m, CFrame.lookAt(cush, cush + face), Vector3.new(T - 0.3, 0.5, 2.0), { blocks = false })
+	local bk = row + Vector3.new(0, 3.0, 0) + back * 1.0
+	Kit.box(m, CFrame.lookAt(bk, bk + face) * CFrame.Angles(-0.18, 0, 0), Vector3.new(T - 0.3, 2.4, 0.35), { blocks = false })
+	-- 팔걸이(의자 사이): 왼쪽 끝은 늘, 오른쪽 끝은 옆 칸이 좌석이 아닐 때만
+	local here = ctx.at(i, j)
+	for k = 0, 3 do
+		local x = -T / 2 + 0.15 + k * (T - 0.3) / 3
+		if k < 3 or ctx.at(i + 1, j) ~= here then
+			local a = row + Vector3.new(x, 2.2, 0)
+			Kit.box(m, CFrame.new(a), Vector3.new(0.3, 0.25, 2.0), { blocks = false, collide = false })
+		end
+	end
+	-- 들어가지 못하게 막는 투명 충돌 상자
+	Kit.box(m, CFrame.new(p + Vector3.new(0, (h + 4) / 2, 0)), Vector3.new(T, h + 4, T), { invisible = true, tag = false })
+end
+
+local function seatsNorth(ctx: any, i: number, j: number)
+	seats(ctx, i, j, -1)
+end
+local function seatsSouth(ctx: any, i: number, j: number)
+	seats(ctx, i, j, 1)
+end
+
+-- ── 스크린 벽: 벽에 붙은 큰 흰 막(찢어진 곳 하나) + 위아래 검은 테두리 + 낮은 무대 ──
+local function screen(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local T = ctx.T
+	local p = base(ctx, i, j)
+	local side = if ctx.isWall(i, j - 1) then Vector3.new(0, 0, -1) else Vector3.new(0, 0, 1)
+	local m = Instance.new("Model")
+	m.Name = "Screen"
+	m.Parent = ctx.props
+	local wallFace = p + side * (T / 2 - 0.3)
+	local sh = ctx.H - 4.5
+	local sc = wallFace + Vector3.new(0, 2.5 + sh / 2, 0)
+	local torn = ctx.hash(i, j, 101) < 0.25
+	if torn then
+		-- 찢어져 늘어진 막: 위쪽 반만 + 아래로 기울어진 조각
+		Kit.box(m, CFrame.lookAt(sc + Vector3.new(0, sh / 4, 0), sc + Vector3.new(0, sh / 4, 0) - side), Vector3.new(T, sh / 2, 0.15), { blocks = false })
+		local flap = sc - Vector3.new(0, sh / 4, 0) - side * 0.8
+		Kit.box(m, CFrame.lookAt(flap, flap - side) * CFrame.Angles(0.25, 0, 0.12), Vector3.new(T * 0.7, sh / 2, 0.12), { blocks = false, collide = false })
+	else
+		Kit.box(m, CFrame.lookAt(sc, sc - side), Vector3.new(T, sh, 0.15), { blocks = false })
+	end
+	for _, y in { 2.3, 2.5 + sh + 0.2 } do
+		local b = wallFace + Vector3.new(0, y, 0) - side * 0.1
+		Kit.box(m, CFrame.lookAt(b, b - side), Vector3.new(T, 0.5, 0.4), { blocks = false, collide = false })
+	end
+	-- 무대(스크린 앞 낮은 단)
+	local st = p + side * 1.0 + Vector3.new(0, 0.6, 0)
+	Kit.box(m, CFrame.lookAt(st, st - side), Vector3.new(T, 1.2, T - 2.0), { name = "Stage" })
+end
+
+-- ── 매점·매표 카운터 ──
+local function counter(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local T = ctx.T
+	local p = base(ctx, i, j)
+	local alongX = ctx.at(i - 1, j) == "C" or ctx.at(i + 1, j) == "C"
+	local len, dep = T, 3.0
+	local size = if alongX then Vector3.new(len, 3.4, dep) else Vector3.new(dep, 3.4, len)
+	local m = Instance.new("Model")
+	m.Name = "Counter"
+	m.Parent = ctx.props
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 1.7, 0)), size, { name = "CounterBody" })
+	local top = if alongX then Vector3.new(len, 0.25, dep + 0.6) else Vector3.new(dep + 0.6, 0.25, len)
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 3.5, 0)), top, { blocks = false })
+	-- 유리 진열 가림막
+	local glass = if alongX then Vector3.new(len - 0.4, 1.6, 0.1) else Vector3.new(0.1, 1.6, len - 0.4)
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 4.5, 0)), glass, { blocks = false, collide = false })
+	-- 금전 등록기(군데군데)
+	if ctx.hash(i, j, 103) < 0.35 then
+		Kit.box(m, CFrame.new(p + Vector3.new(1.2, 4.0, 0)), Vector3.new(1.4, 0.8, 1.2), { blocks = false, collide = false })
+	end
+end
+
+-- ── 팝콘 기계(벽 쪽): 아래 수납장 + 유리 상자(네 기둥) + 안쪽 솥 + 위 간판 ──
+local function popcorn(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local T = ctx.T
+	local p = base(ctx, i, j)
+	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, -1)
+	local c = p + side * (T / 2 - 1.8)
+	local m = Instance.new("Model")
+	m.Name = "Popcorn"
+	m.Parent = ctx.props
+	Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 1.8, 0), c + Vector3.new(0, 1.8, 0) - side), Vector3.new(4.0, 3.6, 3.0), { name = "PopcornBase" })
+	local across = Vector3.new(side.Z, 0, -side.X)
+	for _, a in { -1, 1 } do
+		for _, b in { -1, 1 } do
+			local q = c + across * (a * 1.8) + side * (b * 1.3)
+			Kit.box(m, CFrame.new(q + Vector3.new(0, 5.4, 0)), Vector3.new(0.2, 3.6, 0.2), { blocks = false, collide = false })
+		end
+	end
+	Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 7.4, 0), c + Vector3.new(0, 7.4, 0) - side), Vector3.new(4.0, 0.4, 3.0), { blocks = false })
+	Kit.cylinder(m, c + Vector3.new(0, 5.8, 0), c + Vector3.new(0, 6.8, 0), 0.9, { blocks = false, collide = false })
+	Kit.cylinder(m, c + Vector3.new(0, 6.8, 0), c + Vector3.new(0, 7.2, 0), 0.12, { blocks = false, collide = false })
+	-- 바닥에 쏟아진 팝콘 무더기
+	Kit.box(m, CFrame.new(c + Vector3.new(0, 3.8, 0)), Vector3.new(3.4, 0.3, 2.4), { blocks = false, collide = false })
+	Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 8.3, 0), c + Vector3.new(0, 8.3, 0) - side), Vector3.new(3.6, 1.4, 0.25), { blocks = false, collide = false })
+end
+
+-- ── 영사기: 받침대 + 몸체 + 렌즈(영사창 쪽) + 필름 릴 두 개 ──
+local function projector(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local p = base(ctx, i, j)
+	local fwd = if ctx.isWall(i, j - 1) then Vector3.new(0, 0, -1) else Vector3.new(0, 0, 1)
+	local m = Instance.new("Model")
+	m.Name = "Projector"
+	m.Parent = ctx.props
+	Kit.box(m, CFrame.lookAt(p + Vector3.new(0, 1.6, 0), p + Vector3.new(0, 1.6, 0) + fwd), Vector3.new(2.4, 3.2, 3.0), { name = "ProjectorStand" })
+	local body = p + Vector3.new(0, 4.4, 0)
+	Kit.box(m, CFrame.lookAt(body, body + fwd), Vector3.new(1.8, 2.4, 3.6))
+	Kit.cylinder(m, body + fwd * 1.8, body + fwd * 3.2, 0.45, { blocks = false, collide = false, rings = 1 })
+	for _, z in { -1.0, 1.2 } do
+		local r = body + Vector3.new(0, 2.6, 0) + fwd * z
+		Kit.cylinder(m, r - Vector3.new(0.15, 0, 0), r + Vector3.new(0.15, 0, 0), 1.3, { blocks = false, collide = false, rings = 1 })
+	end
+	-- 영사창(벽에 뚫린 작은 창틀)
+	local port = p + fwd * (ctx.T / 2 - 0.1) + Vector3.new(0, 4.6, 0)
+	Kit.box(m, CFrame.lookAt(port, port + fwd), Vector3.new(2.4, 1.6, 0.3), { blocks = false, collide = false })
+end
+
+-- ── 포스터 액자(벽에 걸린 라이트박스): 지나갈 수 있다 ──
+local function poster(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local T = ctx.T
+	local p = base(ctx, i, j)
+	local side = wallDir(ctx, i, j)
+	if not side then
+		return
+	end
+	local c = p + side * (T / 2 - 0.25) + Vector3.new(0, 5.2, 0)
+	local tilt = (ctx.hash(i, j, 105) - 0.5) * 0.12
+	local cf = CFrame.lookAt(c, c - side) * CFrame.Angles(0, 0, tilt)
+	Kit.box(ctx.props, cf, Vector3.new(3.6, 5.2, 0.35), { blocks = false, collide = false, name = "PosterFrame" })
+	Kit.box(ctx.props, cf * CFrame.new(0, 0, -0.2), Vector3.new(3.0, 4.6, 0.08), { blocks = false, collide = false, name = "Poster" })
+end
+
+-- ── 줄 세우기 기둥(벨트로 이어짐): 지나갈 수 있게 벨트는 충돌 없음 ──
+local function stanchion(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local T = ctx.T
+	local p = base(ctx, i, j)
+	local a = p + Vector3.new(-T / 2 + 0.5, 0, 0)
+	Kit.cylinder(ctx.props, a, a + Vector3.new(0, 3.2, 0), 0.15, { blocks = false })
+	Kit.cylinder(ctx.props, a, a + Vector3.new(0, 0.2, 0), 0.6, { blocks = false, collide = false })
+	if ctx.hash(i, j, 107) < 0.8 then
+		local b = p + Vector3.new(T / 2 - 0.5, 0, 0)
+		local sag = if ctx.hash(i, j, 108) < 0.3 then 1.6 else 0.2
+		Kit.box(ctx.props, CFrame.lookAt((a + b) / 2 + Vector3.new(0, 2.9 - sag, 0), b + Vector3.new(0, 2.9 - sag, 0)), Vector3.new(0.05, 0.25, (b - a).Magnitude), { blocks = false, collide = false })
+	end
+	if ctx.at(i + 1, j) ~= "r" then
+		local b = p + Vector3.new(T / 2 - 0.5, 0, 0)
+		Kit.cylinder(ctx.props, b, b + Vector3.new(0, 3.2, 0), 0.15, { blocks = false })
+	end
+end
+
+-- ── 검표대: 작은 연단 + 기울어진 윗판 ──
+local function ticketStand(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local p = base(ctx, i, j)
+	Kit.box(ctx.props, CFrame.new(p + Vector3.new(0, 1.9, 0)), Vector3.new(2.6, 3.8, 2.0), { name = "TicketStand" })
+	Kit.box(ctx.props, CFrame.new(p + Vector3.new(0, 4.0, 0)) * CFrame.Angles(0.3, 0, 0), Vector3.new(3.0, 0.2, 2.4), { blocks = false, collide = false })
+	-- 넘어진 안내판
+	Kit.box(ctx.props, CFrame.new(p + Vector3.new(2.4, 0.2, 1.5)) * CFrame.Angles(0, 0.5, 0), Vector3.new(2.2, 0.3, 3.0), { blocks = false, collide = false })
+end
+
+-- ── 화장실 세면대 + 거울 ──
+local function sink(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local T = ctx.T
+	local p = base(ctx, i, j)
+	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, -1)
+	local c = p + side * (T / 2 - 1.2)
+	Kit.box(ctx.props, CFrame.lookAt(c + Vector3.new(0, 2.9, 0), c + Vector3.new(0, 2.9, 0) - side), Vector3.new(T - 0.5, 0.6, 2.2), { name = "SinkTop" })
+	Kit.box(ctx.props, CFrame.lookAt(c + Vector3.new(0, 1.3, 0), c + Vector3.new(0, 1.3, 0) - side), Vector3.new(T - 1.5, 2.6, 1.6), { blocks = false })
+	local mir = p + side * (T / 2 - 0.1) + Vector3.new(0, 5.6, 0)
+	Kit.box(ctx.props, CFrame.lookAt(mir, mir - side), Vector3.new(T - 1.0, 3.0, 0.1), { blocks = false, collide = false })
+end
+
+return {
+	Seed = 101,
+	PipeChance = 0.1,
+	HideStyle = "locker", -- 숨는 곳(L): 철제 사물함·청소도구함·화장실 칸
+	SearchStyle = "drawers", -- 뒤지는 곳(Z): 매점 서랍·영사기 필름 캐비닛·사무 서랍, 그중 한 곳에 열쇠
+	Props = { q = seatsNorth, u = seatsSouth, W = screen, C = counter, M = popcorn, P = projector, F = poster, r = stanchion, g = ticketStand, V = sink, T = Props.Desk },
+	Walkable = { F = true, r = true },
+	UpperRects = { { 2, 2, 46, 12 } }, -- 2층 구역(타일 좌표 i0, j0, i1, j1)
+	Rows = {
+		"###############################################",
+		"#.....Z#cc...Z#L......................c......Z#",
+		"#......#......#.........c..........c..........#",
+		"#.T.T..#.....c#####D##########D#########D######",
+		"#......###D####Z.....#c.c#m.L...Z.m#.....Z#m.m#",
+		"#......#.....Z#......#c..#.........#......#...#",
+		"#.T....#......#......#..Z#.........#.T.T..#...#",
+		"#......#......#......#...#.........#......#..Z#",
+		"#L.....#.P....#.P...m#...#...P.P...#L.....#...#",
+		"###D#######D#####D#####D###D#####D####D#####D##",
+		"#.............#...............#c..............#",
+		"#............c#..............c#...............#",
+		"########2########2#########################2###",
+		"########1########1##############cc#########1###",
+		"#.........F...c#........F.....F......Z#......c#",
+		"#..............#c..................c..#.......#",
+		"#...#D########D#D#D#####D#D########D#D#D#####D#",
+		"#...#........L.#.#.....L.#........L.#.#.Z...L.#",
+		"#...#..........#.#.......#..........#.#.......#",
+		"#...#.uuu.uuuu.#.#.uuuuu.#.uuu.uuuu.#.#.uuuuu.#",
+		"#F..#.uuu.uuuu.#.#.uuuuu.#.uuu.uuuu.#.#.uuuuu.#",
+		"#...#.uuu.uuuu.#.#.uuuuu.#.uuu.uuuu.#.#.uuuuu.#",
+		"#...#..........#.#.......#cc........#.#.......#",
+		"#...#.uuu.uuuu.#.#.uuuuu.#.uuu.uuuu.#.#.uuuuu.#",
+		"#...#.uuu.uuuu.#.#.uuuuu.#.uuu.uuuu.#.#.uuuuu.#",
+		"#...#..........#.#.......#..........#.#.......#",
+		"#F..#.ZWWWWWW..#.#..WWWZ.#..WWWWWWZ.#.#..WWW..#",
+		"#...#D########D#D#D#####D#D########D#D#D####D##",
+		"#...#......F.............c............#......E#",
+		"#...#L..............Z.....cc..........#L.....##",
+		"#...###########################################",
+		"#...#..F.....F.......M..M.Z.M.L..F...F.#.....L#",
+		"#F..A.....g............................#.SS...#",
+		"#...#..........O....CCCCCCCCCCC...O....D.SS...#",
+		"#...#.....g............................#......#",
+		"#...A..........O......rrrrrrrrrr.......#......#",
+		"#...#.....g.......F....................#......#",
+		"#...####D######D###D#####D########D#####.CCC..#",
+		"#...#V....Z#Z....V#.c#......Z#......c..#......#",
+		"#...#......#......#..#.......#.........#....T.#",
+		"#...#......#......#..#..T.T..#c........D......#",
+		"#Z.L#L.L.L.#L.L.L.#.L#L......#cc......Z#.....Z#",
+		"###############################################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">Stage2</string>
             <string name="Source"><![CDATA[--!strict
--- STAGE 2 — 물류 창고 (45x41칸, tools/gen-stages.js 로 생성, 방 안 구성·갈림길은 tools/redecorate.js)
--- 대형 선반(H 가로 / h 세로) 줄이 늘어선 큰 창고 4곳, 컨테이너(K, 2단 Q) 야적장, 사무실·재고실,
--- 그 사이를 잇는 좁은 하역 통로. 출구까지 최단 약 150칸(걸어서 약 2분).
+-- STAGE 2 — 물류 창고 (47x43칸, tools/places/warehouse.js 로 생성)
+-- 실제 물류 창고 구조: 방화벽으로 나눈 선반 보관동(H 선반 줄, 8~11칸 폭) 위 3개·아래 5개 사이로 동서 지게차 주 통로(2칸 폭)가 지나고,
+-- 보관동과 주 통로는 2칸 폭 하역문으로 이어진다. 북동쪽 냉동 창고(전실 + 냉장실·냉동실, 세로 선반 h), 남서쪽 사무동(경비실 = 시작,
+-- 사무실·탈의실·화장실), 가운데 아래 지게차 충전실(막다른 방), 남동쪽 하역장(컨테이너 K·2단 Q, 가운데 검수실, 남쪽 트럭 도크 5칸 중 하나가 출구).
+-- 2층(UpperRects) = 메자닌: 1칸 폭 캣워크 + 관리 사무실·회의실·서류 창고·휴게실(문 2개). B·C 보관동 북쪽 벽 계단으로 오르내린다.
+-- 살짝 뒤틀린 곳: 주 통로가 쓰러진 선반으로 두 곳 막힘(서쪽은 메자닌 캣워크 또는 아래 보관동 샛문 B'→C'→D' 로 돌아감,
+-- 동쪽은 냉동 창고 전실이 가운데 벽으로 나뉘어 냉장실 → 냉동실을 가로질러 감), B·C 사이 방화벽 무너짐, A 보관동의 무너진 계단(막다른 곳),
+-- 하역장은 출고 대기 구역(E')으로만 들어간다. 출구까지 최단 약 150칸.
 local Props = require(script.Parent.Parent.Props)
 return {
 	Seed = 23,
@@ -6968,123 +7937,172 @@ return {
 	HideStyle = "tool", -- 숨는 곳(L): 공구 캐비닛
 	SearchStyle = "crate", -- 뒤지는 곳(Z): 나무 상자, 그중 한 곳에 열쇠
 	Props = { H = Props.RackX, h = Props.RackZ, K = Props.Container, T = Props.Desk, Q = Props.ContainerStack },
+	UpperRects = { { 2, 2, 30, 7 } }, -- 2층 구역(타일 좌표 i0, j0, i1, j1)
 	Rows = {
-		"#############################################",
-		"#SS...#####K.c.c.Z#E#K.c.Z#...............#.#",
-		"#.....#####.......A.#.....#.HH.T.HHHHHHHH.#.#",
-		"#SS.T.#.###.......#.#.....#...............#.#",
-		"#.....#.###.......#.#.....D.HHHHH...HHHHH...#",
-		"#.....D.###.c.L.c.#.D.c.c.#...............#.#",
-		"#######.###################.HHHHHHH.HHHHH.#.#",
-		"#####.......#...........#.#...............#.#",
-		"#####.#D#####.HHHH.T.HH...#.HHHH.HHHHHHHH.A.#",
-		"#####.#...Z.#...........#.#...............#.#",
-		"#####.#L....D.H...HHHHH.#.#.H..HHHHHHHHHH.#.#",
-		"#####.#.....#...........#.#...............#.#",
-		"#####.#c....#.HHHHHHH.T.#.#############D###.#",
-		"#####.#K.c.c#...........#.....#c..#.......#.#",
-		"#####.##A######A#############.#.T.#.#######.#",
-		"#####.....#.L...#####.L..c..A.D...#.........#",
-		"#####...#.A..T..#####.......#######D#######.#",
-		"#####.T.#.#c....A...........###K..K..K..K.D.#",
-		"#####...#.#######.T.#.......###...........#.#",
-		"#..L#Z..#.#.....#...#Z...L..###Z..........#.#",
-		"#.T.###.#.#.###.#D#########A###...........#.#",
-		"#...###.....#.....#c..c.#c..c.#c....m.....#.#",
-		"##D##########D#####..T..D..T..#...........A.#",
-		"#...D.............#.....#....L#...........###",
-		"#L..#.HHHHHH.HHHH.###A#####A###c..........###",
-		"#...#.............D.........###...........###",
-		"#####.HHHHHH..HHH.###.###########A###A#######",
-		"#####.............###.#...........#...###c.Z#",
-		"#####.HHHHHH..HHH.###.#.HHHH..HHH.#.#####...#",
-		"###.D.............###.#...........#.#####L..#",
-		"###.#.HHHH..HHHHH.###.#.HHHHHH.HH.#.######A##",
-		"#...#.............###.#...........#.#......K#",
-		"#.####A#######D##A###.#.T.HHHHHHH.#.#.......#",
-		"#...#.......#c..#...#.#...........#.#.......#",
-		"#.T.#.#####.#.T.#.#.#.#.HH..HHHHH.#.#......K#",
-		"#...D.#c..#.#...#.#.#.#...........A.#...m...#",
-		"#.###.#...#.###.#.#.#.#.HHHH..HHH.#.D.......#",
-		"#.....#L..#.....#.#.#.#...........#.#.......#",
-		"#.#####...#.#####.#.#.###D#########.#......Z#",
-		"#.....#Z..D.......#.................#.c..c..#",
-		"#############################################",
+		"###############################################",
+		"#......L#......#cc..Z#Z......L#c.....Z#c......#",
+		"#.T.T.T.#..TT..#.....#...T....#.......#.h.h.h.#",
+		"#.......#......#.....#........#.h.h.h.#.h.h.h.#",
+		"#Z......#.....Z#....c#........#.h.h.h.#.h.h.h.#",
+		"####D######D######D####D####D##.h.h.h.D.h.h.h.#",
+		"#.............................#.h.h.h.#.h.h.h.#",
+		"##############2###########2####.h.h.h.#.h.h.h.#",
+		"#####c########1###########1####.h.h.h.#.h.h.h.#",
+		"#Z......L#.......Z#..........Z#.h.h.h.#.......#",
+		"#........#........#...........#.......#Z.....L#",
+		"#..HHHHH.#.HHHHHH.#.HHHH.HHHH.####D#######D####",
+		"#........D........#...........#L......#......Z#",
+		"#..HHHHH.#.HHHHHH.#.HHHH.HHHH.#.......#.......#",
+		"#........#........#...........#....O..#..O....#",
+		"#..HHHHH.#.HHHHHH.#.HHHH.HHHH.#.......#.......#",
+		"#........#........#L..........#.......#.......#",
+		"###..#######..#######..####..####D#########D###",
+		"#L...............c#...........Z.......#c......#",
+		"#.................#c.................c#.......#",
+		"#####..#######.########..########.#######..####",
+		"#........#L.......#.........#.......L#.......Z#",
+		"#.HHHHHH.#........#.HHHHHHH.D........#.HHHHH..#",
+		"#........#.HHHHHH.#.........#.HHHHHH.#........#",
+		"#.HHHHHH.#........#.HHHHHHH.#........#.HHHHH..#",
+		"#........#.HHHHHH.#.........#.HHHHHH.#........#",
+		"#.HHHHHH.#........#.HHHHHHH.#........#.HHHHH..#",
+		"#........#.HHHHHH.D.........#.HHHHHH.#........#",
+		"#.......Z#........#........Z#........#........#",
+		"######D############D#####################..####",
+		"#L..L#.#Z.L.L.L#......c#.....Q................#",
+		"#....#.#.......#.......#.KK..Q..............Q.#",
+		"##D###.####D####.......#......................#",
+		"#..............#c......#.......######..QQ.....#",
+		"#..............#.......#.KK....#.T.Z#.........#",
+		"###D######D#####.......#.......#....#.........#",
+		"#L.....#.......#......Z#.......##D###.........#",
+		"#....T.#.......#.......#....KK........KK......#",
+		"#......#.T.T.T.#L......#......................#",
+		"#......#.......#.......#......................#",
+		"#SS....#.......#.......#L....................Z#",
+		"#SS...Z#L.....Z#m.m.m.m###E###c###c###c###c####",
+		"###############################################",
 	},
 }
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">Stage3</string>
             <string name="Source"><![CDATA[--!strict
--- STAGE 3 — 하수도 (43x41칸, tools/gen-stages.js 로 생성, 방 안 구성·갈림길은 tools/redecorate.js)
--- 길고 구불구불한 아치 터널망, 펌프실·분기실(머리 위 대형 배관 P), 수로(w, 아래층 + 물소리)가 흐르는 방 2곳에
--- 철제 다리(b)/좁은 다리(n)와 수로로 내려가는 계단(s). 출구까지 최단 약 160칸(걸어서 약 2분).
+-- STAGE 3 — 하수도 (47x43칸, tools/places/sewer.js 로 생성)
+-- 벽돌 아치 터널(보행로 / 수로 w / 보행로, 갈비 아치)이 맵 바깥을 크게 돌고, 가운데 원형 저수조(물웅덩이·기둥)가 갈림목이다.
+-- 수로는 6스터드 낮은 물길: 철제 다리(b)로만 반대편 보행로로 건넌다.
+-- 위 띠: 정비 출입구(시작)·공구 창고·펌프실(문 2개)·밸브실·관리 사무실(문 2개). 가운데: 정비 작업장 → 1칸 정비 샛길 → 저수조,
+-- 배수 제어실(위 터널 ↔ 동쪽 터널)·침전조(문 2개)·침사지. 아래 띠: 공구 창고·오수 펌프장(문 2개)·저장고·배수 점검실.
+-- 살짝 뒤틀린 곳: 위 터널과 아래 터널 가운데가 무너져 펌프실·오수 펌프장으로 돌아가고, 서쪽 터널은 중간이 무너져 막혔다.
+-- 저수조로는 세 갈래(작업장 샛길, 가운데 터널, 배수 제어실), 동쪽은 터널 또는 침전조로 갈린다. 서쪽 터널 끝은 수문이 닫혀
+-- 수문실을 지나야 배수구(출구)에 닿는다. 출구까지 최단 약 147칸.
 local Props = require(script.Parent.Parent.Props)
+
+-- 수로 칸: 물 + 터널 천장의 아치 갈비(양쪽 벽에서 솟아 수로 위에서 만난다). 모퉁이에서는 갈비를 생략
+local function sewerWater(ctx, i: number, j: number)
+	Props.Water(ctx, i, j)
+	local Kit = ctx.Kit
+	local across: Vector3? = nil
+	if not ctx.isWall(i - 1, j) and not ctx.isWall(i + 1, j) and ctx.isWall(i - 2, j) and ctx.isWall(i + 2, j) then
+		across = Vector3.new(1, 0, 0)
+	elseif not ctx.isWall(i, j - 1) and not ctx.isWall(i, j + 1) and ctx.isWall(i, j - 2) and ctx.isWall(i, j + 2) then
+		across = Vector3.new(0, 0, 1)
+	end
+	if not across then
+		return
+	end
+	local c = ctx.center(i, j)
+	local half = ctx.T * 1.5 - 0.3
+	local prev: Vector3? = nil
+	local N = 9
+	for k = 0, N do
+		local a = math.pi * k / N
+		local p = c + across * (half * math.cos(a)) + Vector3.new(0, 5.2 + 8.2 * math.sin(a), 0)
+		if prev then
+			local mid = (prev + p) / 2
+			Kit.box(ctx.props, CFrame.lookAt(mid, p), Vector3.new(0.8, 0.6, (p - prev).Magnitude + 0.15), { collide = false, blocks = false })
+		end
+		prev = p
+	end
+	-- 수로 가장자리 돌 턱(보행로 끝선)
+	for _, s in { -1, 1 } do
+		local e = c + across * (s * (ctx.T / 2 - 0.2)) + Vector3.new(0, -0.25, 0)
+		Kit.box(ctx.props, CFrame.lookAt(e, e + Vector3.new(across.Z, 0, -across.X)), Vector3.new(0.5, 0.5, ctx.T), { collide = false, blocks = false })
+	end
+end
+
 return {
 	Seed = 37,
-	PipeChance = 0.75,
+	PipeChance = 0.8,
 	HideStyle = "rusty", -- 숨는 곳(L): 찌그러진 정비 사물함
 	SearchStyle = "toolbox", -- 뒤지는 곳(Z): 공구함, 그중 한 곳에 열쇠
-	Props = { w = Props.Water, P = Props.BigPipe },
+	Props = { w = sewerWater, P = Props.BigPipe },
 	PitTiles = { w = true },
-	Walkable = { w = true, P = true },
+	Walkable = { P = true }, -- (수로는 괴물 배회 지점에서 뺀다: 보행로로만 다닌다)
 	Rows = {
-		"###########################################",
-		"#SS.Pm###Z...m#.....#.........A.#.........#",
-		"#...P.###.....#.###.###.####A##.#.#######.#",
-		"#SS.P.###LPPPP#.###.....#m...m#...A.....#.#",
-		"#...P.A.A.....#A#########PPPPP#A#######.#.#",
-		"#...Pm#.#....Z#.#.......#....Z#......A..#A#",
-		"###D###.#######.#.#####.###.#####.#######.#",
-		"#.....#.#..A..#.#.#...#.....L..m#.A...#...#",
-		"#.#####.#.###.#.#.###A#.#.......#.###.#.###",
-		"#.....#...#...#.......#.#PPPPPPP#.#...#.###",
-		"#.###.#####.###########.#.......#.#.###.###",
-		"#.#.#.#.Z.#A#v.v#.......#.......#.#.....###",
-		"#.#.#.A.P.#.#...#.#.##A########A#A##A######",
-		"#...#.#.P.A.#...#.#.#.....#...............#",
-		"#####.#.P.#.##A##.#.#.....#...............#",
-		"#.....#.P.#.#.....#A#PPPPP#wwwwwwwwswbwwww#",
-		"#.###.#####.#.###.#.#.....#wwwwwwwwwwbwwww#",
-		"#...#.....#.#.#.#.#.#m...m#wwwwwwwwwsbwsww#",
-		"#.#.#######.#.#.#.#.#######...............#",
-		"#.#.#.Z.L.#.#.A.#.#...#####...............#",
-		"###.#.....#.#A###.###.######A##A###########",
-		"#...#PPPPP#.#.P.#.###.#.................A.#",
-		"#.#.#.....#.#.P.#.###.#.#################A#",
-		"#.#.#.....A.#.PL#.###...#######...........#",
-		"#.#.#.#####.#.P.#.#############.##.####.###",
-		"#.#.#..A..#.#mP.#...#.A.....A...#..L..#.###",
-		"#.#.#.###.#.###A#.#.###.######.##PPPPP..E##",
-		"#.#...#...#.#...#.#...#.....#mPZ#m...m#####",
-		"#.#########A#.###.###.#A#A###.P.###########",
-		"#.#.........#.......#.#.#...#.P.#...A...L.#",
-		"#.#.#################.###...#.P.###.#.....#",
-		"#...###m...........m#.A.#v.v#mP.#.#.#PPPPP#",
-		"#.###..PPPPPPP.PPPPP###.#########.#.#.....#",
-		"#.###.#.............#.....D....L#...#.Z...#",
-		"#.###A#wswwwwwbwwwww#.###D#.....#.#######A#",
-		"#.###.#wwwwwwwbwwwww#.#mP.#ZPPPP#...#...#.#",
-		"#.###.#wwswwwwbwswww#.#.P.#.....###.#.#.#.#",
-		"#.#...#.............#.#.PL#.....#...#.#.A.#",
-		"#.#.#.#############A#.#.P.#####.#.###.#####",
-		"#...#.......A.........#mP.#...........#####",
-		"###########################################",
+		"###############################################",
+		"#SS..Z#cc..Z#L...........Z#m.m.m.v#c...Z.L..c##",
+		"#SS...#.....#..mm..mm..m..#......v#.........c##",
+		"#.....#.....#.....f.......#.......#.....f....##",
+		"#.....#.....#....PPPPP....#.......#..........##",
+		"#c...L#L...c#v...........v#L.....Z#..........##",
+		"###A#####D####D#########D#####D#####D######D###",
+		"##...............c##.........................##",
+		"##.wwwwwwwbwwwwwww##wwwwwwwwbwwwwwwwwbwwwwww.##",
+		"##.w..............##c.b....................w.##",
+		"#L.w.################.w.#######D######D###.w.##",
+		"##.b.#.mm...m.#######.w.####mm....m#L...Z#.w.##",
+		"##.w.#........####c##.w.####.......#.....#.w.##",
+		"##cw.D........D...Z##.w.####.......#.....#.w.##",
+		"##ccc#....f...#.#####.w.####...f..Z#.....#.w.##",
+		"######L......Z#.#####.w.####L......#.....#.b.##",
+		"######........#.####..w..###.......#....c#.w.L#",
+		"######v......v#.###...b...##.......#c...c#.w.##",
+		"#########D#####.##.O..w..O.#v.....v#######.w.##",
+		"######L.....c##.#....www....###D##########.w.##",
+		"######.......##.#...wwwww..................w.##",
+		"##...#c.....Z##.A.O.wwwwwwbwwwwwwwwbwwwwwwbw.##",
+		"#E.w.############...wwwww..................w.##",
+		"##.w.#......v####....www....###D##########.w.##",
+		"##.w.#......v#####.O.....O.##...........Z#.w.##",
+		"##.w.D.......######...O...###............#.w.##",
+		"##cw.#...f...#######.....####..wwwwwwww..#.w.##",
+		"######mm.....#########D######..wwwwwwww..#.w.##",
+		"######m.....L####v.........c#............#.b.##",
+		"##.wc#.......####L..........#.O...O...O..D.w.##",
+		"##.w.D.......####..........Z#............#.w.Z#",
+		"##.b.#..c...Z####cc........v#L..........c#.w.##",
+		"##.w.###########L#########################.w.##",
+		"#Z.w...................c##...................##",
+		"##.wwwwwbwwwwwwwbwwwwwww##wwwwwwwbwwwwwwbwww.##",
+		"##......................##c..................##",
+		"#########D###########D######D#####D######D#####",
+		"######L.....c######L..........Z#Z....L#.....Z##",
+		"######.......######...PP..PP...#......#......##",
+		"######.......######.....mm.....#......#......##",
+		"######.......######............#.....c#......##",
+		"######cc....Z######mm.........m#c....c#L...mm##",
+		"###############################################",
 	},
 }
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">Stage4</string>
             <string name="Source"><![CDATA[--!strict
--- STAGE 4 — 폐병원 (45x41칸, tools/gen-stages.js 로 생성, 방 안 구성·갈림길은 tools/redecorate.js)
--- 긴 복도 4줄에 문 달린 병실(R 침대), 진료실(T 책상, k 캐비닛), 수술실(X), 기둥 로비, 아래층 병동(계단),
--- 그 사이 뒷복도. 출구까지 최단 약 160칸(걸어서 약 2분).
+-- STAGE 4 — 폐병원 (47x43칸, tools/places/hospital.js 로 생성)
+-- 실제 병원 구조: 앞동(외래·응급) 1층, 입원 병동 2층, 뒷동(수술·영안) 1층(2층 = UpperRects, 계단 1·2 로 오르내림).
+-- 앞동 1층: 원무과─외래 진료실(샛문)·진료실·약제실(약장 줄)·응급실(침대 줄)·기둥이 선 응급실·외래 로비(출구).
+-- 병동 2층: 가운데 복도 양쪽으로 병실(창가 침대 R·협탁 Z·옷장 L), 복도로 트인 간호사실, 엘리베이터 홀, 린넨·오물실, 처치실, 상담실,
+-- 서쪽·엘리베이터 홀·동쪽 계단. 뒷동 1층: 당직실(시작)·영안실(냉장고 줄)·수술실─준비실(샛문)·회복실·중앙 공급실·소독실·탈의실.
+-- 살짝 뒤틀린 곳: 복도마다 쓰러진 침대·무너진 천장으로 막힌 칸(영안실·회복실·응급실을 가로지르거나 병실 샛문으로 돌아감),
+-- 무너진 뒷동 가운데 계단실(막다른 곳), 가운데가 무너진 동쪽 1층 연결 복도. 병동에서 내려가는 계단은 두 곳(엘리베이터 홀·서쪽).
+-- 출구까지 최단 약 144칸.
 local Props = require(script.Parent.Parent.Props)
 return {
 	Seed = 41,
@@ -7093,60 +8111,63 @@ return {
 	SearchStyle = "nightstand", -- 뒤지는 곳(Z): 협탁, 그중 한 곳에 열쇠
 	Props = { R = Props.Bed, T = Props.Desk, X = Props.Surgery, k = Props.Cabinet },
 	Walkable = { k = true }, -- (침대 R 은 막힌 칸: 괴물이 침대 위를 배회 목표로 잡지 않게)
+	UpperRects = { { 2, 13, 43, 27 } }, -- 2층 구역(타일 좌표 i0, j0, i1, j1)
 	Rows = {
-		"#############################################",
-		"#SS.k.#########k.k#.D..R..L.#.D.#R.R..#######",
-		"#.....#########...A.#.......#.#.D....L#######",
-		"#SS.X.###k..###...#.#.......D.#.#.....#.k..Z#",
-		"#.....#.A..L#####D#######A###D#.#D#####..X..#",
-		"#.....D.#Z..#.............#...D.#...D.D....L#",
-		"####D########TO.O.O.O.O.O.#Z..#.#...#.####A##",
-		"###.....#k.k#T............#.T.#.#k.k#...D..k#",
-		"###.....#...#TO.O.O.O.O.O.#...#.#####D###...#",
-		"###.L...D...#.............#k..#.#R......#.Tk#",
-		"#########D####D##########D###D#.#.......#...#",
-		"#...........................A.#.A..........k#",
-		"####################D##D#####.D.#psppppp#####",
-		"####......#.....#.L...#...###.#.#ppppppp#####",
-		"####A####.D..X..#.....#..L###.#.#pppsppp#####",
-		"#....L###.#.Z...#..X..D...###...#.......#####",
-		"#k.X..###D#######k....###D#####A###D#########",
-		"#.....D....R#L..#.....#.#....k#.....#k.k..Z.#",
-		"##.####.....#..k###D###.D..T..#####.#...T...#",
-		"##....#.......X.###.....#....k#..D..D.......#",
-		"#####.#####E#...###D######D#####D#########D##",
-		"#.....#######...#...........................#",
-		"#D#######################D##############D##D#",
-		"#..L..D..R.R#####.....###.D.........#.....#.#",
-		"#.....#.....#####..X..###.#########.#.....#.#",
-		"#R.R.R#.....#..k#...Z.###.#.Z..R#.#.#.....#.#",
-		"#######.....#Z..#D###A###.#.....D.#.A.....#.#",
-		"###k..D.....#...#.#R....#.#.....#...#R.R.R#.#",
-		"###...###D####D##.#.....#.D.....######A####.#",
-		"###...###.........#R....###.....###.L...D.#D#",
-		"####.#########.#######.######D#####.....#.#.#",
-		"#.........................###.....D....Z#.#.#",
-		"####D#####D######.###########.....#.....#.#.#",
-		"###...........###.....D...L.#.....#.....#...#",
-		"###.O.O.O.O.O.###k....#.....#....L#####D#D###",
-		"###...........###..X..#.....#R.R..#.....#...#",
-		"#.D.O.O.O.O.O.###k....#.....#######Z.X.k#...#",
-		"#.#..TT.......D.#.....#L....#####.A.....#...#",
-		"#.##D##########.#D###############.####D##D###",
-		"#.............................D...........###",
-		"#############################################",
+		"###############################################",
+		"#Z....#....Z#k...#Z.....#R.R.R.R.R######E######",
+		"#.....#.T...#.T..#.k.k.k#.........#L.........L#",
+		"#.T.T.#....R#....#.k.k.k#.........#...........#",
+		"#.....D.....#...R#......#....k....#..O..O..O..#",
+		"#.....#.....#....#......#.........#...........#",
+		"#....k#L....#...Z#L.....#L.......Z#kk........Z#",
+		"###D#####D#####D###D##D###D#####D###........###",
+		"#...........................c#................#",
+		"#............................#c...............#",
+		"##1############1############################..#",
+		"##2############2############################..#",
+		"#...c#Z.R.R#mm...mm#Z.R.#########Z.R.R#Z.R.#..#",
+		"#....#.....#.......#....#k.....Z#.....#....#..#",
+		"#....#.....#.......#....#..T.T..D.....#....#.Z#",
+		"#....#.....#.......#....#.......#.....#....#..#",
+		"#....#....L#......k#...L#L.....k#....L#...L#..#",
+		"###D####D######..####D####.....####D####D###..#",
+		"#..........#c..................c#..........#..#",
+		"#.........c#....................#c.........#..#",
+		"###D#####D####D####D#####D####D####D####D###c.#",
+		"#....L#....L#k.Z#....L#L...Z#....#...L#....####",
+		"#.....#.....#...#.....#.....#..T.#....#....#.c#",
+		"#.....D.....#...#.....#..T..#....#....#....#..#",
+		"#.....#.....#..c#.....#.....#Z...#....#....#..#",
+		"#Z.R.R#Z.R.R#c.c#Z.R.R#k...k######Z.R.#...c#..#",
+		"########################################.###..#",
+		"########################################2###..#",
+		"########################################1###L.#",
+		"#c...Z#L....L#mm.c#m..kk..m#ccc.L#..Z#.....#..#",
+		"#.....#......#....#........#.....#...#.....#..#",
+		"#....c#.....k#....#Z.......#....c#c..#....k#..#",
+		"###D#####D#####D####D####D####D####D###D####..#",
+		"#.........c#.....................#c...........#",
+		"#..........#c...................c#............#",
+		"###D####D####D####D######D####D####D####D###D##",
+		"#SS..Z#L......Z#m.....m#...k#.......k#.....#.m#",
+		"#SS...#........#.......#...k#........#.....#.m#",
+		"#.....#..R..R..#...X...D....#........#k...k#..#",
+		"#...T.#........#.......#....#........#k...k#..#",
+		"#.....#........#.......#.T..#........#.....#..#",
+		"#L...R#kkkkkkkk#m.k...Z#L..Z#Z.R.R.R.#c...Z#Z.#",
+		"###############################################",
 	},
 }
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">Stage5</string>
             <string name="Source"><![CDATA[--!strict
 -- STAGE 5 — 심층 미로 (47x43칸, tools/gen-stages.js 로 생성, 방 안 구성·갈림길은 tools/redecorate.js)
 -- 막다른 길이 많은 미로 통로, 큰 구덩이 3곳을 건너는 다리(b)와 괴물이 건널 수 없는 좁은 다리(n), 계단(s)으로 오르내리는 아래층,
--- 대형 기둥(B) 열주실, 독방. 괴물 4마리가 여러 방향에서 접근한다. 출구까지 최단 약 150칸(걸어서 약 2분).
+-- 대형 기둥(B) 열주실, 독방. 괴물 4마리가 여러 방향에서 접근한다. 출구까지 최단 약 118칸. 갈림길을 이어 돌아가는 길(고리)이 여러 개라 한쪽이 막혀도 다른 길로 갈 수 있다.
 local Props = require(script.Parent.Parent.Props)
 
 local function bigPillar(ctx, i, j)
@@ -7173,46 +8194,564 @@ return {
 	Rows = {
 		"###############################################",
 		"#SS...A...D.L.###.............................#",
-		"#.....###A#...###############.###.............#",
+		"#.....###A#...###.###########.###.............#",
 		"#SS...#...#.....#...........#.###ppsppbppppppp#",
-		"#.....#L..#####.#.B.B...B.B.#.###pppppbppppppp#",
+		"#.....#L..#####.#.B.B...B.B...###pppppbppppppp#",
 		"#.....#m.Z#.#...#..........Z#...#ppppsbppspppp#",
 		"###A#A#####.#.###...B.B.B...###.#.............#",
-		"#...#...#.......#....Z......#...#.............#",
+		"#...#...#.......#....Z......#.................#",
 		"#.#.#...#.##############.####.###########D#####",
 		"#A#.#.m.#.###..Z###..v#..##...#########.......#",
 		"#.#####A#.###L.m#.A..L#.###.#.#########.#.###.#",
 		"#.#Z.L#.#.###...A.#...#.....#...#######.#...#.#",
-		"#.#..m#.#.#######.#########.###.#######.###.###",
+		"#....m#.#.#######.#########.###.#######.###.###",
 		"#.#...#.........A.....A...#.###...........#...#",
 		"#.###.###.###############.#.#######.#####A###.#",
-		"#.#...............#.......#.#...............#.#",
+		"#.#.......................#.#...............#.#",
 		"#.#pspppbppspppppp#.#######.................#.#",
 		"#.#pppppbppppppppp#...#.#...#...............#.#",
 		"#.#ppsppbppppppppp###.#.#.###ppppsppbppspppp#.#",
 		"#.#...............###.#...###pppppppbppppppp#.#",
 		"#.#...............###.#.#####ppppppsbppppppp#.#",
-		"#.#...............###.#A#...#...............#.#",
+		"#.................###.#A#.....................#",
 		"#.###########D#######A#.#A#.############A####.#",
 		"#.#######.............#.#.#.......#...#...###.#",
 		"#.#######.#############.#######.#A#.#.#.#.###.#",
-		"#.....A...#########...#.........#...#...#...#.#",
+		"#.....A...#########.............#...#...#...#.#",
 		"#.#################.#.#######.#D#####A#####.#.#",
 		"#.#############.....#.......#.#.......#...A.#.#",
 		"#.#############.#########.#.#.#Z....B.A.####E.#",
 		"#.............#.#..L#.....#.#.#.......#.#...#.#",
-		"#############.#.#...#.#######.#.B.B.B.#.A..L#.#",
+		"#############.#.#.....#######.#.B.B.B.#.A..L#.#",
 		"#.............#...Z.#.........#.......###.....#",
-		"#.#############A#####.#########.B.B...#######.#",
+		"#.#.###########A#####.#########.B.B...#######.#",
 		"#.#...............###.#.A..A..#.....Z.###...#.#",
 		"#.#########.#####.###.#######A#####A#####.#.#A#",
-		"#.#.........#.#...###...A.........#.#.....#.#.#",
+		"#.#...........#...###...A.........#.#.....#.#.#",
 		"#.#.#########.#A######A##########.#.#A#####.#.#",
 		"#.#.#..L#.....#...A.............A...#.#####.#.#",
 		"#A#.#...#A###.#.###############.#####.#####.#.#",
 		"#...#mZ...#...#.....#.....A.A.#.#####.#####...#",
-		"#########.#####.#..m#.###.#####.#####.#########",
-		"#.........A.....#L..#...#.............#########",
+		"#.#######.#####.#..m#.###.#####.#####.#########",
+		"#.........A.....#L......#.............#########",
+		"###############################################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="43">
+          <Properties>
+            <string name="Name">Stage6</string>
+            <string name="Source"><![CDATA[--!strict
+-- STAGE 6 — 호텔 (47x43칸, tools/places/hotel.js 로 생성)
+-- 실제 호텔 구조: 서쪽 1층(직원 구역), 가운데 2층 객실층, 동쪽 1층(프런트 쪽)(2층 = UpperRects, 계단 1·2 로 오르내림).
+-- 서쪽 1층: 직원 휴게실(시작)·락커실·세탁실(세탁기 줄)·린넨실─창고·주방─연회장(기둥·원탁), 직원 복도.
+-- 2층 객실층: 가운데 코어(린넨실·제빙실·엘리베이터 홀·하우스키핑)를 두 객실 복도가 둘러싸는 레이스트랙, 바깥쪽으로 작은 객실이 빽빽이
+-- (침대 R·서랍장 Z·옷장 L). 동쪽 1층: 중앙 계단 홀·라운지 바·비즈니스 센터·짐 보관실·프런트 로비(데스크·기둥, 정문 출구).
+-- 살짝 뒤틀린 곳: 복도마다 무너진 천장·쓰러진 카트로 막힌 칸(세탁실·라운지를 가로지르거나 커넥팅 룸 샛문으로 돌아감),
+-- 계단실 4곳 중 직원 계단·동쪽 비상계단은 무너져 막다른 곳, 코어의 무너진 직원 계단, 가운데가 무너진 지하 연결 통로.
+-- 2층에서는 서쪽 복도·엘리베이터 홀·동쪽 복도 중 골라 돈다. 출구까지 최단 약 154칸.
+local Props = require(script.Parent.Parent.Props)
+return {
+	Seed = 61,
+	PipeChance = 0.2,
+	HideStyle = "hotelcloset", -- 숨는 곳(L): 객실 옷장(청소 카트 옆 벽장)
+	SearchStyle = "dresser", -- 뒤지는 곳(Z): 객실 서랍장, 그중 한 곳에 열쇠
+	Props = { R = Props.Bed, T = Props.Desk, k = Props.Cabinet },
+	Walkable = { k = true },
+	UpperRects = { { 15, 2, 34, 38 } }, -- 2층 구역(타일 좌표 i0, j0, i1, j1)
+	Rows = {
+		"###############################################",
+		"#SS.....k#..##.Z.c############....##....mm#..##",
+		"#SS......D..##....#..........#....21......#..##",
+		"#....TT..#..12...c#..........D....##......D..##",
+		"#........#..##c...#..######..#...k##L.....#..##",
+		"#L......Z#..#######..#kkk.#..##############..##",
+		"##########..##...L#..D....#..#L...##.....Z#..##",
+		"#.L.L.L..#..##R...D..#....#..D...R##k.....D..##",
+		"#........D..##....#..#...Z#..#....##k..T..#c.##",
+		"#........#..##Z...#..######c.#...Z##k.....#####",
+		"#k.k.k..Z#..#######..#m...######D###k..T..#.c##",
+		"##########..##...L#..#....D.c#L...##......D..##",
+		"#mm.....Z#..##R...D..#L...#..#...R##.....L#..##",
+		"#........D..##....#..######..D....#########..##",
+		"#.mm.mm..#c.##Z...#..######..#...Z##k.....#..##",
+		"#........##########...mmmm...#######.T.T..D..##",
+		"#.mm.mm..#.c##...L#..........#L...##......#..##",
+		"#........D..##R...D..........D...R##.....Z#..##",
+		"#L......k#..##....#..........#....#########..##",
+		"##########..##Z...#..........#...Z#########..##",
+		"#c..#kkk.#..#######...mmmm...##############..##",
+		"#...D....D..##...L#..######..#....##..c####..##",
+		"#L.c#...Z#..##R...D..######..D....21...####..##",
+		"##########..##....#..#...k#..#....##Z.c####..##",
+		"#mmmm...Z#..##Z...#c.#...k#..#c...#########..##",
+		"#........D..###D######....#..#######c....c#..##",
+		"#..TTTT..#..##...L#.c#....D..#L...##......D..##",
+		"#........#..##R...#..#Z.c.#..D...R##L..c.Z#..##",
+		"#L......k#..##....D..######..#....#########..##",
+		"###D######..##Z...#..######..#...Z#########..##",
+		"#..........k#######..#cc..#..#######Z........##",
+		"#.T...T.....##...c#..#c...D..#L...##.kkkk....##",
+		"#...O...O...##....D..#...L#..D...R##.........##",
+		"#...........12....#..######..#....##.........E#",
+		"#Z....T.....##....#..######..#...Z##m..O..O..##",
+		"#...O...O...#######..........#######m........##",
+		"#.T.........##c...D..........D....##.........##",
+		"#L........T.##c..L############Z..c##c.......L##",
+		"#####D##################################D######",
+		"#.....................c#......................#",
+		"#Z.....................#c....................L#",
+		"###############################################",
+		"###############################################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="44">
+          <Properties>
+            <string name="Name">Stage7</string>
+            <string name="Source"><![CDATA[--!strict
+-- STAGE 7 — 학교 (47x43칸, tools/places/school.js 로 생성)
+-- 실제 학교 구조: 본관과 별관이 각각 1층·2층(2층 = UpperRects, 계단 1·2 로 오르내림).
+-- 본관 1층: 행정실·교무실·교장실(샛문으로 이어짐)·중앙 현관 로비(출구)·보건실·방송실·화장실, 복도 끝에 계단실 3곳.
+-- 본관 2층: 교실 줄(앞문·뒷문)·교구 준비실·화장실. 서쪽 2층 연결 복도로 별관 2층(과학실─준비실─음악실 샛문, 화장실, 도서관 서가, 컴퓨터실).
+-- 별관 1층: 당직실(시작)·창고·급식실─조리실·기둥이 선 체육관·체육 창고. 별관 계단은 동쪽만 살아 있다.
+-- 살짝 뒤틀린 곳: 복도마다 쓰러진 사물함·책상으로 막힌 칸(교실·교무실·도서관을 가로질러 돌아감), 무너진 서쪽 계단실,
+-- 가운데가 무너진 1층 동쪽 연결 복도(양쪽 막다른 길). 출구까지 최단 약 150칸.
+local Props = require(script.Parent.Parent.Props)
+return {
+	Seed = 71,
+	PipeChance = 0.25,
+	HideStyle = "locker", -- 숨는 곳(L): 철제 사물함
+	SearchStyle = "drawers", -- 뒤지는 곳(Z): 책상·교무실 서랍, 그중 한 곳에 열쇠
+	Props = { T = Props.Desk, k = Props.Cabinet, R = Props.Bed },
+	Walkable = { k = true },
+	UpperRects = { { 2, 13, 43, 31 } }, -- 2층 구역(타일 좌표 i0, j0, i1, j1)
+	Rows = {
+		"###############################################",
+		"#....k#k.....Z#...Z####E#####R.R.k#mm.Z#L.L.L.#",
+		"#.....#.......#.T..#L......L#.....#....#......#",
+		"#.T.T.D.T.T.T.D....#........#.....#....#......#",
+		"#.....#.......#....#.O....O.#....Z#....#......#",
+		"#.....#.T.T...#....#........#.....#....#......#",
+		"#Z....#......L#...k#k......k#L....#...c#.....c#",
+		"###D####D###D###D####......####D####D####D#####",
+		"#........c#...................................#",
+		"#.........#c......L...............L...........#",
+		"######1#################1#############1#####..#",
+		"######2#################2#############2#####..#",
+		"#............c#............................#..#",
+		"#.............#............................#..#",
+		"#..##D##D###D##D###D##D###D###D##D###D######..#",
+		"#..#......#......#......#Z..#......#......c#.Z#",
+		"#..#......#......#......#...#......#.......#..#",
+		"#..#.T.T..#.T.T..#.T.T..#...#.T.T..#.......#..#",
+		"#..#......#......#......#...#......#.......#..#",
+		"#..#.T.T..#.T.T..#.T.T..#..c#.T.T..#.......#..#",
+		"#..#Z....L#Z....L#Z....L#c.c#Z....L#.L.L.L.#c.#",
+		"#L.############################################",
+		"#..#mm....k#k.k#k....L#L.L#L........Z#L...Z#.c#",
+		"#..#.......#...#..TT..#...#..k.k.k.k.#.....#..#",
+		"#..#..T.T..D...D......#...#..k.k.k.k.#.T.T.#..#",
+		"#..#.......#...#......#...#..........#.....#..#",
+		"#..#..T.T..#...#......#...#..k.k.k.k.#.T.T.#..#",
+		"#..#Z......#c.Z#......#...#..........#.....#L.#",
+		"#..##D###D###D###D##D###D###D######D###D####..#",
+		"#..............#c...............#..........#..#",
+		"#..............#...............c#..........#..#",
+		"########################################2###..#",
+		"######c#################################1###..#",
+		"#....................#........................#",
+		"#...................c#........................#",
+		"###D####D###D######D######D###D########D#######",
+		"#SS..Z#c.Z#..........#Z.....#............#...Z#",
+		"#SS...#...#..........#.....k#............#....#",
+		"#.....#...#..T.T.T...#.....k#..O..O..O...D....#",
+		"#...T.#...#..........D...T..#............#....#",
+		"#.....#..c#..T.T.T...#......#............#...c#",
+		"#L...R#c.c#L........Z#mmm..m#cc.........Z#L.cc#",
+		"###############################################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="45">
+          <Properties>
+            <string name="Name">Stage8</string>
+            <string name="Source"><![CDATA[--!strict
+-- STAGE 8 — 폐유치원 (47x43칸, tools/places/kindergarten.js 로 생성)
+-- 진짜 유치원 1층 구조: 남쪽 현관·신발장 홀(시작)에서 긴 복도 세 줄(C → B → A)을 갈지자로 올라가 북동쪽 후문 비상구(E)로 나간다.
+-- 남쪽: 현관·작은 화장실·식당(문 2)·조리실·교구실 | 놀이 공간: 낮잠방(N)·꽃님반·실내 놀이터(U 미끄럼틀, 정글짐 칸막이)·볼풀방(G)·구름반
+-- 교실 줄: 해님반·달님반·별님반·새싹반·무지개반(작은 책걸상 t)·작은 화장실(j) | 북쪽: 교재 창고·원장실·교무실·보건실·교사 화장실·후문 홀.
+-- 복도를 잇는 방은 몇 곳뿐: C→B 는 볼풀방·구름반(놀이터에서 볼풀방으로 기어가는 터널 q 도), B→A 는 해님반(달님반에서 낮은 통로 q 로도).
+-- 살짝 미로: 복도 C 가운데가 쓰러진 사물함으로 막혀 놀이터나 식당을 가로지르고, 복도 A 는 교무실 앞이 무너져 교무실(문 2)·원장실 터널로 돌아간다.
+-- 숨는 곳(L)은 어린이 사물함·신발장, 뒤지는 곳(Z)은 장난감 상자. 출구까지 최단 약 150칸.
+local Props = require(script.Parent.Parent.Props)
+return {
+	Seed = 81,
+	PipeChance = 0.12,
+	HideStyle = "cubby", -- 숨는 곳(L): 어린이 사물함
+	SearchStyle = "toybox", -- 뒤지는 곳(Z): 장난감 상자, 그중 한 곳에 열쇠
+	Props = { U = Props.Slide, t = Props.SmallDesk, y = Props.ToyPile, G = Props.BallPit, N = Props.NapMat, j = Props.KidToilet, q = Props.LowTunnel },
+	Walkable = { G = true, N = true, q = true },
+	Rows = {
+		"###############################################",
+		"#cc...Z#L....Z#c..........Z#.....j#j.j.#L...c##",
+		"#c.....#......#............#N.....#....#.....##",
+		"#......#..tt..#...tttttt...#N.....#...Z#.....##",
+		"#...cc.#......#............#.....Z#....#.....E#",
+		"#......#......q...tttttt...#N.....#....#.....##",
+		"#......#......#............#N.....#....#.....##",
+		"#L....y#c.....#L..........c#.....L#...L#....y##",
+		"###D######D#####D########D####D#####D####D#####",
+		"#Z..................c#.......................L#",
+		"#....................#c.......................#",
+		"#####D#####################D##############D####",
+		"#L.....U#L.....Z#Z.....U#......L#U....L#L.....#",
+		"#.......#.......#.......#.......#......#......#",
+		"#.t.t.t.#.t.t.t.#.t.t.t.#.t.t.t.#.t.t..#.....j#",
+		"#.......q.......#.......#.......#......#......#",
+		"#.t.t.t.#.t.t.t.#.t.t.t.#.t.t.t.#.t.t..#.....Z#",
+		"#.......#.......#.......#.......#......#......#",
+		"#......y#y......#......L#y.....Z#.....Z#j.j.j.#",
+		"###D#########D#####D###############D###########",
+		"#...............c............................L#",
+		"#............................c................#",
+		"############D#######################D######D###",
+		"#......Z#......L#L......#.....Z#y.....L#......#",
+		"#.NN.NN.#.......#.......#......#.......#......#",
+		"#.......#.t.t.t.#..UU...#..UU..#.GGGGG.#.t.t..#",
+		"#.NN.NN.#.......#.......#......#.GGGGG.#.....L#",
+		"#.......#.t.t.t.#.......#......q.GGGGG.#.t.t..#",
+		"#.NN.NN.#.......#....O.....O...#.GGGGG.#......#",
+		"#.......#.......#..............#.......#......#",
+		"#L.....y#Z.....y#y............y#......Z#y....Z#",
+		"####D#############D##########D####D#######D####",
+		"#......................c#....................Z#",
+		"#L......................#c....................#",
+		"#######D#####D####D##########D############D####",
+		"#........Z#L...Z#..............#mm....Z#.....Z#",
+		"#L........#.....#..............#.......#......#",
+		"#L........#.....#..tt.tt.tt....#.......#......#",
+		"#..SS.....#.....#..............D...c...#...y..#",
+		"#L.SS.....#.....#..tt.tt.tt....#.......#......#",
+		"#.........#.....#..............#.......#.....c#",
+		"#...LLL..y#j.j.j#Z............L#mm.mm.m#y...cc#",
+		"###############################################",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="46">
+          <Properties>
+            <string name="Name">Stage9</string>
+            <string name="Source"><![CDATA[--!strict
+-- STAGE 9 — 지하 주차장 (47x43칸, tools/gen-stage9.js 로 생성)
+-- 지하 1층 북쪽: 엘리베이터 홀(시작)·관리 사무소(사물함 L)·넓은 주차 구역(차 Q, 빈 칸 l, 굵은 기둥 B, 칸막이 아치).
+-- 동쪽 3칸 폭 램프와 비상계단(s)으로 지하 2층(구덩이 높이: 차 K, 빈 칸 y, 기둥 X, 서쪽 끝 좁은 배관 통로)으로 내려가고,
+-- 서쪽 램프·비상계단으로 다시 지하 1층 남쪽(기계실·전기실·셔터 내린 하역장 x·꺾인 배관 통로·정산소 J)으로 올라온다.
+-- 출구(E)는 차단기(g)가 달린 차량 출구 게이트. 숨는 곳(L)은 관리실 사물함, 뒤지는 곳(Z)은 공구함.
+-- 줄지어 선 차와 기둥이 시야·음파를 끊고, 주차 줄 사이 틈과 칸막이 아치로 돌아가는 고리가 여러 개다.
+-- 맞댄 주차 줄마다 한 줄은 굵은 콘크리트 벽 기둥(#)이라 넓은 주차 구역이 음파 크기(가장 넓은 정사각형 8)로 끊기고,
+-- 하역장 가운데엔 콘크리트 하역 플랫폼과 벽 기둥 4개. 지하 2층에서 올라오는 길은 두 갈래: 서쪽 램프(→ 착지 통로·기계실 쪽)와
+-- 하역장으로 바로 올라오는 비상계단. 막다른 곳: 서쪽 배관 통로, 관리 사무소, 기계실·전기실, 꺾인 배관 통로 끝. 출구까지 최단 약 137칸.
+local Props = require(script.Parent.Parent.Props)
+
+local function base(ctx: any, i: number, j: number): Vector3
+	return ctx.center(i, j) + Vector3.new(0, ctx.floorY(i, j), 0)
+end
+
+local function wallDir(ctx: any, i: number, j: number): Vector3?
+	for _, d in { { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 } } do
+		if ctx.isWall(i + d[1], j + d[2]) then
+			return Vector3.new(d[1], 0, d[2])
+		end
+	end
+	return nil
+end
+
+local STALL = { Q = true, K = true, l = true, y = true }
+
+-- 주차 칸 바닥선: 칸 양옆(x 방향 경계) 흰 선 + 앞쪽 끝선 대신 바퀴 멈춤턱
+local function stallLines(ctx: any, i: number, j: number, p: Vector3)
+	local Kit = ctx.Kit
+	local T = ctx.T
+	for _, s in { -1, 1 } do
+		-- 오른쪽 경계는 옆 칸이 주차 칸이 아닐 때만(겹치지 않게)
+		if s == -1 or not STALL[ctx.at(i + 1, j)] then
+			Kit.box(ctx.props, CFrame.new(p + Vector3.new(s * (T / 2 - 0.15), 0.04, 0)), Vector3.new(0.25, 0.08, T - 1), { blocks = false, collide = false })
+		end
+	end
+	local back = if ctx.isWall(i, j - 1) then -1 elseif ctx.isWall(i, j + 1) then 1 else 0
+	if back ~= 0 then
+		local st = p + Vector3.new(0, 0.25, back * (T / 2 - 1.2))
+		for _, s in { -1, 1 } do
+			Kit.box(ctx.props, CFrame.new(st + Vector3.new(s * 1.5, 0, 0)), Vector3.new(1.8, 0.5, 0.6), { blocks = false, collide = false })
+		end
+	end
+end
+
+-- 주차된 차(큰 상자형): 바퀴 4개 + 차체 + 객실 + 범퍼·창틀 선
+local function car(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local p = base(ctx, i, j)
+	stallLines(ctx, i, j, p)
+	local nose = if ctx.hash(i, j, 91) < 0.5 then 1 else -1
+	local yaw = (ctx.hash(i, j, 92) - 0.5) * 0.12
+	local cf = CFrame.new(p) * CFrame.Angles(0, yaw, 0)
+	local m = Instance.new("Model")
+	m.Name = "Car"
+	m.Parent = ctx.props
+	for _, x in { -2.3, 2.3 } do
+		for _, z in { -2.5, 2.5 } do
+			local w = cf * CFrame.new(x, 1.05, z)
+			Kit.cylinder(m, (w * CFrame.new(-0.35, 0, 0)).Position, (w * CFrame.new(0.35, 0, 0)).Position, 1.05, { blocks = false, collide = false })
+		end
+	end
+	Kit.box(m, cf * CFrame.new(0, 2.0, 0), Vector3.new(4.8, 1.9, 7.4), { name = "CarBody" })
+	Kit.box(m, cf * CFrame.new(0, 3.75, -nose * 0.5), Vector3.new(4.2, 1.6, 3.8), { name = "CarCabin" })
+	-- 앞·뒤 유리 경사(쐐기)
+	Kit.wedge(m, cf * CFrame.new(0, 3.75, nose * 1.95) * CFrame.Angles(0, if nose == 1 then 0 else math.pi, 0), Vector3.new(4.2, 1.6, 0.8), { blocks = false, collide = false })
+	-- 창틀 가운데 기둥, 범퍼, 전조등
+	for _, s in { -1, 1 } do
+		Kit.box(m, cf * CFrame.new(s * 2.12, 3.75, -nose * 0.5), Vector3.new(0.08, 1.4, 0.25), { blocks = false, collide = false })
+		Kit.box(m, cf * CFrame.new(0, 1.3, s * 3.78), Vector3.new(5.0, 0.5, 0.25), { blocks = false, collide = false })
+		Kit.box(m, cf * CFrame.new(s * 1.6, 2.3, nose * 3.72), Vector3.new(0.9, 0.4, 0.12), { blocks = false, collide = false })
+	end
+	Kit.box(m, cf * CFrame.new(0, 2.4, 0), Vector3.new(5.0, 4.6, 7.6), { invisible = true, tag = false })
+end
+
+-- 빈 주차 칸(바닥선만)
+local function emptyStall(ctx: any, i: number, j: number)
+	stallLines(ctx, i, j, base(ctx, i, j))
+end
+
+-- 굵은 기둥 + 모서리 보호대 + 네 면 번호판(7세그먼트 숫자 두 자리)
+local SEG = {
+	["0"] = "abcdef", ["1"] = "bc", ["2"] = "abged", ["3"] = "abgcd", ["4"] = "fgbc",
+	["5"] = "afgcd", ["6"] = "afgedc", ["7"] = "abc", ["8"] = "abcdefg", ["9"] = "abcdfg",
+}
+local function digit(ctx: any, ch: string, origin: Vector3, right: Vector3, out: Vector3, h: number)
+	local w, t = h * 0.55, h * 0.13
+	local half = h / 2
+	local bars = {
+		a = { 0, h, w, h }, b = { w, h, w, half }, c = { w, half, w, 0 }, d = { 0, 0, w, 0 },
+		e = { 0, half, 0, 0 }, f = { 0, h, 0, half }, g = { 0, half, w, half },
+	}
+	for k in (SEG[ch] or ""):gmatch(".") do
+		local b = bars[k]
+		local a = origin + right * b[1] + Vector3.yAxis * b[2] + out * 0.1
+		local z = origin + right * b[3] + Vector3.yAxis * b[4] + out * 0.1
+		local d = z - a
+		ctx.Kit.box(ctx.props, CFrame.fromMatrix((a + z) / 2, d.Unit, out:Cross(d.Unit).Unit), Vector3.new(d.Magnitude + t, t, 0.12), { blocks = false, collide = false })
+	end
+end
+local function pillar(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local p = base(ctx, i, j)
+	local h = ctx.H - ctx.floorY(i, j)
+	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, h / 2, 0)), Vector3.new(4.0, h, 4.0), { name = "Pillar" })
+	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, 0.5, 0)), Vector3.new(4.8, 1.0, 4.8), { name = "PillarBase" })
+	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, h - 0.8, 0)), Vector3.new(5.0, 1.6, 5.0), { name = "PillarCap" })
+	local label = string.format("%02d", (j * 47 + i) % 97) -- 칸 위치로 정해지는 번호(다시 지어도 같다)
+	for _, f in { Vector3.xAxis, -Vector3.xAxis, Vector3.zAxis, -Vector3.zAxis } do
+		local right = Vector3.new(f.Z, 0, -f.X) -- 번호판을 마주 본 사람의 오른쪽
+		local face = p + f * 2.05 + Vector3.new(0, 6.0, 0)
+		Kit.box(ctx.props, CFrame.lookAt(face, face + f), Vector3.new(2.8, 1.9, 0.1), { blocks = false, collide = false })
+		local dh = 1.2
+		for n = 1, 2 do
+			local o = face + Vector3.new(0, -dh / 2, 0) + right * ((n - 1.5) * dh * 0.95 - dh * 0.27) + f * 0.05
+			digit(ctx, label:sub(n, n), o, right, f, dh)
+		end
+		-- 모서리 보호대(아래쪽 띠 두 줄)
+		for _, y in { 1.6, 2.6 } do
+			Kit.box(ctx.props, CFrame.lookAt(p + f * 2.05 + Vector3.new(0, y, 0), p + f * 3 + Vector3.new(0, y, 0)), Vector3.new(4.0, 0.3, 0.1), { blocks = false, collide = false })
+		end
+	end
+end
+
+-- 손수레(카트): 벽 쪽으로 붙여 둔다
+local function cart(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local side = wallDir(ctx, i, j) or Vector3.new(1, 0, 0)
+	local p = base(ctx, i, j) + side * 2.0
+	local yaw = ctx.hash(i, j, 7) * 1.2
+	local cf = CFrame.new(p) * CFrame.Angles(0, yaw, 0)
+	local m = Instance.new("Model")
+	m.Name = "Cart"
+	m.Parent = ctx.props
+	Kit.box(m, cf * CFrame.new(0, 0.9, 0), Vector3.new(2.4, 0.2, 3.6))
+	Kit.crate(m, (cf * CFrame.new(0, 1.0, 0.4)).Position, Vector3.new(2.0, 1.6, 2.0), yaw + 0.1)
+	for _, x in { -1.0, 1.0 } do
+		for _, z in { -1.5, 1.5 } do
+			Kit.cylinder(m, (cf * CFrame.new(x - 0.15, 0.35, z)).Position, (cf * CFrame.new(x + 0.15, 0.35, z)).Position, 0.35, { blocks = false, collide = false })
+		end
+		Kit.cylinder(m, (cf * CFrame.new(x, 0.9, -1.8)).Position, (cf * CFrame.new(x, 3.6, -1.9)).Position, 0.08, { blocks = false, collide = false })
+	end
+	Kit.cylinder(m, (cf * CFrame.new(-1.0, 3.6, -1.9)).Position, (cf * CFrame.new(1.0, 3.6, -1.9)).Position, 0.08, { blocks = false, collide = false })
+end
+
+-- 소화전: 벽에 붙은 소화전함 + 바닥 소화전
+local function hydrant(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, -1)
+	local p = base(ctx, i, j)
+	local face = p + side * (ctx.T / 2 - 0.4)
+	Kit.box(ctx.props, CFrame.lookAt(face + Vector3.new(0, 4.2, 0), face + Vector3.new(0, 4.2, 0) - side), Vector3.new(2.8, 3.4, 0.8), { blocks = false })
+	Kit.box(ctx.props, CFrame.lookAt(face + Vector3.new(0, 4.2, 0) - side * 0.42, face + Vector3.new(0, 4.2, 0) - side), Vector3.new(2.2, 2.8, 0.05), { blocks = false, collide = false })
+	local post = face - side * 0.9 + Vector3.new(side.Z, 0, -side.X) * 2.2
+	Kit.cylinder(ctx.props, post, post + Vector3.new(0, 2.2, 0), 0.4, { blocks = false })
+	Kit.ball(ctx.props, post + Vector3.new(0, 2.3, 0), 0.42, { blocks = false, collide = false })
+	Kit.cylinder(ctx.props, post + Vector3.new(0, 1.5, 0) - Vector3.new(side.Z, 0, -side.X) * 0.7, post + Vector3.new(0, 1.5, 0) + Vector3.new(side.Z, 0, -side.X) * 0.7, 0.18, { blocks = false, collide = false })
+end
+
+-- 엘리베이터 문(벽면): 문틀 + 두 짝 + 호출 버튼
+local function elevator(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, -1)
+	local right = Vector3.new(side.Z, 0, -side.X)
+	local face = base(ctx, i, j) + side * (ctx.T / 2 - 0.15)
+	for _, s in { -1, 1 } do
+		local jp = face + right * s * 2.9 + Vector3.new(0, 4.5, 0)
+		Kit.box(ctx.props, CFrame.lookAt(jp, jp - side), Vector3.new(0.6, 9, 0.5), { blocks = false })
+		local dp = face + right * s * 1.3 + Vector3.new(0, 4.2, 0) - side * 0.05
+		Kit.box(ctx.props, CFrame.lookAt(dp, dp - side), Vector3.new(2.5, 8.2, 0.12), { blocks = false, collide = false })
+	end
+	local top = face + Vector3.new(0, 9.2, 0)
+	Kit.box(ctx.props, CFrame.lookAt(top, top - side), Vector3.new(6.4, 0.8, 0.5), { blocks = false })
+	local btn = face + right * 3.8 + Vector3.new(0, 4.0, 0) - side * 0.1
+	Kit.box(ctx.props, CFrame.lookAt(btn, btn - side), Vector3.new(0.5, 1.0, 0.15), { blocks = false, collide = false })
+end
+
+-- 셔터(하역장 벽면): 말린 셔터 통 + 가로 살
+local function shutter(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, 1)
+	local right = Vector3.new(side.Z, 0, -side.X)
+	local face = base(ctx, i, j) + side * (ctx.T / 2 - 0.2)
+	for y = 0.4, 9.0, 0.75 do
+		local sp = face + Vector3.new(0, y, 0)
+		Kit.box(ctx.props, CFrame.lookAt(sp, sp - side), Vector3.new(ctx.T - 0.2, 0.6, 0.12), { blocks = false, collide = false })
+	end
+	Kit.cylinder(ctx.props, face + Vector3.new(0, 9.9, 0) - right * (ctx.T / 2) - side * 0.4, face + Vector3.new(0, 9.9, 0) + right * (ctx.T / 2) - side * 0.4, 0.8, { blocks = false, collide = false })
+	-- 하역장 바닥 정지선
+	local st = face - side * 2.5 + Vector3.new(0, 0.04, 0)
+	Kit.box(ctx.props, CFrame.lookAt(st, st - side), Vector3.new(ctx.T - 1, 0.08, 0.35), { blocks = false, collide = false })
+end
+
+-- 차량 출구 차단기: 벽 쪽 기둥 + 위로 들린 막대
+local function barrier(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, -1)
+	local p = base(ctx, i, j)
+	local post = p + side * (ctx.T / 2 - 1.0)
+	Kit.box(ctx.props, CFrame.new(post + Vector3.new(0, 1.9, 0)), Vector3.new(1.3, 3.8, 1.3), { name = "BarrierPost" })
+	local hinge = post + Vector3.new(0, 3.4, 0)
+	local tip = hinge - side * 1.6 + Vector3.new(0, 6.0, 0)
+	Kit.cylinder(ctx.props, hinge, tip, 0.18, { blocks = false, collide = false })
+	-- 바닥 정지선
+	local axis = Vector3.new(side.Z, 0, -side.X)
+	Kit.box(ctx.props, CFrame.lookAt(p + Vector3.new(0, 0.04, 0), p + Vector3.new(0, 0.04, 0) + axis), Vector3.new(ctx.T - 0.5, 0.08, 0.4), { blocks = false, collide = false })
+end
+
+-- 주차 정산기(벽에 붙은 키오스크)
+local function payMachine(ctx: any, i: number, j: number)
+	local Kit = ctx.Kit
+	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, -1)
+	local p = base(ctx, i, j) + side * (ctx.T / 2 - 1.1)
+	Kit.box(ctx.props, CFrame.lookAt(p + Vector3.new(0, 2.6, 0), p + Vector3.new(0, 2.6, 0) - side), Vector3.new(2.6, 5.2, 1.8), { name = "PayMachine" })
+	local f = p - side * 0.92
+	Kit.box(ctx.props, CFrame.lookAt(f + Vector3.new(0, 3.9, 0), f + Vector3.new(0, 3.9, 0) - side), Vector3.new(1.8, 1.2, 0.06), { blocks = false, collide = false })
+	Kit.box(ctx.props, CFrame.lookAt(f + Vector3.new(0, 2.6, 0), f + Vector3.new(0, 2.6, 0) - side), Vector3.new(1.0, 0.2, 0.15), { blocks = false, collide = false })
+	Kit.box(ctx.props, CFrame.lookAt(f + Vector3.new(0, 1.3, 0), f + Vector3.new(0, 1.3, 0) - side), Vector3.new(1.6, 0.5, 0.2), { blocks = false, collide = false })
+end
+
+-- 램프: 계단(s)이 옆으로 이어진 넓은 곳은 매끈한 경사판 + 가장자리 연석으로 덮는다(비상계단은 계단 그대로)
+local function ramp(ctx: any, i: number, j: number)
+	local wide = ctx.at(i - 1, j) == "s" or ctx.at(i + 1, j) == "s" or ctx.at(i, j - 1) == "s" or ctx.at(i, j + 1) == "s"
+	if not wide then
+		return
+	end
+	local Kit = ctx.Kit
+	local up = Vector3.new(0, 0, -1)
+	for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+		local n = ctx.at(i + d[1], j + d[2])
+		if n ~= "#" and not ctx.isPit(i + d[1], j + d[2]) then
+			up = Vector3.new(d[1], 0, d[2])
+		end
+	end
+	local c = ctx.center(i, j)
+	local rise = -ctx.PIT_Y
+	-- 경사선이 계단 코보다 조금 위로 오도록 아래쪽으로 1.1 밀어 둔다
+	local mid = c - up * 1.1 + Vector3.new(0, ctx.PIT_Y + rise / 2, 0)
+	Kit.wedge(ctx.props, CFrame.lookAt(mid, mid - up), Vector3.new(ctx.T, rise, ctx.T), { name = "Ramp" })
+	local across = Vector3.new(up.Z, 0, -up.X)
+	for _, s in { -1, 1 } do
+		if ctx.isWall(i + math.round(across.X * s), j + math.round(across.Z * s)) then
+			local a = c + across * s * (ctx.T / 2 - 0.4) - up * (ctx.T / 2) + Vector3.new(0, ctx.PIT_Y + 0.5, 0)
+			local b = a + up * ctx.T + Vector3.new(0, rise, 0)
+			local d = b - a
+			Kit.box(ctx.props, CFrame.lookAt((a + b) / 2, b), Vector3.new(0.6, 1.0, d.Magnitude), { blocks = false, collide = false })
+		end
+	end
+end
+
+return {
+	Seed = 91,
+	PipeChance = 0.3,
+	HideStyle = "locker", -- 숨는 곳(L): 관리 사무소·기계실 철제 사물함
+	SearchStyle = "toolbox", -- 뒤지는 곳(Z): 공구함, 그중 한 곳에 열쇠
+	Props = { Q = car, K = car, l = emptyStall, y = emptyStall, B = pillar, X = pillar, u = cart, h = hydrant, e = elevator, x = shutter, g = barrier, J = payMachine, s = ramp, T = Props.Desk, k = Props.Cabinet },
+	PitTiles = { K = true, X = true, y = true },
+	Walkable = { l = true, y = true, u = true, h = true, e = true, x = true, g = true, k = true, K = false, X = false },
+	Rows = {
+		"###############################################",
+		"#.e.e.e..#.lQQQBQlllBQQQQBQ#QQQBQQQlBQQQQBQQQ.#",
+		"#.SS.....#.................A..................#",
+		"#........D................u#..................#",
+		"#L.......#..#lQQ#Q.Q#QQl#l.#.#QlQ#lQ.#lQQ#ll..#",
+		"#.......h#..BQQQBl.lBQQlBl.#.BQQQBQQ.BlllBlQ..#",
+		"#####D####h................#.................h#",
+		"#...Z...k#.................A..................#",
+		"#L......k#..QQ.QQlBQlQ.QQQ.#.QlB.lQBQQQB.QQB..#",
+		"#..T..T..#..QQ.QlQ#QQQ.QQQ.#.QQ#.Ql#QlQ#.QQ#..#",
+		"#L.......D.................#u.................#",
+		"#........#.................A.................Z#",
+		"#L..L.Z.L#ZlQBlQQQBlQQlBQQl#llBlQQlBQQlQ...l..#",
+		"########################################sss#s##",
+		"#pyXKKKKXyKKKXyKKKXKKKyp#ppppppppppppppppppppp#",
+		"#p#ppppppppppppppppppppppppppppppppppppppppppp#",
+		"#p#ppppppppppppppppppppp#ppppppppppppppppppppp#",
+		"#p#KKK#yKp#KKK#ypK#KKK#p#pKKK#KpK#KKK#pKK#KKpp#",
+		"#p#KKKXKKpXyyKXKpKXKKKXp#pKKKXKpKXKyKXpyKXyKpp#",
+		"#p#ppppppppppppppppppppp#ppppppppppppppppppppp#",
+		"#p#ppppppppppppppppppppppppppppppppppppppppppp#",
+		"#p#ppppppppppppppppppppppppppppppppppppppppppp#",
+		"#p#KXKpKXKKKXpKKXyKpXKKp#pyXKpyXKKypKKyXKpKXpp#",
+		"#p#K#KpK#KKK#pKK#KKp#Kyp#py#KpK#KKypKKK#KpK#pp#",
+		"#p#ppppppppppppppppppppp#ppppppppppppppppppppp#",
+		"#p#ppppppppppppppppppppp#ppppppppppppppppppppp#",
+		"#ppppppppppppppppppppppppppppppppppppppppppppp#",
+		"#ppppKKXKKyypKKyKXKKKKXp#pyKKXyyyyXKyKyXKKyKXp#",
+		"##sss#######s##################################",
+		"#..........A...h..........L########.......L...#",
+		"#..........#....u..........########.#####....h#",
+		"#####D######...............D..#####.#J.Z#.....#",
+		"#..........#...#.......#...##f#####.#...#..B..#",
+		"#.m..m..m..#..............c##...###.##D##.....#",
+		"#..........#.c...#####.....####.###u..........#",
+		"#.v........#....c#####c...L####f###......######",
+		"#Z....f...L#.....#####.....####...#........g.E#",
+		"####D#######.c.............######.#......######",
+		"#..........#...#.......#..c######.....B.......#",
+		"#k........k#...............########...........#",
+		"#k........kD............u..D..............Q.Q.#",
+		"#..L..m.Z..#Z.x.Zx..x..x...########.Z.........#",
 		"###############################################",
 	},
 }
@@ -7220,7 +8759,7 @@ return {
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="39">
+      <Item class="Script" referent="47">
         <Properties>
           <string name="Name">TestHarness</string>
           <token name="RunContext">0</token>
@@ -9321,6 +10860,38 @@ local function probe()
 	end
 end
 
+local function flowerSpot()
+	-- 꽃괴물은 Config.Flower.Stages(하수도)에만, 그 스테이지에선 맵 한가운데쯤(시작점에서 떨어진 곳)에 나오는지
+	for i = 1, #Config.Stages do
+		local want = table.find(Config.Flower.Stages, Config.Stages[i].Id) ~= nil
+		for _ = 1, (if want then 3 else 1) do
+			Round.startStage(i)
+			task.wait(0.5)
+			if not want then
+				check("stage " .. i .. " has no flower", #Round.flowers == 0, tostring(#Round.flowers))
+				break
+			end
+			local info = Round.info
+			local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
+			for _, n in info.nodes do
+				x0, x1 = math.min(x0, n.X), math.max(x1, n.X)
+				z0, z1 = math.min(z0, n.Z), math.max(z1, n.Z)
+			end
+			local size = math.max(x1 - x0, z1 - z0)
+			local f = Round.flowers[1]
+			if not f then
+				check("stage " .. i .. " flower exists", false)
+				break
+			end
+			local fp = f.root.Position
+			local mid = math.sqrt((fp.X - (x0 + x1) / 2) ^ 2 + (fp.Z - (z0 + z1) / 2) ^ 2)
+			local fromStart = (fp - info.spawns[1].Position).Magnitude
+			check("stage " .. i .. " flower near map middle", mid <= size * 0.2 and fromStart >= 90,
+				string.format("toMid %.0f (map %.0f) fromStart %.0f", mid, size, fromStart))
+		end
+	end
+end
+
 task.spawn(function()
 	local ok, err = pcall(function()
 		if args.Test == "dense" then
@@ -9345,6 +10916,8 @@ task.spawn(function()
 			seal()
 		elseif args.Test == "doppel" then
 			doppelTest()
+		elseif args.Test == "flowerspot" then
+			flowerSpot()
 		elseif args.Test == "chase" then
 			chaseMotion()
 		elseif args.Test == "lives" then
@@ -9370,13 +10943,13 @@ end)
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="40">
+  <Item class="SoundService" referent="48">
     <Properties>
       <string name="Name">SoundService</string>
       <token name="AmbientReverb">11</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="41">
+  <Item class="StarterPlayer" referent="49">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -9388,11 +10961,11 @@ end)
       <float name="CharacterWalkSpeed">10</float>
       <bool name="EnableMouseLockOption">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="42">
+    <Item class="StarterPlayerScripts" referent="50">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="ModuleScript" referent="43">
+      <Item class="ModuleScript" referent="51">
         <Properties>
           <string name="Name">Audio</string>
           <string name="Source"><![CDATA[--!strict
@@ -9953,7 +11526,7 @@ return Audio
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="44">
+      <Item class="ModuleScript" referent="52">
         <Properties>
           <string name="Name">DoppelFx</string>
           <string name="Source"><![CDATA[--!strict
@@ -10161,7 +11734,7 @@ return DoppelFx
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="45">
+      <Item class="ModuleScript" referent="53">
         <Properties>
           <string name="Name">JumpScare</string>
           <string name="Source"><![CDATA[--!strict
@@ -10242,10 +11815,10 @@ local function draw(shape: number)
 	local function px(x: number, y: number): Vector2
 		return Vector2.new((0.5 + (x - cx) * k) * size, (0.5 + (y - cy) * k) * size)
 	end
-	local function line(a: Vector2, b: Vector2, w: number)
+	local function line(a: Vector2, b: Vector2, w: number, color: Color3?)
 		local d = b - a
 		local fr = Instance.new("Frame")
-		fr.BackgroundColor3 = WHITE
+		fr.BackgroundColor3 = color or WHITE
 		fr.BorderSizePixel = 0
 		fr.AnchorPoint = Vector2.new(0.5, 0.5)
 		fr.Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
@@ -10260,7 +11833,7 @@ local function draw(shape: number)
 			local a, b = l.pts[i], l.pts[i % n + 1]
 			local ax, ay = rot(a[1], a[2])
 			local bx, by = rot(b[1], b[2])
-			line(px(ax, ay), px(bx, by), w)
+			line(px(ax, ay), px(bx, by), w, l.tint) -- 이빨은 붉은색
 		end
 	end
 	for _, e in f.circles do
@@ -10446,14 +12019,14 @@ function JumpScare.play(scream: (() -> ())?, kind: string?)
 	end
 	busy = true
 	JumpScare.count += 1
-	local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
+
 	gui.Enabled = true
 	if kind == "doppel" then
 		drawDoppel()
 	elseif kind == "flower" then
 		drawFlower()
 	else
-		draw(((math.max(1, si) - 1) % 5) + 1)
+		draw(Faces.BONE)
 	end
 	JumpScare.lastKind = kind or "monster"
 	if scream then
@@ -10486,7 +12059,7 @@ return JumpScare
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="46">
+      <Item class="ModuleScript" referent="54">
         <Properties>
           <string name="Name">KeyHUD</string>
           <string name="Source"><![CDATA[--!strict
@@ -10647,7 +12220,7 @@ return KeyHUD
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="47">
+      <Item class="ModuleScript" referent="55">
         <Properties>
           <string name="Name">LobbyUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -10954,7 +12527,7 @@ return LobbyUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="48">
+      <Item class="LocalScript" referent="56">
         <Properties>
           <string name="Name">Main</string>
           <string name="Source"><![CDATA[--!strict
@@ -10974,6 +12547,7 @@ if UserInputService.TouchEnabled and (not UserInputService.MouseEnabled or not U
 	local S = Config.Sonar :: any
 	S.PoolSize = math.min(S.PoolSize, 2000)
 	S.RevealPerFrame = math.min(S.RevealPerFrame, 220)
+	S.MaxRemotePulses = 3
 end
 local World = require(script.Parent:WaitForChild("SonarWorld"))
 local Lines = require(script.Parent:WaitForChild("SonarLines"))
@@ -11344,6 +12918,24 @@ end)
 -- 관전 카메라 보간 상태
 local specCF: CFrame? = nil
 local specTarget: Player? = nil
+-- 내 시선(카메라 방향)을 초당 최대 10번, 바뀌었을 때만 서버로 보낸다(관전하는 사람이 내 시점 그대로 본다)
+local LookShare = Remotes:WaitForChild("LookShare") :: RemoteEvent
+local lookSentAt, lookYaw, lookPitch = 0, 99, 99
+local function shareLook(now: number)
+	local cam = workspace.CurrentCamera
+	if not cam or now - lookSentAt < 0.1 or player:GetAttribute("Status") ~= "Alive" then
+		return
+	end
+	local lv = cam.CFrame.LookVector
+	local yaw = math.atan2(-lv.X, -lv.Z)
+	local pitch = math.asin(math.clamp(lv.Y, -1, 1))
+	local dy = math.abs((yaw - lookYaw + math.pi) % (2 * math.pi) - math.pi)
+	if dy < 0.03 and math.abs(pitch - lookPitch) < 0.03 then
+		return
+	end
+	lookSentAt, lookYaw, lookPitch = now, yaw, pitch
+	LookShare:FireServer(yaw, pitch)
+end
 RunService.RenderStepped:Connect(function(dt)
 	local now = os.clock()
 	-- 마우스 커서: 1인칭에서는 숨긴다(조준점만). 로비 메뉴(Tab)를 열었을 때만 보인다
@@ -11364,6 +12956,7 @@ RunService.RenderStepped:Connect(function(dt)
 		table.remove(luaTimes, 1)
 	end
 	UI.setCooldown((now - lastFire) / Config.Sonar.Cooldown)
+	shareLook(now)
 	-- 관전 카메라: 살아 있는 동료의 1인칭 시점
 	local cam = workspace.CurrentCamera
 	if spectating() and cam then
@@ -11376,7 +12969,11 @@ RunService.RenderStepped:Connect(function(dt)
 			local head = troot
 			if head then
 				cam.CameraType = Enum.CameraType.Scriptable
-				local want = head.CFrame * CFrame.new(0, 1.6, 0)
+				-- 그 사람의 실제 카메라 방향(공유된 좌우·위아래 시선). 아직 없으면 몸이 향한 방향
+				local eye = head.Position + Vector3.new(0, 1.6, 0)
+				local yaw = t:GetAttribute("LookYaw") :: number?
+				local pitch = (t:GetAttribute("LookPitch") :: number?) or 0
+				local want = if yaw then CFrame.new(eye) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch, 0, 0) else head.CFrame * CFrame.new(0, 1.6, 0)
 				if specTarget ~= t or not specCF or (specCF.Position - want.Position).Magnitude > 12 then
 					specCF = want
 					specTarget = t
@@ -11623,7 +13220,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="49">
+      <Item class="ModuleScript" referent="57">
         <Properties>
           <string name="Name">MapView</string>
           <string name="Source"><![CDATA[--!strict
@@ -11954,7 +13551,7 @@ return Map
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="50">
+      <Item class="ModuleScript" referent="58">
         <Properties>
           <string name="Name">Mates</string>
           <string name="Source"><![CDATA[--!strict
@@ -12044,7 +13641,7 @@ return Mates
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="51">
+      <Item class="ModuleScript" referent="59">
         <Properties>
           <string name="Name">MobileUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -12302,7 +13899,7 @@ return MobileUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="52">
+      <Item class="ModuleScript" referent="60">
         <Properties>
           <string name="Name">MonsterAnim</string>
           <string name="Source"><![CDATA[--!strict
@@ -12412,7 +14009,7 @@ local FLOWER_RUSH = style({ crouch = 0.12, lean = 0.6, stride = 0.55, lift = 0.2
 local FLOWER_STILL = style({ crouch = 0.04, lean = 0.06, armBase = 0.02, armSwing = 0.05, headDrop = 0.55, tension = 0.6 })
 
 -- ── 괴물 하나의 몸 ──
-type LimbRest = { m1: Motor6D, m2: Motor6D, m3: Motor6D?, mEnd: Motor6D, v1: Vector3, v2: Vector3?, v3: Vector3, tip: Vector3, pole: Vector3 }
+type LimbRest = { m1: Motor6D, m2: Motor6D, m3: Motor6D?, mEnd: Motor6D, mToe: Motor6D?, v1: Vector3, v2: Vector3?, v3: Vector3, tip: Vector3, pole: Vector3 }
 type Foot = { pos: Vector3, lifted: boolean, from: Vector3, to: Vector3, t: number, dur: number, planted: boolean }
 type Arm = { pitch: Spring, roll: Spring, c1: Spring, c2: Spring, c3: Spring }
 type Body = {
@@ -12496,7 +14093,7 @@ local function build(model: Model): Body?
 		local v1, v2 = sh.C0.Position, ft.C0.Position
 		-- (무릎은 앞쪽으로 굽는 경향: 그림의 꺾인 방향 + 앞)
 		local kp = poleOf(v1, v2, -Vector3.zAxis)
-		legs[s] = { m1 = th, m2 = sh, mEnd = ft, v1 = v1, v3 = v2, tip = tipOf(ft), pole = (kp + Vector3.new(0, 0, -0.8)).Unit }
+		legs[s] = { m1 = th, m2 = sh, mEnd = ft, mToe = motor(model, "Toe" .. s), v1 = v1, v3 = v2, tip = tipOf(ft), pole = (kp + Vector3.new(0, 0, -0.8)).Unit }
 		if mid then
 			local a1, a2, a3 = mid.C0.Position, fo.C0.Position, ha.C0.Position
 			arms[s] = { m1 = up, m2 = mid, m3 = fo, mEnd = ha, v1 = a1, v2 = a2, v3 = a3, tip = tipOf(ha), pole = poleOf(a1 + a2, a3, Vector3.zAxis) }
@@ -12984,6 +14581,15 @@ local function update(b: Body, dt: number)
 		-- 발: 땅에 평평하게(들 때는 발끝이 아래로)
 		local footPitch = if f.lifted then -0.5 * math.sin(math.pi * f.t) else 0
 		L.mEnd.Transform = r2:Inverse() * rrot * CFrame.Angles(footPitch, 0, 0)
+		-- 발가락(발볼 관절): 디딜 땐 바닥에 평평, 발을 떼면 밑으로 접히고, 내딛기 직전엔 살짝 들렸다가 펴지며 닿는다
+		if L.mToe then
+			local toe = 0
+			if f.lifted then
+				local t = f.t
+				toe = if t < 0.7 then -0.7 * math.sin(math.pi * 0.5 * math.min(t / 0.35, 1)) * (1 - math.max(0, t - 0.35) / 0.35) else 0.3 * math.sin(math.pi * (t - 0.7) / 0.3)
+			end
+			L.mToe.Transform = CFrame.Angles(toe, 0, 0)
+		end
 		-- (테스트) 디딘 발이 목표에서 얼마나 떨어졌나(미끄러짐)
 		if not f.lifted then
 			b.stats.slip = math.max(b.stats.slip, (A - f.pos).Magnitude)
@@ -13131,7 +14737,7 @@ return Anim
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="53">
+      <Item class="ModuleScript" referent="61">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
@@ -13233,7 +14839,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="54">
+      <Item class="LocalScript" referent="62">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -13241,7 +14847,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="55">
+      <Item class="ModuleScript" referent="63">
         <Properties>
           <string name="Name">Reveal</string>
           <string name="Source"><![CDATA[--!strict
@@ -13473,7 +15079,7 @@ return Reveal
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="56">
+      <Item class="ModuleScript" referent="64">
         <Properties>
           <string name="Name">SearchLook</string>
           <string name="Source"><![CDATA[--!strict
@@ -13565,7 +15171,7 @@ return SearchLook
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="57">
+      <Item class="ModuleScript" referent="65">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -13592,6 +15198,7 @@ type Rec = {
 	q: number,
 	slot: number,
 	wake: number?, -- 밝기가 일정한 구간에서는 이 시각까지 계산을 건너뛴다
+	tint: Color3?, -- 이 선만의 색(괴물 이빨 등, 파트 속성 SonarColor). 없으면 Config.Sonar.LineColor
 }
 
 local folder: Folder? = nil
@@ -13716,8 +15323,8 @@ local function place(part: Part, a: Vector3, b: Vector3, cam: Vector3)
 	table.insert(moveCFs, CFrame.lookAt(mid, mid + dir, up))
 end
 
--- 선 하나를 보여 준다. key 가 같은 선이 이미 있으면 그 선을 갱신한다.
-function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: number?, cam: Vector3, replace: boolean?)
+-- 선 하나를 보여 준다. key 가 같은 선이 이미 있으면 그 선을 갱신한다. tint: 이 선만의 색(없으면 기본 흰색)
+function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: number?, cam: Vector3, replace: boolean?, tint: Color3?)
 	if (b - a).Magnitude < 0.03 then
 		return
 	end
@@ -13730,6 +15337,7 @@ function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: numb
 			rec.peak = math.max(peak, rec.peak * 0.5)
 			rec.q = -1
 			rec.wake = nil
+			rec.tint = tint
 			if replace then
 				place(rec.part, a, b, cam)
 			end
@@ -13741,7 +15349,7 @@ function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: numb
 		return
 	end
 	place(part, a, b, cam)
-	local rec: Rec = { part = part, t0 = now, peak = peak, key = key, q = -1, slot = #active + 1 }
+	local rec: Rec = { part = part, t0 = now, peak = peak, key = key, q = -1, slot = #active + 1, tint = tint }
 	active[rec.slot] = rec
 	table.insert(order, { rec = rec, t0 = now })
 	-- 큐 앞쪽 빈자리 정리
@@ -13797,7 +15405,8 @@ function Lines.update(now: number)
 			if q ~= rec.q then
 				rec.q = q
 				local v = q / QUANT
-				rec.part.Color = Color3.new(LR * v, LG * v, LB * v)
+				local c = rec.tint
+				rec.part.Color = if c then Color3.new(c.R * v, c.G * v, c.B * v) else Color3.new(LR * v, LG * v, LB * v)
 				frameColor += 1
 			end
 			i += 1
@@ -13876,7 +15485,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="58">
+      <Item class="ModuleScript" referent="66">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -13909,6 +15518,7 @@ type Pulse = {
 	dynB: { Vector3 },
 	dynM: { Vector3 },
 	dynKey: { number | false },
+	dynTint: { [number]: Color3 }, -- 나눈 선분 번호 → 색(파트 속성 SonarColor 가 있는 것만)
 	dynCell: { [number]: { number } },
 	dseen: { [number]: boolean },
 	cam: Vector3,
@@ -14046,6 +15656,7 @@ local function gatherDynamic(p: Pulse, exclude: Model?)
 		end
 	end
 	-- 문, 괴물, 다른 플레이어(그 순간의 모습)
+	local tints: { [number]: Color3 } = {}
 	for _, e in World.dynamicParts(p.origin, R, exclude) do
 		local part = e.part
 		local before = list.n
@@ -14063,6 +15674,12 @@ local function gatherDynamic(p: Pulse, exclude: Model?)
 		else
 			Geo.staticEdges(part, list, true)
 			Geo.viewEdges(part, p.cam, list)
+			local tint = part:GetAttribute("SonarColor")
+			if typeof(tint) == "Color3" then
+				for i = before + 1, list.n do
+					tints[i] = tint
+				end
+			end
 		end
 		local pid = dynId(part)
 		for i = before + 1, list.n do
@@ -14088,6 +15705,7 @@ local function gatherDynamic(p: Pulse, exclude: Model?)
 				local m = (pa + pb) / 2
 				p.dynM[n] = m
 				p.dynKey[-n] = if key then (key :: number) * 32 - s else false
+				p.dynTint[n] = tints[i] :: any
 				for _, idx in World.attachCells(m) do
 					local l = p.dynCell[idx]
 					if not l then
@@ -14164,6 +15782,7 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 		dynB = {},
 		dynM = {},
 		dynKey = {},
+		dynTint = {},
 		dynCell = {},
 		dseen = {},
 		cam = Pulses.camera(),
@@ -14178,6 +15797,23 @@ function Pulses.start(origin: Vector3, exclude: Model?, traced: boolean?): boole
 	if p.own then
 		table.insert(pulses, 1, p)
 	else
+		-- 팀원·도플갱어 음파는 동시에 MaxRemotePulses 개까지만(여럿이 동시에 쏴도 렉 없이): 넘으면 가장 오래된 것부터 끝낸다
+		local remote = 0
+		for _, q in pulses do
+			if not q.own then
+				remote += 1
+			end
+		end
+		local cap = (S :: any).MaxRemotePulses or 4
+		while remote >= cap do
+			for k, q in pulses do
+				if not q.own then
+					table.remove(pulses, k)
+					break
+				end
+			end
+			remote -= 1
+		end
 		table.insert(pulses, p)
 	end
 	Pulses.last = p
@@ -14272,7 +15908,7 @@ local function reveal(p: Pulse, id: number, arrival: number, now: number)
 	else
 		local s = -id
 		local key = p.dynKey[-s]
-		Lines.show(p.dynA[s], p.dynB[s], now, peak, if key then (key :: number) - 1e7 else nil, p.cam, true)
+		Lines.show(p.dynA[s], p.dynB[s], now, peak, if key then (key :: number) - 1e7 else nil, p.cam, true, p.dynTint[s])
 	end
 	p.revealed += 1
 	if p.trace and #p.trace < 6000 then
@@ -14344,7 +15980,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="59">
+      <Item class="ModuleScript" referent="67">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -14923,7 +16559,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="60">
+      <Item class="ModuleScript" referent="68">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -15136,7 +16772,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="61">
+  <Item class="Workspace" referent="69">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

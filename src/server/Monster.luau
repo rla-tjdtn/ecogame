@@ -27,7 +27,7 @@ Monster.registry = {} :: { any }
 local SPREAD = 35 -- 배회 중 다른 괴물이 이 거리 안이면 반대쪽으로 간다
 local SHARE_SOUND = 25 -- 같은 소리를 이미 다른 괴물이 이 거리 안으로 조사하러 가면 따라가지 않는다
 
-export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase" | "Disguise" | "Dormant" | "Look"
+export type State = "Wander" | "Alert" | "Investigate" | "Search" | "Chase" | "Disguise" | "Dormant" | "Look" | "Return"
 
 -- ── 메인 괴물 몸: 모든 스테이지 같은 디자인(삼각 머리 구체관절, buildModel). 스테이지 번호(Voice)는 소리·추격 리듬만 바꾼다 ──
 
@@ -100,7 +100,7 @@ export type Skeleton = {
 	neck: Vector3,
 	head: Vector3,
 	headEnd: Vector3,
-	legs: { [number]: { hip: Vector3, knee: Vector3, ankle: Vector3, toe: Vector3 } },
+	legs: { [number]: { hip: Vector3, knee: Vector3, ankle: Vector3, toe: Vector3, ball: Vector3? } }, -- ball: 발볼(있으면 발가락이 따로 접힌다)
 	arms: { [number]: { shoulder: Vector3, elbow: Vector3, mid: Vector3?, wrist: Vector3, tip: Vector3 } },
 	floorY: number,
 	mass: number, -- 무게(착지 충격·둔중함), 1 = 메인 괴물
@@ -121,7 +121,13 @@ local function skeleton(model: Model, root: BasePart, cf: CFrame, parts: { BaseP
 		local L = sk.legs[s]
 		bone("Thigh" .. s, "Pelvis", L.hip, L.knee)
 		bone("Shin" .. s, "Thigh" .. s, L.knee, L.ankle)
-		bone("Foot" .. s, "Shin" .. s, L.ankle, L.toe)
+		if L.ball then
+			-- 발등(발목 → 발볼) + 발가락(발볼 → 발끝): 걸을 때 발가락이 따로 접혔다 펴진다
+			bone("Foot" .. s, "Shin" .. s, L.ankle, L.ball)
+			bone("Toe" .. s, "Foot" .. s, L.ball, L.toe)
+		else
+			bone("Foot" .. s, "Shin" .. s, L.ankle, L.toe)
+		end
 		local A = sk.arms[s]
 		bone("Upper" .. s, "Chest", A.shoulder, A.elbow)
 		local last = "Upper" .. s
@@ -166,8 +172,8 @@ local function skeleton(model: Model, root: BasePart, cf: CFrame, parts: { BaseP
 		return (a + ab * t - p).Magnitude
 	end
 	local candidates: { [string]: { string } } = {
-		["Leg-1"] = { "Thigh-1", "Shin-1", "Foot-1" },
-		["Leg1"] = { "Thigh1", "Shin1", "Foot1" },
+		["Leg-1"] = { "Thigh-1", "Shin-1", "Foot-1", "Toe-1" },
+		["Leg1"] = { "Thigh1", "Shin1", "Foot1", "Toe1" },
 		["Arm-1"] = { "Upper-1", "Mid-1", "Fore-1", "Hand-1" },
 		["Arm1"] = { "Upper1", "Mid1", "Fore1", "Hand1" },
 	}
@@ -486,51 +492,176 @@ local function buildFlower(cf: CFrame): Model
 		seg(P(x0, y0, zf(y0)), P(x1, y1, zf(y1)), r or 0.035)
 	end
 	local body = flat(-0.2)
-	-- 어깨로 이어지는 목 밑동, 솟은 어깨
-	bez(170, 196, 166, 210, 162, 222, 160, 236, 2, body)
-	bez(190, 196, 194, 210, 198, 222, 200, 236, 2, body)
-	bez(160, 236, 150, 238, 142, 242, 138, 250, 2, body)
-	bez(200, 236, 210, 238, 218, 242, 222, 250, 2, body)
-	-- 몸통(좁아지는 허리) + 가운데 줄기선 + 잎맥 같은 갈비뼈 3쌍
-	bez(142, 250, 144, 280, 152, 305, 164, 318, 3, body)
-	line(164, 318, 196, 318, body)
-	bez(196, 318, 208, 305, 216, 280, 218, 250, 3, body)
-	line(180, 246, 180, 312, flat(-0.25), 0.025)
-	for _, y in { 258, 274, 290 } do
-		local w = if y == 290 then 18 else 24
-		bez(180, y, 174, y + 4, 180 - w * 0.6, y + 4, 180 - w, y, 2, flat(-0.25), 0.022)
-		bez(180, y, 186, y + 4, 180 + w * 0.6, y + 4, 180 + w, y, 2, flat(-0.25), 0.022)
+	-- 굶주린 몸통: 가시처럼 솟은 어깨뼈, 드러난 갈비뼈, 푹 꺼진 배, 마디 불거진 등뼈
+	local function knob(x: number, y: number, zf: (number) -> number, r: number)
+		local z = zf(y)
+		seg(P(x, y, z), P(x, y, z - 0.05), r)
 	end
-	-- 팔: 무릎 아래까지, 뿌리처럼 갈라진 손가락
+	bez(177, 190, 168, 206, 160, 222, 152, 228, 2, body, 0.035)
+	bez(152, 228, 146, 222, 140, 214, 132, 204, 2, body, 0.035)
+	line(132, 204, 140, 234, body, 0.03)
+	bez(140, 234, 136, 254, 140, 272, 152, 282, 2, body, 0.035)
+	bez(152, 282, 164, 290, 166, 304, 160, 318, 2, body, 0.035)
+	bez(180, 240, 166.5, 241.6, 151.5, 248.8, 153, 256, 2, flat(-0.25), 0.024)
+	bez(180, 251, 164.7, 252.8, 147.7, 260.9, 149.4, 269, 2, flat(-0.25), 0.024)
+	bez(180, 262, 165.6, 263.8, 149.6, 271.9, 151.2, 280, 2, flat(-0.25), 0.024)
+	bez(180, 273, 169.2, 274.4, 157.2, 280.7, 158.4, 287, 2, flat(-0.25), 0.024)
+	bez(183, 190, 192, 206, 200, 222, 208, 228, 2, body, 0.035)
+	bez(208, 228, 214, 222, 220, 214, 228, 204, 2, body, 0.035)
+	line(228, 204, 220, 234, body, 0.03)
+	bez(220, 234, 224, 254, 220, 272, 208, 282, 2, body, 0.035)
+	bez(208, 282, 196, 290, 194, 304, 200, 318, 2, body, 0.035)
+	bez(180, 240, 193.5, 241.6, 208.5, 248.8, 207, 256, 2, flat(-0.25), 0.024)
+	bez(180, 251, 195.3, 252.8, 212.3, 260.9, 210.6, 269, 2, flat(-0.25), 0.024)
+	bez(180, 262, 194.4, 263.8, 210.4, 271.9, 208.8, 280, 2, flat(-0.25), 0.024)
+	bez(180, 273, 190.8, 274.4, 202.8, 280.7, 201.6, 287, 2, flat(-0.25), 0.024)
+	line(180, 232, 180, 318, flat(-0.25), 0.025)
+	knob(180, 240, flat(-0.25), 0.05)
+	knob(180, 252, flat(-0.25), 0.05)
+	knob(180, 264, flat(-0.25), 0.05)
+	knob(180, 276, flat(-0.25), 0.05)
+	knob(180, 288, flat(-0.25), 0.05)
+	knob(180, 300, flat(-0.25), 0.05)
+	knob(180, 312, flat(-0.25), 0.05)
+	-- 팔: 바깥으로 꺾인 팔꿈치(뼈 가시) 아래로 무릎까지 늘어진 앙상한 팔
+	-- 손: 거미 다리처럼 벌어진 긴 손가락 4개(마디 3개 + 갈고리 손톱)와 몸 쪽으로 꺾인 엄지
 	local function armZ(py: number): number
 		return -0.25 - math.clamp((py - 250) / 140, 0, 1) * 0.45
 	end
-	for _, s in { -1, 1 } do
-		local function X(px: number): number
-			return 180 + (px - 180) * -s -- (s = -1: 왼쪽 그대로, 1: 좌우 뒤집기)
+	group = "Arm-1"
+	bez(140, 234, 124, 248, 108, 268, 98, 290, 2, armZ, 0.04)
+	knob(98, 290, armZ, 0.08)
+	line(98, 290, 86, 282, armZ, 0.028)
+	line(98, 290, 90, 298, armZ, 0.024)
+	bez(98, 290, 98, 306, 102, 320, 108, 330, 2, armZ, 0.035)
+	bez(102, 292, 106, 306, 110, 318, 112, 328, 2, armZ, 0.022)
+	knob(108, 330, armZ, 0.065)
+	line(108, 330, 96.3, 344, armZ, 0.026)
+	knob(96.3, 344, armZ, 0.045)
+	line(96.3, 344, 85.9, 359, armZ, 0.024)
+	knob(85.9, 359, armZ, 0.036)
+	line(85.9, 359, 79.4, 374, armZ, 0.022)
+	knob(79.4, 374, armZ, 0.03)
+	line(79.4, 374, 85.4, 386, armZ, 0.018)
+	line(108, 330, 102.6, 344, armZ, 0.026)
+	knob(102.6, 344, armZ, 0.045)
+	line(102.6, 344, 97.8, 361.3, armZ, 0.024)
+	knob(97.8, 361.3, armZ, 0.036)
+	line(97.8, 361.3, 94.8, 378.5, armZ, 0.022)
+	knob(94.8, 378.5, armZ, 0.03)
+	line(94.8, 378.5, 100.8, 392.3, armZ, 0.018)
+	line(108, 330, 108.9, 344, armZ, 0.026)
+	knob(108.9, 344, armZ, 0.045)
+	line(108.9, 344, 109.7, 360.5, armZ, 0.024)
+	knob(109.7, 360.5, armZ, 0.036)
+	line(109.7, 360.5, 110.2, 377, armZ, 0.022)
+	knob(110.2, 377, armZ, 0.03)
+	line(110.2, 377, 104.2, 390.2, armZ, 0.018)
+	line(108, 330, 114.3, 344, armZ, 0.026)
+	knob(114.3, 344, armZ, 0.045)
+	line(114.3, 344, 119.9, 357.5, armZ, 0.024)
+	knob(119.9, 357.5, armZ, 0.036)
+	line(119.9, 357.5, 123.4, 371, armZ, 0.022)
+	knob(123.4, 371, armZ, 0.03)
+	line(123.4, 371, 117.4, 381.8, armZ, 0.018)
+	line(108, 330, 122, 336, armZ, 0.024)
+	knob(122, 336, armZ, 0.04)
+	line(122, 336, 130, 350, armZ, 0.022)
+	line(130, 350, 126, 360, armZ, 0.018)
+	group = "Arm1"
+	bez(220, 234, 236, 248, 252, 268, 262, 290, 2, armZ, 0.04)
+	knob(262, 290, armZ, 0.08)
+	line(262, 290, 274, 282, armZ, 0.028)
+	line(262, 290, 270, 298, armZ, 0.024)
+	bez(262, 290, 262, 306, 258, 320, 252, 330, 2, armZ, 0.035)
+	bez(258, 292, 254, 306, 250, 318, 248, 328, 2, armZ, 0.022)
+	knob(252, 330, armZ, 0.065)
+	line(252, 330, 263.7, 344, armZ, 0.026)
+	knob(263.7, 344, armZ, 0.045)
+	line(263.7, 344, 274.1, 359, armZ, 0.024)
+	knob(274.1, 359, armZ, 0.036)
+	line(274.1, 359, 280.6, 374, armZ, 0.022)
+	knob(280.6, 374, armZ, 0.03)
+	line(280.6, 374, 274.6, 386, armZ, 0.018)
+	line(252, 330, 257.4, 344, armZ, 0.026)
+	knob(257.4, 344, armZ, 0.045)
+	line(257.4, 344, 262.2, 361.3, armZ, 0.024)
+	knob(262.2, 361.3, armZ, 0.036)
+	line(262.2, 361.3, 265.2, 378.5, armZ, 0.022)
+	knob(265.2, 378.5, armZ, 0.03)
+	line(265.2, 378.5, 259.2, 392.3, armZ, 0.018)
+	line(252, 330, 251.1, 344, armZ, 0.026)
+	knob(251.1, 344, armZ, 0.045)
+	line(251.1, 344, 250.3, 360.5, armZ, 0.024)
+	knob(250.3, 360.5, armZ, 0.036)
+	line(250.3, 360.5, 249.8, 377, armZ, 0.022)
+	knob(249.8, 377, armZ, 0.03)
+	line(249.8, 377, 255.8, 390.2, armZ, 0.018)
+	line(252, 330, 245.7, 344, armZ, 0.026)
+	knob(245.7, 344, armZ, 0.045)
+	line(245.7, 344, 240.1, 357.5, armZ, 0.024)
+	knob(240.1, 357.5, armZ, 0.036)
+	line(240.1, 357.5, 236.6, 371, armZ, 0.022)
+	knob(236.6, 371, armZ, 0.03)
+	line(236.6, 371, 242.6, 381.8, armZ, 0.018)
+	line(252, 330, 238, 336, armZ, 0.024)
+	knob(238, 336, armZ, 0.04)
+	line(238, 336, 230, 350, armZ, 0.022)
+	line(230, 350, 234, 360, armZ, 0.018)
+	group = nil
+	-- 하반신: 다리 없이 몸통이 그대로 땅에 박혀 있다. 허리 아래가 굵어지며 바닥으로 파고들고,
+	-- 밑동에서 뿌리·촉수가 바닥을 따라 사방으로 꿈틀대며 뻗는다
+	-- (뼈대의 다리는 보이지 않는 채로 남겨 걸음 리듬만 쓴다. 바닥 쪽 선은 루트에 붙여 땅에 고정)
+	do
+		local function ground(n0: number)
+			for k = n0 + 1, #parts do
+				parts[k]:SetAttribute("Ground", true)
+			end
 		end
-		group = "Arm" .. s
-		bez(X(138), 250, X(124), 280, X(118), 305, X(120), 330, 2, armZ)
-		bez(X(120), 330, X(118), 350, X(116), 362, X(114), 372, 2, armZ)
-		bez(X(114), 372, X(110), 380, X(104), 388, X(100), 394, 2, armZ, 0.026)
-		line(X(114), 372, X(114), 396, armZ, 0.026)
-		bez(X(114), 372, X(118), 380, X(124), 386, X(130), 390, 2, armZ, 0.026)
-		line(X(108), 384, X(94), 384, armZ, 0.022)
+		-- 허리 → 땅으로 파고드는 밑동(위쪽 절반은 골반, 아래쪽 절반은 땅에 붙는다)
+		for _, s in { -1, 1 } do
+			local function X(px: number): number
+				return 180 + (px - 180) * -s
+			end
+			bez(X(160), 318, X(158), 330, X(156), 344, X(154), 356, 2, body)
+			local n0 = #parts
+			bez(X(154), 356, X(152), 370, X(146), 384, X(134), 396, 3, body)
+			ground(n0)
+		end
+		-- 밑동 껍질의 결(세로 주름)
+		for _, x in { 166, 174, 186, 194 } do
+			line(x, 324, x + (x - 180) * 0.15, 352, flat(-0.25), 0.02)
+			local n0 = #parts
+			line(x + (x - 180) * 0.15, 356, x + (x - 180) * 0.6, 394, flat(-0.25), 0.02)
+			ground(n0)
+		end
+		-- 땅을 따라 사방으로 뻗은 뿌리 촉수(길이·휘는 방향이 제각각), 끝은 살짝 들려 꿈틀
+		local n0 = #parts
+		for k, c in { { 0, 2.6, 1 }, { 50, 1.9, -1 }, { 95, 2.4, 1 }, { 140, 1.6, -1 }, { 185, 2.8, 1 }, { 230, 2.0, -1 }, { 275, 2.3, 1 }, { 320, 1.7, -1 } } do
+			local a, len, s = math.rad(c[1]), c[2], c[3]
+			local dir = Vector3.new(math.sin(a), 0, math.cos(a))
+			local side = Vector3.new(dir.Z, 0, -dir.X)
+			local base = P(180, 394, -0.2) + dir * 0.55
+			local prev = base
+			local n = 6
+			for i = 1, n do
+				local t = i / n
+				local lift = if i == n then 0.25 else 0.04 * math.sin(t * math.pi)
+				local p = base + dir * (len * t) + side * (s * math.sin(t * math.pi * 1.5) * 0.35) + Vector3.new(0, lift, 0)
+				seg(prev, p, 0.055 * (1 - t * 0.75))
+				prev = p
+			end
+			-- 곁가지 하나
+			if k % 2 == 1 then
+				local m = base + dir * (len * 0.5)
+				seg(m, m + (dir + side * s * 1.2).Unit * 0.6 + Vector3.new(0, 0.05, 0), 0.02)
+			end
+		end
+		ground(n0)
 	end
-	-- 다리: 뒤로 꺾이고 뿌리 같은 발
+	-- 뼈대용 다리 위치(보이는 선은 없음)
 	local function legZ(py: number): number
 		return if py < 360 then -0.2 - (py - 318) / 42 * 0.35 else -0.55 + (py - 360) / 36 * 0.6
-	end
-	for _, s in { -1, 1 } do
-		local function X(px: number): number
-			return 180 + (px - 180) * -s
-		end
-		group = "Leg" .. s
-		bez(X(168), 318, X(162), 338, X(166), 352, X(174), 360, 2, legZ)
-		bez(X(174), 360, X(168), 372, X(160), 384, X(152), 392, 2, legZ)
-		line(X(152), 392, X(138), 395, legZ, 0.026)
-		line(X(152), 392, X(148), 397, legZ, 0.026)
-		line(X(152), 392, X(160), 396, legZ, 0.026)
 	end
 	group = nil
 	-- 머리(평소): 줄기처럼 휜 목 끝에 고개 숙인 튤립 봉오리
@@ -538,36 +669,73 @@ local function buildFlower(cf: CFrame): Model
 	local function budZ(py: number): number
 		return -0.35 - math.clamp((198 - py) / 110, 0, 1) * 0.55
 	end
-	bez(180, 198, 186, 176, 196, 160, 210, 150, 3, budZ)
-	bez(210, 150, 200, 132, 204, 106, 222, 96, 3, budZ)
-	bez(222, 96, 238, 104, 244, 128, 236, 148, 3, budZ)
-	bez(236, 148, 228, 158, 218, 158, 210, 150, 2, budZ)
-	bez(222, 96, 220, 116, 220, 136, 224, 154, 2, budZ, 0.022)
-	bez(212, 110, 216, 124, 218, 140, 220, 156, 2, budZ, 0.022)
-	bez(232, 108, 230, 124, 230, 140, 228, 154, 2, budZ, 0.022)
-	line(222, 96, 220, 88, budZ, 0.022)
-	line(222, 96, 226, 89, budZ, 0.022)
+	bez(180, 190, 186, 172, 196, 158, 210, 150, 3, budZ, 0.04)
+	-- 봉오리 덩어리는 목 끝(210,150)을 기준으로 크게(BUD_K 배)
+	local BUD_K = 1.9
+	local function bb(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, n: number, r: number?)
+		local function k(x: number, y: number): (number, number)
+			return 210 + (x - 210) * BUD_K, 150 + (y - 150) * BUD_K
+		end
+		local a0, b0 = k(x0, y0)
+		local a1, b1 = k(x1, y1)
+		local a2, b2 = k(x2, y2)
+		local a3, b3 = k(x3, y3)
+		bez(a0, b0, a1, b1, a2, b2, a3, b3, n, budZ, r)
+	end
+	-- 바깥 윤곽(꽃잎 겹이 보이게 양옆 두 장 + 가운데 한 장)
+	bb(210, 150, 200, 132, 204, 106, 222, 96, 4, 0.04)
+	bb(222, 96, 238, 104, 244, 128, 236, 148, 4, 0.04)
+	bb(236, 148, 228, 158, 218, 158, 210, 150, 3, 0.04)
+	bb(210, 150, 194, 138, 198, 112, 216, 99, 3, 0.03)
+	bb(236, 148, 252, 136, 248, 112, 228, 99, 3, 0.03)
+	-- 꽃잎 겹선(봉오리 결)
+	bb(222, 96, 220, 116, 220, 136, 224, 154, 3, 0.026)
+	bb(212, 110, 216, 124, 218, 140, 220, 156, 3, 0.026)
+	bb(232, 108, 230, 124, 230, 140, 228, 154, 3, 0.026)
+	-- 꼭대기 뾰족한 끝 + 밑동을 감싼 꽃받침 3장
+	bb(222, 96, 221, 92, 220, 90, 219, 84, 1, 0.026)
+	bb(222, 96, 223, 92, 225, 90, 227, 85, 1, 0.026)
+	bb(210, 150, 204, 156, 200, 160, 196, 166, 1, 0.026)
+	bb(223, 156, 223, 160, 223, 163, 223, 168, 1, 0.026)
+	bb(236, 148, 242, 154, 246, 158, 250, 164, 1, 0.026)
 	-- 머리(깨어나면): 곧게 선 목 끝에 뾰족한 꽃잎 6장이 젖혀지고 가운데 작은 눈 7개
 	mark = "Bloom"
 	local headZ = flat(-0.95)
-	bez(180, 198, 180, 180, 182, 166, 186, 156, 2, function(py)
-		return -0.35 - math.clamp((198 - py) / 42, 0, 1) * 0.55
+	bez(180, 190, 180, 172, 182, 154, 186, 138, 3, function(py)
+		return -0.35 - math.clamp((198 - py) / 60, 0, 1) * 0.55
 	end)
-	local hx, hy = 186, 128
+	local hx, hy = 186, 104
+	local PK = 1.75 -- 꽃잎 크기(원래의 배)
+	-- 안쪽 겹: 바깥 꽃잎 사이로 짧은 꽃잎 6장
+	for k = 0, 5 do
+		local a = math.rad(k * 60 + 30)
+		local function R(x: number, y: number): (number, number)
+			x, y = x * PK * 0.55, y * PK * 0.55
+			return hx + x * math.cos(a) - y * math.sin(a), hy + x * math.sin(a) + y * math.cos(a)
+		end
+		local x0, y0 = R(-5, -8)
+		local x1, y1 = R(-12, -30)
+		local x2, y2 = R(0, -60)
+		local u1, v1 = R(12, -30)
+		local u2, v2 = R(5, -8)
+		bez(x0, y0, x1, y1, x1, y1, x2, y2, 2, flat(-0.9), 0.028)
+		bez(x2, y2, u1, v1, u1, v1, u2, v2, 2, flat(-0.9), 0.028)
+	end
 	for k = 0, 5 do
 		local a = math.rad(k * 60)
 		local function R(x: number, y: number): (number, number)
+			x, y = x * PK, y * PK
 			return hx + x * math.cos(a) - y * math.sin(a), hy + x * math.sin(a) + y * math.cos(a)
 		end
 		local x0, y0 = R(-4, -6)
 		local x1, y1 = R(-10, -24)
 		local x2, y2 = R(-8, -46)
 		local x3, y3 = R(0, -62)
-		bez(x0, y0, x1, y1, x2, y2, x3, y3, 2, headZ, 0.03)
+		bez(x0, y0, x1, y1, x2, y2, x3, y3, 3, headZ, 0.04)
 		local u1, v1 = R(8, -46)
 		local u2, v2 = R(10, -24)
 		local u3, v3 = R(4, -6)
-		bez(x3, y3, u1, v1, u2, v2, u3, v3, 2, headZ, 0.03)
+		bez(x3, y3, u1, v1, u2, v2, u3, v3, 3, headZ, 0.04)
 		local m0, n0 = R(0, -14)
 		local m1, n1 = R(0, -52)
 		line(m0, n0, m1, n1, headZ, 0.02)
@@ -578,7 +746,8 @@ local function buildFlower(cf: CFrame): Model
 		end
 	end
 	for _, e in { { 0, 0, 0.09 }, { -8, -6, 0.06 }, { 8, -6, 0.06 }, { -10, 4, 0.055 }, { 10, 4, 0.055 }, { -3, 10, 0.05 }, { 3, 10, 0.05 } } do
-		seg(P(hx + e[1], hy + e[2], -1.0), P(hx + e[1], hy + e[2], -1.06), e[3], "FEye")
+		local ex, ey, er = e[1] * 1.5, e[2] * 1.5, e[3] * 1.5
+		seg(P(hx + ex, hy + ey, -1.0), P(hx + ex, hy + ey, -1.06), er, "FEye")
 	end
 	mark = nil
 	-- 전신 뼈대(키 크고 가는 몸: 긴 목·긴 팔의 휘청임)
@@ -587,18 +756,26 @@ local function buildFlower(cf: CFrame): Model
 		waist = P(180, 280, -0.2),
 		neck = P(180, 236, -0.2),
 		head = P(180, 198, -0.35),
-		headEnd = P(196, 132, -0.9),
+		headEnd = P(190, 104, -0.9),
 		legs = {
 			[-1] = { hip = P(168, 318, -0.2), knee = P(174, 360, legZ(360)), ankle = P(152, 392, legZ(392)), toe = P(138, 395, -0.6) },
 			[1] = { hip = P(192, 318, -0.2), knee = P(186, 360, legZ(360)), ankle = P(208, 392, legZ(392)), toe = P(222, 395, -0.6) },
 		},
 		arms = {
-			[-1] = { shoulder = P(138, 250, armZ(250)), elbow = P(120, 330, armZ(330)), wrist = P(114, 372, armZ(372)), tip = P(114, 396, armZ(396)) },
-			[1] = { shoulder = P(222, 250, armZ(250)), elbow = P(240, 330, armZ(330)), wrist = P(246, 372, armZ(372)), tip = P(246, 396, armZ(396)) },
+			[-1] = { shoulder = P(140, 234, armZ(234)), elbow = P(98, 290, armZ(290)), wrist = P(108, 330, armZ(330)), tip = P(108, 390, armZ(390)) },
+			[1] = { shoulder = P(220, 234, armZ(234)), elbow = P(262, 290, armZ(290)), wrist = P(252, 330, armZ(330)), tip = P(252, 390, armZ(390)) },
 		},
 		floorY = -4,
 		mass = 0.7,
 	}, folder)
+	for _, p in parts do
+		if p:GetAttribute("Ground") then
+			local w = p:FindFirstChildOfClass("WeldConstraint")
+			if w then
+				w.Part0 = root -- 땅에 박힌 부분은 상체가 흔들려도 바닥에 그대로
+			end
+		end
+	end
 	makeHumanoid(model, FLOWER_HIP, 0)
 	CollectionService:AddTag(model, Config.Tags.Monster)
 	CollectionService:AddTag(model, Config.Tags.Flower)
@@ -722,13 +899,9 @@ local function buildModel(cf: CFrame, _stage: number): Model
 	-- 팔·다리: 왼쪽(s = -1) 시안 좌표, 오른쪽은 좌우 대칭(x → 670 - x)
 	-- 손·발: 손목(발목)에서 마디 손가락 4개. { 첫 마디 x, y, 둘째 마디 x, y, 발톱 끝 x, y }
 	local HAND = { { 180, 512.5, 150, 535, 140, 585 }, { 190, 519, 162.5, 565, 160, 617.5 }, { 202.5, 520, 195, 567.5, 202.5, 612.5 }, { 215, 516, 239, 544, 244, 592.5 } }
-	local FOOT = { { 240, 760, 212, 785, 196, 852 }, { 252, 768, 234, 805, 226, 852 }, { 268, 768, 276, 805, 284, 852 }, { 282, 760, 304, 786, 318, 852 } }
 	-- 손가락은 아래로 갈수록 앞으로 굽고, 발가락은 발목에서 앞으로 뻗어 발톱 끝이 바닥에 닿는다
 	local function handZ(y: number): number
 		return -0.15 - 0.45 * math.clamp((y - 462.5) / 155, 0, 1)
-	end
-	local function footZ(y: number): number
-		return 0.1 - 1.3 * math.clamp((y - 715) / 137, 0, 1)
 	end
 	local function digits(w: Vector3, list: { { number } }, P: (number, number, number) -> Vector3, zf: (number) -> number): Vector3
 		local sum = Vector3.zero
@@ -754,7 +927,7 @@ local function buildModel(cf: CFrame, _stage: number): Model
 		end
 		return sum / #list
 	end
-	type LimbJ = { a: Vector3, b: Vector3, c: Vector3, tip: Vector3 }
+	type LimbJ = { a: Vector3, b: Vector3, c: Vector3, tip: Vector3, ball: Vector3? }
 	local armJ: { [number]: LimbJ } = {}
 	local legJ: { [number]: LimbJ } = {}
 	for _, s in { -1, 1 } do
@@ -774,7 +947,33 @@ local function buildModel(cf: CFrame, _stage: number): Model
 		bone(kn, an)
 		ball(kn, BALL_R)
 		ball(an, BALL_R)
-		legJ[s] = { a = hip, b = kn, c = an, tip = digits(an, FOOT, P, footZ) }
+		-- 발: 발목에서 앞아래로 내려가는 발등뼈 → 바닥의 발볼(구체관절) → 앞으로 바닥을 따라 뻗은 마디 발가락 4개 + 발톱,
+		-- 발목 뒤로 뒤꿈치 발톱 하나. (발볼에서 발가락이 따로 접힌다)
+		local ballP = P(262, 836, -0.55)
+		bone(an, ballP)
+		ball(ballP, BALL_R * 0.8)
+		local sum = Vector3.zero
+		for _, dx in { -30, -10, 10, 30 } do
+			local k1 = P(262 + dx * 0.45, 845, -0.95)
+			local k2 = P(262 + dx * 0.8, 848, -1.35)
+			local tip = P(262 + dx, 852, -1.8)
+			line(ballP, k1, 0.03, BALL_R * 0.8, KNUCKLE_R)
+			line(k1, k2, 0.028, KNUCKLE_R, KNUCKLE_R)
+			ball(k1, KNUCKLE_R)
+			ball(k2, KNUCKLE_R)
+			local dir = (tip - k2).Unit
+			local side = dir:Cross(Vector3.yAxis).Unit * 0.045
+			local base = k2 + dir * KNUCKLE_R
+			seg(base + side, tip, 0.015)
+			seg(base - side, tip, 0.015)
+			sum += tip
+		end
+		-- 뒤꿈치 발톱(발목 뒤로 꺾여 바닥을 찌름)
+		local heel = P(262, 772, 0.5)
+		line(an, heel, 0.028, BALL_R, KNUCKLE_R)
+		ball(heel, KNUCKLE_R)
+		seg(heel, P(262, 846, 0.72), 0.018)
+		legJ[s] = { a = hip, b = kn, c = an, tip = sum / 4, ball = ballP }
 		group = nil
 		ball(sh, BALL_R)
 		ball(hip, BALL_R * 0.9)
@@ -809,8 +1008,8 @@ local function buildModel(cf: CFrame, _stage: number): Model
 		head = S(335, 202, -0.15),
 		headEnd = S(face.tx, face.ty - 40, HZ),
 		legs = {
-			[-1] = { hip = legJ[-1].a, knee = legJ[-1].b, ankle = legJ[-1].c, toe = legJ[-1].tip },
-			[1] = { hip = legJ[1].a, knee = legJ[1].b, ankle = legJ[1].c, toe = legJ[1].tip },
+			[-1] = { hip = legJ[-1].a, knee = legJ[-1].b, ankle = legJ[-1].c, toe = legJ[-1].tip, ball = legJ[-1].ball },
+			[1] = { hip = legJ[1].a, knee = legJ[1].b, ankle = legJ[1].c, toe = legJ[1].tip, ball = legJ[1].ball },
 		},
 		arms = {
 			[-1] = { shoulder = armJ[-1].a, elbow = armJ[-1].b, wrist = armJ[-1].c, tip = armJ[-1].tip },
@@ -1046,6 +1245,8 @@ function Monster.setState(self: Monster, s: State)
 		speed = cfg.ChaseSpeed
 	elseif s == "Alert" then
 		speed = 0
+	elseif s == "Return" then
+		speed = cfg.ReturnSpeed or cfg.WanderSpeed
 	end
 	self.hum.WalkSpeed = speed
 	if s ~= "Chase" and self.mawOpen then
@@ -1964,9 +2165,28 @@ function Monster.setBloom(self: Monster, open: boolean)
 end
 
 -- 달려갈 곳: 음파 쏜 자리(안전 구역 안이면 그 앞, 바닥 위)
+-- 꽃괴물이 들어가면 안 되는 곳: 안전 구역, 그리고 시작점 둘레(KeepOut) — 시작 위치를 막아 못 나가게 되지 않게
+local function flowerBanned(self: Monster, p: Vector3): boolean
+	if Monster.isSafe(p) then
+		return true
+	end
+	local ko = (self :: any).keepOut
+	return ko ~= nil and Vector3.new(p.X - ko.X, 0, p.Z - ko.Z).Magnitude < self.cfg.KeepOut
+end
+
 local function rushGoal(self: Monster, pos: Vector3): Vector3
-	if Monster.isSafe(pos) then
-		return self:nearestOutside(pos) or pos
+	if flowerBanned(self, pos) then
+		-- 소리 난 곳에서 가장 가까운, 들어가도 되는 지점까지만 온다
+		local best, bd = nil, math.huge
+		for _, n in self.nodes do
+			if not flowerBanned(self, n) then
+				local d = (n - pos).Magnitude
+				if d < bd then
+					best, bd = n, d
+				end
+			end
+		end
+		return best or self:nearestOutside(pos) or pos
 	end
 	return pos
 end
@@ -1989,6 +2209,11 @@ function Monster.flowerHear(self: Monster, pos: Vector3, radius: number, kind: s
 		self:setState("Alert")
 	elseif self.state == "Look" then
 		self:setState("Chase")
+	elseif self.state == "Return" then
+		-- 돌아가던 중: 다시 펼치고 달려간다
+		self:setBloom(true)
+		self.alertUntil = os.clock() + self.cfg.WakeTime
+		self:setState("Alert")
 	end
 	-- (달리는 중이면 목표만 바뀐다)
 end
@@ -2047,7 +2272,7 @@ function Monster.flowerTick(self: Monster, now: number)
 				local best, bd = nil, math.huge
 				for _, n in self.nodes do
 					local dd = (n - goal).Magnitude
-					if dd < bd and not Monster.isSafe(n) then
+					if dd < bd and not flowerBanned(self, n) then
 						best, bd = n, dd
 					end
 				end
@@ -2069,11 +2294,40 @@ function Monster.flowerTick(self: Monster, now: number)
 		-- 두리번: 조금씩 몸을 돌린다
 		self.root.CFrame = self.root.CFrame * CFrame.Angles(0, math.rad(math.random(-25, 25)), 0)
 		if now >= self.searchUntil then
-			-- 머리를 닫고 그 자리에서 다시 기다린다
-			self:note("closing, dormant")
+			-- 머리를 닫고 원래 자리(맵 가운데쯤)로 걸어 돌아간다(가까우면 그 자리에서 기다린다)
 			self:setBloom(false)
-			self:setState("Dormant")
+			local home = (self :: any).home
+			if home and Vector3.new(home.X - my.X, 0, home.Z - my.Z).Magnitude > 6 then
+				self:note("closing, returning home")
+				self.goal = home
+				self.waypoints = {}
+				self:setState("Return")
+			else
+				self:note("closing, dormant")
+				self:setState("Dormant")
+			end
 		end
+		return
+	end
+	if st == "Return" then
+		local home = (self :: any).home
+		local flat = if home then Vector3.new(home.X - my.X, 0, home.Z - my.Z).Magnitude else 0
+		if not home or flat < 4 then
+			self:note("home, dormant")
+			self.waypoints = {}
+			self.goal = nil
+			self:setState("Dormant")
+			return
+		end
+		self.goal = home
+		if #self.waypoints == 0 and not self:pathTo(home) then
+			-- 길을 못 찾으면 그 자리에서 기다린다
+			self:setState("Dormant")
+			return
+		end
+		self:follow()
+		Doors.openNear(my + self.root.CFrame.LookVector * 2, 6, my)
+		self:checkStuck(false)
 		return
 	end
 	-- (그 밖의 상태가 되면 기다림으로)

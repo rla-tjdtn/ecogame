@@ -105,7 +105,7 @@ local FLOWER_RUSH = style({ crouch = 0.12, lean = 0.6, stride = 0.55, lift = 0.2
 local FLOWER_STILL = style({ crouch = 0.04, lean = 0.06, armBase = 0.02, armSwing = 0.05, headDrop = 0.55, tension = 0.6 })
 
 -- ── 괴물 하나의 몸 ──
-type LimbRest = { m1: Motor6D, m2: Motor6D, m3: Motor6D?, mEnd: Motor6D, v1: Vector3, v2: Vector3?, v3: Vector3, tip: Vector3, pole: Vector3 }
+type LimbRest = { m1: Motor6D, m2: Motor6D, m3: Motor6D?, mEnd: Motor6D, mToe: Motor6D?, v1: Vector3, v2: Vector3?, v3: Vector3, tip: Vector3, pole: Vector3 }
 type Foot = { pos: Vector3, lifted: boolean, from: Vector3, to: Vector3, t: number, dur: number, planted: boolean }
 type Arm = { pitch: Spring, roll: Spring, c1: Spring, c2: Spring, c3: Spring }
 type Body = {
@@ -189,7 +189,7 @@ local function build(model: Model): Body?
 		local v1, v2 = sh.C0.Position, ft.C0.Position
 		-- (무릎은 앞쪽으로 굽는 경향: 그림의 꺾인 방향 + 앞)
 		local kp = poleOf(v1, v2, -Vector3.zAxis)
-		legs[s] = { m1 = th, m2 = sh, mEnd = ft, v1 = v1, v3 = v2, tip = tipOf(ft), pole = (kp + Vector3.new(0, 0, -0.8)).Unit }
+		legs[s] = { m1 = th, m2 = sh, mEnd = ft, mToe = motor(model, "Toe" .. s), v1 = v1, v3 = v2, tip = tipOf(ft), pole = (kp + Vector3.new(0, 0, -0.8)).Unit }
 		if mid then
 			local a1, a2, a3 = mid.C0.Position, fo.C0.Position, ha.C0.Position
 			arms[s] = { m1 = up, m2 = mid, m3 = fo, mEnd = ha, v1 = a1, v2 = a2, v3 = a3, tip = tipOf(ha), pole = poleOf(a1 + a2, a3, Vector3.zAxis) }
@@ -677,6 +677,15 @@ local function update(b: Body, dt: number)
 		-- 발: 땅에 평평하게(들 때는 발끝이 아래로)
 		local footPitch = if f.lifted then -0.5 * math.sin(math.pi * f.t) else 0
 		L.mEnd.Transform = r2:Inverse() * rrot * CFrame.Angles(footPitch, 0, 0)
+		-- 발가락(발볼 관절): 디딜 땐 바닥에 평평, 발을 떼면 밑으로 접히고, 내딛기 직전엔 살짝 들렸다가 펴지며 닿는다
+		if L.mToe then
+			local toe = 0
+			if f.lifted then
+				local t = f.t
+				toe = if t < 0.7 then -0.7 * math.sin(math.pi * 0.5 * math.min(t / 0.35, 1)) * (1 - math.max(0, t - 0.35) / 0.35) else 0.3 * math.sin(math.pi * (t - 0.7) / 0.3)
+			end
+			L.mToe.Transform = CFrame.Angles(toe, 0, 0)
+		end
 		-- (테스트) 디딘 발이 목표에서 얼마나 떨어졌나(미끄러짐)
 		if not f.lifted then
 			b.stats.slip = math.max(b.stats.slip, (A - f.pos).Magnitude)
