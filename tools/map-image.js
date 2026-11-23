@@ -8,6 +8,10 @@ const rows = [...src.matchAll(/^\s*"([^"]+)",\s*$/gm)].map((m) => m[1]);
 const T = 20, W = rows[0].length, H = rows.length;
 const wall = (i, j) => (i < 0 || j < 0 || i >= W || j >= H ? true : rows[j][i] === "#");
 let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W * T}" height="${H * T}" style="background:#000"><rect width="100%" height="100%" fill="#000"/>`;
+// 2층 구역(UpperRects)은 남색 바탕 + "2F", 계단 칸은 초록
+const upper = [...((src.match(/UpperRects = \{(.*)\},/) || ["", ""])[1].matchAll(/\{\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\s*\}/g))].map((m) => m.slice(1, 5).map((v) => +v - 1));
+for (const [a, b, c, d] of upper) svg += `<rect x="${a * T}" y="${b * T}" width="${(c - a + 1) * T}" height="${(d - b + 1) * T}" fill="#0d2148"/>`;
+for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if (rows[j][i] === "1" || rows[j][i] === "2") svg += `<rect x="${i * T + 2}" y="${j * T + 2}" width="${T - 4}" height="${T - 4}" fill="${rows[j][i] === "1" ? "#1c7c3c" : "#2fbf5f"}"/>`;
 const line = (x1, y1, x2, y2) => (svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#fff" stroke-width="2"/>`);
 for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
 	if (!wall(i, j)) continue;
@@ -23,6 +27,7 @@ for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
 	else if (c === "S") svg += `<circle cx="${x}" cy="${y}" r="4" fill="#4cf"/>`;
 	else if (c === "D" || c === "A") svg += `<circle cx="${x}" cy="${y}" r="2" fill="#888"/>`;
 }
+for (const [a, b, c, d] of upper) svg += `<text x="${(a + c + 1) * T / 2}" y="${(b + d + 1) * T / 2}" fill="#4a6fb0" font-size="${T * 3}" font-family="sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="middle" opacity="0.5">2F</text>`;
 svg += "</svg>";
 const svgPath = out.replace(/\.png$/, ".svg");
 fs.writeFileSync(svgPath, svg);

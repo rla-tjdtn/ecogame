@@ -1,7 +1,8 @@
 // Generates the Rows of STAGE 9 — 지하 주차장 (src/server/Stages/Stage9.luau) by hand-placed blocks:
 // 지하 1층 북쪽 주차 구역(시작 엘리베이터 홀·관리 사무소) → 동쪽 램프/비상계단으로 지하 2층(구덩이 높이) →
-// 서쪽 램프/비상계단으로 다시 지하 1층 남쪽(기계실·전기실·하역장·배관 통로·정산소) → 차량 출구 게이트(E).
-//   node tools/gen-stage9.js      (writes the Rows block in Stage9.luau, then run node tools/check-layout.js)
+// 서쪽 램프 또는 하역장 비상계단(두 갈래)으로 다시 지하 1층 남쪽(기계실·전기실·하역장·배관 통로·정산소) → 차량 출구 게이트(E).
+// 맞댄 주차 줄의 한 줄은 벽 기둥(#)으로 세워 넓은 구역을 음파 크기로 끊는다(가장 넓은 정사각형 8).
+//   node tools/gen-stage9.js [--dry]   (writes the Rows block in Stage9.luau, then run node tools/check-layout.js)
 const fs = require("fs");
 const path = require("path");
 const W = 47, H = 43;
@@ -14,10 +15,11 @@ const get = (x, y) => g[y][x];
 // car/empty/pillar = 이 층에서 쓰는 문자, gaps = 틈(통로) x 좌표들, rnd = 빈 칸 확률
 let seed = 9100;
 const r = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
-function carRow(x0, x1, y, { car, empty, pillar, gaps = [], every = 5, phase = 0, rnd = 0.2 }) {
+// wall = true 이면 기둥 자리를 굵은 콘크리트 벽 기둥(#)으로 세운다(맞댄 두 줄 중 한 줄만): 넓은 주차 구역을 음파 크기로 끊는다
+function carRow(x0, x1, y, { car, empty, pillar, gaps = [], every = 5, phase = 0, rnd = 0.2, wall = false }) {
 	for (let x = x0; x <= x1; x++) {
 		if (gaps.includes(x)) continue;
-		if ((x - x0 + phase) % every === 0) set(x, y, pillar);
+		if ((x - x0 + phase) % every === 0) set(x, y, wall ? "#" : pillar);
 		else set(x, y, r() < rnd ? empty : car);
 	}
 }
@@ -48,12 +50,12 @@ carRow(11, 26, 1, { car: "Q", empty: "l", pillar: "B", gaps: [], every: 5, phase
 carRow(28, 44, 1, { car: "Q", empty: "l", pillar: "B", every: 5, phase: 2, rnd: 0.25 });
 // 가운데 두 줄
 for (const y of [4, 5]) {
-	carRow(12, 25, y, { car: "Q", empty: "l", pillar: "B", gaps: [18], every: 4, rnd: 0.2 });
-	carRow(29, 43, y, { car: "Q", empty: "l", pillar: "B", gaps: [36], every: 4, rnd: 0.2 });
+	carRow(12, 25, y, { car: "Q", empty: "l", pillar: "B", gaps: [18], every: 4, rnd: 0.2, wall: y === 4 });
+	carRow(29, 43, y, { car: "Q", empty: "l", pillar: "B", gaps: [36], every: 4, rnd: 0.2, wall: y === 4 });
 }
 for (const y of [8, 9]) {
-	carRow(12, 25, y, { car: "Q", empty: "l", pillar: "B", gaps: [14, 22], every: 4, phase: 2, rnd: 0.2 });
-	carRow(29, 43, y, { car: "Q", empty: "l", pillar: "B", gaps: [32, 40], every: 4, phase: 2, rnd: 0.2 });
+	carRow(12, 25, y, { car: "Q", empty: "l", pillar: "B", gaps: [14, 22], every: 4, phase: 2, rnd: 0.2, wall: y === 9 });
+	carRow(29, 43, y, { car: "Q", empty: "l", pillar: "B", gaps: [32, 40], every: 4, phase: 2, rnd: 0.2, wall: y === 9 });
 }
 // 남쪽 벽면 주차(램프·비상계단 앞은 비운다)
 carRow(11, 26, 12, { car: "Q", empty: "l", pillar: "B", every: 5, phase: 3, rnd: 0.3 });
@@ -70,15 +72,15 @@ fill(1, 14, 45, 27, "p");
 fill(24, 14, 24, 27, "#");
 set(24, 15, "p"); set(24, 20, "p"); set(24, 21, "p"); set(24, 26, "p"); // (구덩이 높이라 아치 대신 뚫린 틈)
 for (const y of [17, 18]) {
-	carRow(3, 22, y, { car: "K", empty: "y", pillar: "X", gaps: [9, 16], every: 4, phase: 1, rnd: 0.2 });
-	carRow(26, 43, y, { car: "K", empty: "y", pillar: "X", gaps: [31, 38], every: 4, phase: 1, rnd: 0.2 });
+	carRow(3, 22, y, { car: "K", empty: "y", pillar: "X", gaps: [9, 16], every: 4, phase: 1, rnd: 0.2, wall: y === 17 });
+	carRow(26, 43, y, { car: "K", empty: "y", pillar: "X", gaps: [31, 38], every: 4, phase: 1, rnd: 0.2, wall: y === 17 });
 }
 for (const y of [22, 23]) {
-	carRow(3, 22, y, { car: "K", empty: "y", pillar: "X", gaps: [6, 13, 19], every: 4, phase: 3, rnd: 0.2 });
-	carRow(26, 43, y, { car: "K", empty: "y", pillar: "X", gaps: [29, 35, 41], every: 4, phase: 3, rnd: 0.2 });
+	carRow(3, 22, y, { car: "K", empty: "y", pillar: "X", gaps: [6, 13, 19], every: 4, phase: 3, rnd: 0.2, wall: y === 23 });
+	carRow(26, 43, y, { car: "K", empty: "y", pillar: "X", gaps: [29, 35, 41], every: 4, phase: 3, rnd: 0.2, wall: y === 23 });
 }
 // 벽면 주차(동쪽 램프 착지점은 비운다)
-carRow(2, 22, 27, { car: "K", empty: "y", pillar: "X", gaps: [2, 3, 4, 8], every: 5, phase: 0, rnd: 0.3 });
+carRow(2, 22, 27, { car: "K", empty: "y", pillar: "X", gaps: [2, 3, 4, 12], every: 5, phase: 0, rnd: 0.3 });
 carRow(26, 44, 27, { car: "K", empty: "y", pillar: "X", every: 5, phase: 2, rnd: 0.3 });
 carRow(2, 22, 14, { car: "K", empty: "y", pillar: "X", every: 5, phase: 4, rnd: 0.3 });
 // 좁은 배관 통로(지하 2층 서쪽 끝, 벽 사이 한 칸 폭)
@@ -87,7 +89,7 @@ fill(2, 15, 2, 25, "#");
 set(2, 26, "p");
 // 램프(서쪽, 위로) + 비상계단
 for (const x of [2, 3, 4]) set(x, 28, "s");
-set(8, 28, "s");
+set(12, 28, "s"); // 비상계단: 하역장으로 바로 올라온다(램프와 다른 갈래)
 
 // ══ 지하 1층 남쪽 (y 29..41) ══
 // 램프 착지 통로
@@ -109,8 +111,8 @@ fill(12, 29, 26, 41, ".");
 set(11, 29, "A"); set(11, 30, "#"); // 램프 착지 → 하역장 (아치는 한 칸)
 for (const x of [14, 17, 20, 23]) set(x, 41, "x"); // 셔터(남쪽 벽)
 set(13, 34, "c"); set(13, 37, "c"); set(26, 33, "c"); set(26, 38, "c");
-fill(17, 34, 21, 34, "c"); fill(17, 36, 21, 36, "c");
-set(19, 34, "."); set(19, 36, ".");
+fill(17, 34, 21, 36, "#"); // 가운데 하역 플랫폼(콘크리트 단)
+set(16, 35, "c"); set(22, 35, "c");
 set(16, 30, "u"); set(24, 40, "u"); set(26, 35, "L"); set(12, 41, "Z");
 set(15, 29, "h");
 // 배관 통로 (하역장 동쪽, 한 칸 폭으로 꺾이며 정산 구역으로)
@@ -131,12 +133,16 @@ fill(41, 36, 44, 36, "."); set(45, 36, "E"); set(43, 36, "g");
 set(1, 4, "L"); set(26, 29, "L"); set(16, 41, "Z");
 set(36, 41, "Z"); set(45, 30, "h"); set(44, 40, "Q"); set(42, 40, "Q"); set(35, 34, "u");
 // 남쪽 구역 기둥
-for (const [x, y] of [[15, 32], [23, 32], [15, 38], [23, 38], [43, 32], [38, 38]]) set(x, y, "B");
+for (const [x, y] of [[43, 32], [38, 38]]) set(x, y, "B");
+for (const [x, y] of [[15, 32], [23, 32], [15, 38], [23, 38]]) set(x, y, "#"); // 하역장 벽 기둥
 
 // ── 출력 ──
 const rows = g.map((row) => row.join(""));
 const file = path.join(__dirname, "..", "src", "server", "Stages", "Stage9.luau");
 const src = fs.readFileSync(file, "utf8");
 const out = src.replace(/Rows = \{[\s\S]*?\n\t\},/, "Rows = {\n" + rows.map((x) => `\t\t"${x}",`).join("\n") + "\n\t},");
-fs.writeFileSync(file, out);
 console.log(rows.join("\n"));
+const { analyze } = require("./places/lib");
+const a = analyze(rows, [], { pits: ["K", "X", "y"], walkable: ["l", "y", "u", "h", "e", "x", "g"] });
+console.log(`지하 주차장: 출구까지 ${a.exit} 칸 | 꼭 지나는 칸 ${a.choke} | 가장 넓은 정사각형 ${a.maxSquare} (${a.maxSquareAt}) | 막다른 칸 ${a.deadEnds}${a.unreachable.length ? " | 못 가는 칸 " + a.unreachable.slice(0, 10).join(" ") : ""}`);
+if (!process.argv.includes("--dry")) fs.writeFileSync(file, out);

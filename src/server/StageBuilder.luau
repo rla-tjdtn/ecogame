@@ -7,6 +7,10 @@
 --   D  문(복도를 가로지르는 벽 + 문)   A  아치 리브       O  기둥
 --   c  상자 더미      m  기계 설비     v  수직 배관 묶음  f  천장 환풍기
 --   p  구덩이(아래층) b  구덩이 위 철제 다리             s  계단(구덩이 ↔ 위층)
+--   1  2층 계단 아래 칸(바닥 0 → 6)   2  2층 계단 위 칸(6 → 12). 1 은 1층 칸, 2 는 2층 칸과 맞닿는다.
+-- 2층: layout.UpperRects 의 직사각형(타일 좌표 {i0, j0, i1, j1}) 안 칸은 바닥이 y=12(UP)이고 천장이 y=26.
+--   2층 칸은 1층 칸 위에 겹쳐 쌓지 않고 같은 격자의 다른 구역에 높게 짓는다(벽으로 막혀 있으니 음파로는 구별되지 않는다).
+--   center(i, j) 의 y 가 그 칸의 바닥 기준 높이라서, 소품 함수는 floorY·H 를 그대로 상대 높이로 쓰면 된다.
 -- 스테이지별 추가 타일은 레이아웃 모듈의 Props 함수로 짓는다(같은 ctx 를 받는다).
 
 local CollectionService = game:GetService("CollectionService")
@@ -23,9 +27,11 @@ local T = 8
 local H = 14
 local PIT_Y = -6
 local BOTTOM = -10
+local UP = 12 -- 2층 바닥 높이
 Builder.Tile = T
 Builder.Height = H
 Builder.PitY = PIT_Y
+Builder.Up = UP
 
 export type Layout = {
 	Rows: { string },
@@ -36,6 +42,7 @@ export type Layout = {
 	HideStyle: string?,
 	SearchStyle: string?, -- 상자·서랍(Z) 모양: drawers / crate / toolbox / nightstand / chest (Search.Styles) -- 숨는 곳(L) 모양: locker / tool / rusty / wardrobe / closet (Hiding.Styles)
 	Seed: number?,
+	UpperRects: { { number } }?, -- 2층 구역(타일 좌표 {i0, j0, i1, j1})
 }
 
 export type StageInfo = {
@@ -90,10 +97,39 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 	local function floorY(i: number, j: number): number
 		return if isPit(i, j) then PIT_Y else 0
 	end
-	-- 타일 (i, j) 의 가운데(바닥 높이 0 기준 x,z). i = 열(x), j = 행(z)
-	local function center(i: number, j: number): Vector3
-		return Vector3.new((i - 1) * T + T / 2, 0, (j - 1) * T + T / 2)
+	-- 2층 구역
+	local upperSet: { [number]: boolean } = {}
+	local hasUpper = false
+	for _, r in layout.UpperRects or {} do
+		for j = r[2], r[4] do
+			for i = r[1], r[3] do
+				upperSet[j * 1000 + i] = true
+				hasUpper = true
+			end
+		end
 	end
+	local function isFlight(i: number, j: number): boolean
+		local c = at(i, j)
+		return c == "1" or c == "2"
+	end
+	-- 이 칸의 바닥 기준 높이(1층 0, 계단 위 칸 6, 2층 12)
+	local function base(i: number, j: number): number
+		local c = at(i, j)
+		if c == "1" then
+			return 0
+		elseif c == "2" then
+			return UP / 2
+		end
+		return if upperSet[j * 1000 + i] then UP else 0
+	end
+	local function isUpper(i: number, j: number): boolean
+		return upperSet[j * 1000 + i] == true and not isFlight(i, j)
+	end
+	-- 타일 (i, j) 의 가운데(x,z, y = 그 칸의 바닥 기준 높이). i = 열(x), j = 행(z)
+	local function center(i: number, j: number): Vector3
+		return Vector3.new((i - 1) * T + T / 2, base(i, j), (j - 1) * T + T / 2)
+	end
+	local TOP = if hasUpper then UP + H else H
 
 	local folder = Instance.new("Folder")
 	folder.Name = name
@@ -147,15 +183,28 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 
 	-- 벽 덩어리, 위층 바닥(벽 아래 포함), 아래층 바닥, 천장
 	for _, r in merge(function(i, j) return isWall(i, j) end) do
-		rectSpan(r, 0, H, { name = "Wall" })
+		rectSpan(r, 0, TOP, { name = "Wall" })
 	end
-	for _, r in merge(function(i, j) return not isPit(i, j) end) do
+	for _, top in { 0, UP / 2, UP } do
+		for _, r in merge(function(i, j) return not isPit(i, j) and not isWall(i, j) and base(i, j) == top end) do
+			rectSpan(r, BOTTOM, top, { name = if top == UP then "UpperFloor" else "Floor" })
+		end
+	end
+	for _, r in merge(function(i, j) return isWall(i, j) end) do
 		rectSpan(r, BOTTOM, 0, { name = "Floor" })
 	end
 	for _, r in merge(function(i, j) return isPit(i, j) end) do
 		rectSpan(r, BOTTOM, PIT_Y, { name = "PitFloor" })
 	end
-	Kit.span(geo, Vector3.new(0, H, 0), Vector3.new(nx * T, H + 2, nz * T), { name = "Ceiling" })
+	if hasUpper then
+		-- 1층 천장(1층·구덩이 칸 위만) + 맨 위 천장(2층과 계단실 위)
+		for _, r in merge(function(i, j) return not isWall(i, j) and not isFlight(i, j) and not isUpper(i, j) end) do
+			rectSpan(r, H, H + 2, { name = "Ceiling" })
+		end
+		Kit.span(geo, Vector3.new(0, TOP, 0), Vector3.new(nx * T, TOP + 2, nz * T), { name = "Ceiling" })
+	else
+		Kit.span(geo, Vector3.new(0, H, 0), Vector3.new(nx * T, H + 2, nz * T), { name = "Ceiling" })
+	end
 
 	local dirs = {
 		{ di = 1, dj = 0, v = Vector3.new(1, 0, 0) },
@@ -170,12 +219,12 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 		exitCFrame = CFrame.new(),
 		exitSize = Vector3.new(6, 8, 6),
 		nodes = {},
-		bounds = { min = Vector3.new(0, BOTTOM, 0), max = Vector3.new(nx * T, H + 2, nz * T) },
+		bounds = { min = Vector3.new(0, BOTTOM, 0), max = Vector3.new(nx * T, TOP + 2, nz * T) },
 		route = nil,
 	}
 
 	-- ── 타일 경로(tools/check-layout.js 와 같은 규칙: 구덩이 = 아래층, 다리 = 위층, 계단 = 둘 다) ──
-	local passable: { [string]: boolean } = { ["."] = true, S = true, E = true, D = true, A = true, f = true, P = true, s = true }
+	local passable: { [string]: boolean } = { ["."] = true, S = true, E = true, D = true, A = true, f = true, P = true, s = true, ["1"] = true, ["2"] = true }
 	for k in pitSet do
 		passable[k] = true
 	end
@@ -193,8 +242,18 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 		end
 		return { 0 }
 	end
-	local function hasLevel(c: string, l: number): boolean
-		for _, x in levels(c) do
+	-- 층 번호: 0 = 1층, 1 = 구덩이(아래층), 2 = 2층. 계단 1 칸은 1층, 2 칸은 2층으로 치고 둘 사이를 건너면 층이 바뀐다
+	local function levelsAt(i: number, j: number): { number }
+		local c = at(i, j)
+		if c == "1" then
+			return { 0 }
+		elseif c == "2" or upperSet[j * 1000 + i] then
+			return { 2 }
+		end
+		return levels(c)
+	end
+	local function hasLevel(i: number, j: number, l: number): boolean
+		for _, x in levelsAt(i, j) do
 			if x == l then
 				return true
 			end
@@ -204,10 +263,9 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 	info.route = function(from: Vector3, to: Vector3, monster: boolean?): { Vector3 }?
 		local function tileOf(p: Vector3): (number, number, number)
 			local i, j = math.floor(p.X / T) + 1, math.floor(p.Z / T) + 1
-			local c = at(i, j)
-			local l = if p.Y < PIT_Y / 2 then 1 else 0
-			if not hasLevel(c, l) then
-				l = levels(c)[1]
+			local l = if p.Y < PIT_Y / 2 then 1 elseif p.Y > UP - 4 then 2 else 0
+			if not hasLevel(i, j, l) then
+				l = levelsAt(i, j)[1]
 			end
 			return i, j, l
 		end
@@ -239,14 +297,20 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 					table.insert(q, { i, j, 1 - l })
 				end
 			end
+			local here_c = at(i, j)
 			for _, d in dirs do
 				local ni, nj = i + d.di, j + d.dj
 				local c = at(ni, nj)
-				if passable[c] and not (monster and c == "n") and hasLevel(c, l) then
-					local nk = k(ni, nj, l)
+				local nl = l
+				-- 계단 아래 칸(1) ↔ 위 칸(2): 층이 바뀐다
+				if (here_c == "1" and c == "2") or (here_c == "2" and c == "1") then
+					nl = levelsAt(ni, nj)[1]
+				end
+				if passable[c] and not (monster and c == "n") and hasLevel(ni, nj, nl) then
+					local nk = k(ni, nj, nl)
 					if prev[nk] == nil then
 						prev[nk] = here
-						table.insert(q, { ni, nj, l })
+						table.insert(q, { ni, nj, nl })
 					end
 				end
 			end
@@ -263,6 +327,8 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 			local y = if l == 1 then PIT_Y else 0
 			if at(i, j) == "s" then
 				y = PIT_Y / 2
+			elseif isFlight(i, j) then
+				y = UP / 4 -- (계단 칸 가운데 높이: center 의 y 가 그 칸 아래 끝)
 			end
 			table.insert(out, 1, center(i, j) + Vector3.new(0, y + 0.5, 0))
 			cur = prev[cur]
@@ -315,7 +381,7 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 	for j = 1, nz do
 		for i = 1, nx do
 			local ch = at(i, j)
-			if ch ~= "#" then
+			if ch ~= "#" and not isFlight(i, j) then
 				local fy = floorY(i, j)
 				local c = center(i, j)
 				for _, d in wallSides(i, j) do
@@ -569,6 +635,24 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 						local b = a + up.v * T + Vector3.new(0, -PIT_Y, 0)
 						Kit.railing(props, a, b, 3.3, 2.7)
 					end
+				end
+			end
+			if ch == "1" or ch == "2" then
+				-- 2층 계단: 1 칸은 2 칸 쪽으로, 2 칸은 2층 칸 쪽으로 올라간다(칸마다 6스터드)
+				local up = dirs[1]
+				for _, d in dirs do
+					local ni, nj = i + d.di, j + d.dj
+					if (ch == "1" and at(ni, nj) == "2") or (ch == "2" and isUpper(ni, nj) and not isWall(ni, nj)) then
+						up = d
+					end
+				end
+				local bottom = c - up.v * (T / 2)
+				Kit.stairs(props, bottom, up.v, 6, UP / 2, T, 8)
+				-- 벽 쪽 손잡이(양옆)
+				local across = Vector3.new(up.v.Z, 0, -up.v.X)
+				for _, s in { -1, 1 } do
+					local a = bottom + across * s * 3.4
+					Kit.railing(props, a, a + up.v * T + Vector3.new(0, UP / 2, 0), 3.3, 2.7)
 				end
 			end
 			local pf = layout.Props and layout.Props[ch]
