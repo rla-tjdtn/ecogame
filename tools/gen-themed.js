@@ -283,7 +283,96 @@ function hospital() {
 	return { file: "Stage4.luau", rows };
 }
 
-const GEN = { sewer, school, hospital };
+// ── 물류 창고: 아주 큰 보관동 3개(긴 선반 줄)가 위아래로 쌓이고, 오른쪽·왼쪽 끝 하역문으로 번갈아 이어진다.
+// 왼쪽 띠에 사무실·경비실·휴게실, 마지막 동 오른쪽은 컨테이너 하역장과 화물 출입구(출구) ──
+function warehouse() {
+	const W = 45, H = 41;
+	const g = grid(W, H);
+	const halls = [[1, 12], [14, 26], [28, 39]];
+	for (const [y0, y1] of halls) room(g, 8, y0, 42, y1);
+	// 하역문(넓은 틈): A→B 오른쪽, B→C 왼쪽
+	for (const x of [39, 40, 41]) g[13][x] = ".";
+	for (const x of [9, 10, 11]) g[27][x] = ".";
+	// 긴 선반 줄(H): 각 동에 2칸 간격, 양 끝과 가운데 한두 곳은 가로 통로
+	halls.forEach(([y0, y1], h) => {
+		const cross = h === 1 ? [21, 30] : [17, 26, 34];
+		for (let y = y0 + 2; y <= y1 - 2; y += 2) {
+			for (let x = 11; x <= 39; x++) {
+				if (cross.some((c) => Math.abs(c - x) <= 0) && ((y - y0) / 2 + h) % 2 === 0) continue;
+				if (cross.includes(x)) continue;
+				g[y][x] = "H";
+			}
+		}
+	});
+	// 마지막 동 오른쪽: 선반 대신 컨테이너 하역장
+	for (let y = 29; y <= 38; y++) for (let x = 33; x <= 42; x++) if (g[y][x] === "H") g[y][x] = ".";
+	for (const [x, y, ch] of [[34, 30, "K"], [35, 30, "K"], [38, 30, "Q"], [39, 30, "Q"], [34, 33, "Q"], [35, 33, "Q"], [38, 36, "K"], [39, 36, "K"], [34, 37, "K"], [35, 37, "K"], [41, 29, "c"], [42, 29, "c"]]) g[y][x] = ch;
+	g[34][43] = "E";
+	// 동마다 벽 쪽 상자·공구 캐비닛
+	for (const [x, y, ch] of [[42, 1, "Z"], [8, 12, "Z"], [42, 12, "L"], [25, 1, "c"], [26, 1, "c"], [42, 14, "Z"], [8, 14, "L"], [8, 26, "c"], [42, 26, "Z"], [25, 26, "c"], [20, 39, "Z"], [8, 39, "L"], [42, 39, "L"], [28, 28, "c"], [29, 28, "c"]]) g[y][x] = ch;
+	// 왼쪽 띠: 경비실(시작) · 사무실 · 탈의실 · 휴게실 · 자재실 · 관리실 — 각자 옆 동으로 문 하나
+	const offices = [[1, 5, "start"], [7, 11, "office"], [15, 19, "locker"], [21, 25, "break"], [29, 33, "stock"], [35, 39, "office"]];
+	for (const [y0, y1, kind] of offices) {
+		room(g, 1, y0, 6, y1);
+		g[y0 + 2][7] = "D";
+		if (kind === "start") { g[1][1] = "S"; g[1][2] = "S"; g[2][1] = "S"; g[2][2] = "S"; g[5][6] = "Z"; g[5][1] = "T"; }
+		if (kind === "office") { g[y0 + 1][2] = "T"; g[y0 + 1][4] = "T"; g[y0][1] = "Z"; g[y1][1] = "L"; }
+		if (kind === "locker") { for (const x of [1, 3, 5]) g[y0][x] = "L"; g[y1][1] = "Z"; }
+		if (kind === "break") { g[y0 + 2][3] = "T"; g[y0][1] = "c"; g[y1][6] = "Z"; }
+		if (kind === "stock") { g[y0][1] = "c"; g[y0][2] = "c"; g[y1][1] = "c"; g[y1][6] = "Z"; g[y0][6] = "L"; }
+	}
+	return { file: "Stage2.luau", rows: g.map((r) => r.join("")) };
+}
+
+function hotel() {
+	const W = 45, H = 43;
+	fill.guest = (g, s, x0, x1) => {
+		g[rowOf(s, 0)][x0 + 2] = "R"; // 침대(머리를 창가 벽에)
+		g[rowOf(s, 1)][x0] = "L"; // 옷장
+		g[rowOf(s, 0)][x1] = "Z"; // 서랍장
+	};
+	fill.linen = (g, s, x0, x1) => { g[rowOf(s, 0)][x0] = "c"; g[rowOf(s, 0)][x0 + 1] = "c"; g[rowOf(s, 0)][x1] = "L"; g[rowOf(s, 2)][x1] = "Z"; };
+	const rows = building(W, H, (g, slots, corr) => {
+		const S = (k, side) => slots.find((s) => s.k === k && s.side === side);
+		const guests = (n) => Array.from({ length: n }, () => [5, "guest", [2]]);
+		// 시작 = 2층 직원 사무실
+		const a = S(0, "up");
+		cut(g, a, 1, 5, [2]);
+		g[a.y0][1] = "S"; g[a.y0][2] = "S"; g[a.y0 + 1][1] = "S"; g[a.y0 + 1][2] = "S"; g[a.y0][5] = "Z";
+		lay(g, { ...a, xs: 7 }, [...guests(6), [4, "linen", [1]]]);
+		lay(g, { ...S(0, "down"), xe: 35 }, guests(6));
+		lay(g, { ...S(0, "down"), xs: 39 }, [[2, "linen", [0]]]);
+		lay(g, { ...S(1, "up"), xe: 35 }, [[4, "linen", [1]], ...guests(5)]);
+		lay(g, { ...S(1, "up"), xs: 39 }, [[2, "linen", [0]]]);
+		lay(g, S(1, "down"), [...guests(6), [5, "linen", [2]]]);
+		// 3동(1층): 연회장(기둥·원탁) · 주방 / 아래: 세탁실 · 프런트 로비(출구 쪽)
+		const c = S(2, "up");
+		cut(g, c, 4, 22, [3, 9, 15]);
+		for (const x of [7, 12, 17]) { g[c.y0 + 1][x] = "T"; }
+		for (const x of [5, 21]) g[c.y0][x] = "O";
+		g[c.y0][13] = "Z"; g[c.y0 + 3][22] = "L";
+		cut(g, c, 24, 31, [2]);
+		g[c.y0][24] = "m"; g[c.y0][25] = "m"; g[c.y0][27] = "m"; g[c.y0 + 2][28] = "T"; g[c.y0][31] = "Z"; g[c.y0 + 3][31] = "c";
+		lay(g, { ...c, xs: 33 }, guests(2));
+		const d = S(2, "down");
+		cut(g, d, 1, 9, [3, 7]);
+		for (const x of [2, 4, 6]) g[d.y1][x] = "m";
+		g[d.y0][1] = "c"; g[d.y0][2] = "c"; g[d.y1][9] = "Z"; g[d.y0][9] = "L";
+		lay(g, { ...d, xs: 11 }, guests(3));
+		cut(g, d, 28, W - 5, [3, 9]);
+		for (const x of [30, 34, 38]) g[d.y0 + 2][x] = "O";
+		for (const x of [31, 32, 33]) g[d.y1][x] = "k"; // 프런트 데스크
+		g[d.y1][W - 5] = "Z"; g[d.y1][28] = "L";
+		// 엘리베이터 홀: 각 동 복도 가운데 벽의 기둥 쌍
+		for (let k = 0; k < 3; k++) { const y = corr(k)[1]; for (const x of [20, 24]) if (g[y + 1][x] === "#") g[y][x] = "O"; }
+		// 비상계단(지름길): 1동 오른쪽에서 2동으로
+		for (let y = corr(0)[1] + 1; y < corr(1)[0]; y++) { g[y][37] = "."; g[y][38] = "."; }
+	});
+	delete fill.guest; delete fill.linen;
+	return { file: "Stage6.luau", rows };
+}
+
+const GEN = { sewer, school, hospital, warehouse, hotel };
 const which = process.argv[2];
 if (!GEN[which]) {
 	console.log("usage: node tools/gen-themed.js <" + Object.keys(GEN).join("|") + "> [--dry]");
