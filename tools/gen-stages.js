@@ -1,4 +1,4 @@
-﻿// Generates the six stage layouts (src/server/Stages/StageN.luau "Rows") from per-chapter themes:
+﻿// Generates the seven stage layouts (src/server/Stages/StageN.luau "Rows") from per-chapter themes:
 // rooms of several kinds + winding corridors/tunnels between them (rooms-and-mazes), doors/arches on the
 // openings, pits / water channels crossed by bridges with stairs down, and chapter props. The exit is put
 // where the shortest walk from the start is about TARGET tiles (1 tile = 8 studs; 150 tiles ≈ 2 min walking).
@@ -176,6 +176,23 @@ const THEMES = {
 			{ name: "boiler", w: [9, 11], h: [7, 7], count: 1, band: { rows: 3, bridge: () => "b" }, weight: 0 },
 		],
 		rooms: 34,
+	},
+	7: {
+		file: "Stage7.luau", W: 47, H: 43, seed: 7900, hides: 13, hidePrefer: ["classroom", "lab", "office"], searches: 10, searchPrefer: ["classroom", "office", "library"],
+		start: [5, 5], winding: 0.08, extra: 0.1, keepDead: 0.25, door: 0.8,
+		halls: [[1, 11, 31, 1], [15, 21, 31, 1], [1, 31, 29, 1], [35, 1, 1, 19]], arch: 0.05, corrArch: 0.0, corrDoor: 0.02, fans: 0.0,
+		pits: "p",
+		kinds: [
+			{ name: "classroom", w: [5, 7], h: [5, 5], weight: 5, decorate: (rm, pl, r) => { for (let y = rm.y + 2; y < rm.y + rm.h - 2; y += 2) for (let x = rm.x + 2; x < rm.x + rm.w - 2; x += 2) if (r() < 0.85) pl(x, y, "T"); } },
+			{ name: "office", w: [5, 7], h: [3, 5], weight: 0, count: 1, decorate: (rm, pl, r) => { for (let x = rm.x + 2; x < rm.x + rm.w - 2; x += 2) pl(x, rm.y + Math.floor(rm.h / 2), "T"); } },
+			{ name: "library", w: [9, 11], h: [5, 7], weight: 0, count: 1, decorate: (rm, pl, r) => { for (let y = rm.y + 2; y < rm.y + rm.h - 2; y += 2) for (let x = rm.x + 2; x < rm.x + rm.w - 2; x++) if (x !== rm.x + Math.floor(rm.w / 2) && r() < 0.9) pl(x, y, "k"); } },
+			{ name: "cafeteria", w: [9, 11], h: [5, 7], weight: 0, count: 1, decorate: (rm, pl, r) => { for (let y = rm.y + 2; y < rm.y + rm.h - 2; y += 2) for (let x = rm.x + 2; x < rm.x + rm.w - 2; x += 3) if (r() < 0.85) pl(x, y, "T"); } },
+			{ name: "gym", w: [11, 13], h: [7, 9], weight: 0, count: 1, decorate: (rm, pl, r) => { deco.corners(rm, pl, r, "O"); } },
+			{ name: "lab", w: [5, 7], h: [3, 5], weight: 0, count: 1, decorate: (rm, pl, r) => { for (let x = rm.x + 2; x < rm.x + rm.w - 2; x += 2) pl(x, rm.y + Math.floor(rm.h / 2), "T");  } },
+			{ name: "boiler", w: [9, 11], h: [7, 7], count: 1, band: { rows: 3, bridge: () => "b" }, weight: 0 },
+			{ name: "restroom", w: [3, 3], h: [3, 3], weight: 1, decorate: (rm, pl, r) => {  } },
+		],
+		rooms: 36,
 	},
 };
 
@@ -548,7 +565,7 @@ function writeRows(file, rows) {
 const args = process.argv.slice(2);
 const dry = args.includes("--dry");
 const only = args.filter((a) => /^\d$/.test(a)).map(Number);
-for (const id of only.length ? only : [1, 2, 3, 4, 5, 6]) {
+for (const id of only.length ? only : [1, 2, 3, 4, 5, 6, 7]) {
 	const theme = THEMES[id];
 	let res = null, tries = 0, lastFail = null;
 	for (let s = theme.seed; s < theme.seed + 3000 && !res; s++) {
