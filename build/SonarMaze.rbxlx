@@ -11292,7 +11292,7 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 			tr.acc = 0
 			Audio.footstep("FootWalk", root, 0)
 		end
-	elseif isMonster and model:GetAttribute("Rig") == 2 then
+	elseif isMonster and (model:GetAttribute("Rig") == 2 or model:GetAttribute("Rig") == 3) then
 		-- 전신 뼈대 괴물: 발이 실제로 땅에 닿는 순간 MonsterAnim 이 Audio.monsterFoot 을 부른다
 		tr.acc = 0
 	elseif isMonster then
@@ -11528,6 +11528,182 @@ return Audio
       </Item>
       <Item class="ModuleScript" referent="52">
         <Properties>
+          <string name="Name">CreatureAnim</string>
+          <string name="Source"><![CDATA[--!strict
+-- 챕터 괴물(Rig = 3) 전용 애니메이션 구동기. 괴물마다 뼈 구조와 이동 방식이 달라서,
+-- 모델 속성 Creature(예 "c1h")에 맞는 모듈 Creatures/<id>.luau 의 step(body, dt) 이 뼈(Motor6D)를 직접 움직인다.
+-- 공용 두 팔·두 다리 MonsterAnim(Rig = 2)과는 따로 돈다.
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local CreatureAnim = {}
+CreatureAnim.range = 170
+CreatureAnim.onStep = nil :: ((Model, Vector3, number) -> ())?
+CreatureAnim.stats = {} :: { [string]: { frames: number, steps: number, maxAngle: number } }
+
+export type Body = {
+	model: Model,
+	root: BasePart,
+	id: string,
+	m: { [string]: Motor6D }, -- 뼈 이름 → 모터
+	rest: { [string]: CFrame }, -- 모터 C0(쉬는 자세)
+	tip: { [string]: Vector3 }, -- 뼈 길이 벡터(Tip 속성)
+	t: number, -- 누적 시간
+	phase: number, -- 보행 위상(괴물 모듈이 쓴다)
+	speed: number, -- 수평 속도(부드럽게)
+	vel: Vector3, -- 루트 기준 속도(부드럽게)
+	state: string,
+	data: { [string]: any }, -- 괴물 모듈 마음대로
+	step: (at: Vector3, hit: number) -> (), -- 착지 소리
+}
+
+local mods: { [string]: any } = {}
+local function modFor(id: string): any
+	if mods[id] == nil then
+		local folder = script.Parent:FindFirstChild("Creatures")
+		local ms = folder and folder:FindFirstChild(id)
+		mods[id] = if ms and ms:IsA("ModuleScript") then require(ms) :: any else false
+	end
+	return mods[id] or nil
+end
+
+local bodies: { [Model]: Body } = {}
+local function build(model: Model, id: string): Body?
+	local root = model.PrimaryPart
+	if not root then
+		return nil
+	end
+	local m: { [string]: Motor6D } = {}
+	local rest: { [string]: CFrame } = {}
+	local tip: { [string]: Vector3 } = {}
+	for _, d in model:GetDescendants() do
+		if d:IsA("Motor6D") and string.sub(d.Name, 1, 2) == "B_" then
+			local name = string.sub(d.Name, 3)
+			m[name] = d
+			rest[name] = d.C0
+			local t = d.Part1 and d.Part1:GetAttribute("Tip")
+			tip[name] = if typeof(t) == "Vector3" then t else Vector3.zero
+		end
+	end
+	local b: Body
+	b = {
+		model = model,
+		root = root,
+		id = id,
+		m = m,
+		rest = rest,
+		tip = tip,
+		t = math.random() * 10,
+		phase = math.random(),
+		speed = 0,
+		vel = Vector3.zero,
+		state = "Wander",
+		data = {},
+		step = function(at: Vector3, hit: number)
+			local st = CreatureAnim.stats[id]
+			if st then
+				st.steps += 1
+			end
+			if CreatureAnim.onStep then
+				CreatureAnim.onStep(model, at, hit)
+			end
+		end,
+	}
+	CreatureAnim.stats[id] = CreatureAnim.stats[id] or { frames = 0, steps = 0, maxAngle = 0 }
+	return b
+end
+
+-- 공용 도구 ------------------------------------------------------------
+-- 뼈 하나를 쉬는 자세 기준으로 회전(라디안, 뼈 로컬 축 X=끄덕, Y=좌우, Z=기울기)
+function CreatureAnim.pose(b: Body, name: string, rx: number, ry: number, rz: number, offset: Vector3?)
+	local mo = b.m[name]
+	if not mo then
+		return
+	end
+	mo.Transform = (if offset then CFrame.new(offset) else CFrame.identity) * CFrame.fromEulerAnglesYXZ(rx, ry, rz)
+	local st = CreatureAnim.stats[b.id]
+	if st then
+		st.maxAngle = math.max(st.maxAngle, math.abs(rx), math.abs(ry), math.abs(rz))
+	end
+end
+-- 0~1 위상에서 부드러운 파형
+function CreatureAnim.wave(p: number): number
+	return math.sin(p * math.pi * 2)
+end
+-- 발 들기 곡선(0~1 → 0 → 1 → 0, duty 비율만큼만 들림)
+function CreatureAnim.lift(p: number, duty: number): number
+	local q = (p % 1) / duty
+	return if q < 1 then math.sin(q * math.pi) else 0
+end
+function CreatureAnim.approach(cur: number, target: number, rate: number, dt: number): number
+	return cur + (target - cur) * (1 - math.exp(-rate * dt))
+end
+
+RunService.RenderStepped:Connect(function(dt)
+	dt = math.min(dt, 1 / 20)
+	local cam = workspace.CurrentCamera
+	local camPos = cam and cam.CFrame.Position or Vector3.zero
+	for _, inst in CollectionService:GetTagged(Config.Tags.Monster) do
+		local model = inst :: Model
+		if model:IsA("Model") and model.Parent and model:GetAttribute("Rig") == 3 then
+			local id = model:GetAttribute("Creature")
+			local root = model.PrimaryPart
+			if typeof(id) == "string" and root and (root.Position - camPos).Magnitude < CreatureAnim.range then
+				local mod = modFor(id)
+				if mod then
+					local b = bodies[model]
+					if not b or b.root ~= root then
+						b = build(model, id)
+						if b then
+							bodies[model] = b
+							if mod.init then
+								mod.init(b)
+							end
+						end
+					end
+					if b then
+						local v = root.AssemblyLinearVelocity
+						local flat = Vector3.new(v.X, 0, v.Z)
+						b.speed = CreatureAnim.approach(b.speed, flat.Magnitude, 8, dt)
+						b.vel = b.vel:Lerp(root.CFrame:VectorToObjectSpace(flat), math.min(1, dt * 8))
+						b.state = (model:GetAttribute("State") :: string?) or "Wander"
+						b.t += dt
+						mod.step(b, dt)
+						local st = CreatureAnim.stats[id]
+						if st then
+							st.frames += 1
+						end
+					end
+				end
+			end
+		end
+	end
+	for model in bodies do
+		if not model.Parent then
+			bodies[model] = nil
+		end
+	end
+end)
+
+function CreatureAnim.reset()
+	for _, st in CreatureAnim.stats do
+		st.frames, st.steps, st.maxAngle = 0, 0, 0
+	end
+end
+
+return CreatureAnim
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Folder" referent="53">
+        <Properties>
+          <string name="Name">Creatures</string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="54">
+        <Properties>
           <string name="Name">DoppelFx</string>
           <string name="Source"><![CDATA[--!strict
 -- 도플갱어 연출(클라이언트):
@@ -11734,7 +11910,7 @@ return DoppelFx
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="53">
+      <Item class="ModuleScript" referent="55">
         <Properties>
           <string name="Name">JumpScare</string>
           <string name="Source"><![CDATA[--!strict
@@ -12059,7 +12235,7 @@ return JumpScare
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="54">
+      <Item class="ModuleScript" referent="56">
         <Properties>
           <string name="Name">KeyHUD</string>
           <string name="Source"><![CDATA[--!strict
@@ -12220,7 +12396,7 @@ return KeyHUD
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="55">
+      <Item class="ModuleScript" referent="57">
         <Properties>
           <string name="Name">LobbyUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -12527,7 +12703,7 @@ return LobbyUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="56">
+      <Item class="LocalScript" referent="58">
         <Properties>
           <string name="Name">Main</string>
           <string name="Source"><![CDATA[--!strict
@@ -12565,6 +12741,11 @@ local DoppelFx = require(script.Parent:WaitForChild("DoppelFx"))
 -- 괴물 전신 움직임(발 고정 IK·무게중심·관성). 발이 땅에 닿는 순간 발소리
 local MonsterAnim = require(script.Parent:WaitForChild("MonsterAnim"))
 MonsterAnim.onStep = function(model: Model, at: Vector3, hit: number)
+	Audio.monsterFoot(model, at, hit)
+end
+-- 챕터 괴물(괴물마다 다른 뼈대) 움직임
+local CreatureAnim = require(script.Parent:WaitForChild("CreatureAnim"))
+CreatureAnim.onStep = function(model: Model, at: Vector3, hit: number)
 	Audio.monsterFoot(model, at, hit)
 end
 local Reveal = require(script.Parent:WaitForChild("Reveal"))
@@ -13220,7 +13401,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="57">
+      <Item class="ModuleScript" referent="59">
         <Properties>
           <string name="Name">MapView</string>
           <string name="Source"><![CDATA[--!strict
@@ -13551,7 +13732,7 @@ return Map
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="58">
+      <Item class="ModuleScript" referent="60">
         <Properties>
           <string name="Name">Mates</string>
           <string name="Source"><![CDATA[--!strict
@@ -13641,7 +13822,7 @@ return Mates
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="59">
+      <Item class="ModuleScript" referent="61">
         <Properties>
           <string name="Name">MobileUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -13899,7 +14080,7 @@ return MobileUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="60">
+      <Item class="ModuleScript" referent="62">
         <Properties>
           <string name="Name">MonsterAnim</string>
           <string name="Source"><![CDATA[--!strict
@@ -14737,7 +14918,7 @@ return Anim
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="61">
+      <Item class="ModuleScript" referent="63">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
@@ -14839,7 +15020,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="62">
+      <Item class="LocalScript" referent="64">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -14847,7 +15028,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="63">
+      <Item class="ModuleScript" referent="65">
         <Properties>
           <string name="Name">Reveal</string>
           <string name="Source"><![CDATA[--!strict
@@ -15079,7 +15260,7 @@ return Reveal
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="64">
+      <Item class="ModuleScript" referent="66">
         <Properties>
           <string name="Name">SearchLook</string>
           <string name="Source"><![CDATA[--!strict
@@ -15171,7 +15352,7 @@ return SearchLook
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="65">
+      <Item class="ModuleScript" referent="67">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -15485,7 +15666,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="66">
+      <Item class="ModuleScript" referent="68">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -15980,7 +16161,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="67">
+      <Item class="ModuleScript" referent="69">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -16559,7 +16740,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="68">
+      <Item class="ModuleScript" referent="70">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -16772,7 +16953,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="69">
+  <Item class="Workspace" referent="71">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

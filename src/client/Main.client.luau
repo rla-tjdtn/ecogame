@@ -35,6 +35,11 @@ local MonsterAnim = require(script.Parent:WaitForChild("MonsterAnim"))
 MonsterAnim.onStep = function(model: Model, at: Vector3, hit: number)
 	Audio.monsterFoot(model, at, hit)
 end
+-- 챕터 괴물(괴물마다 다른 뼈대) 움직임
+local CreatureAnim = require(script.Parent:WaitForChild("CreatureAnim"))
+CreatureAnim.onStep = function(model: Model, at: Vector3, hit: number)
+	Audio.monsterFoot(model, at, hit)
+end
 local Reveal = require(script.Parent:WaitForChild("Reveal"))
 local MobileUI = require(script.Parent:WaitForChild("MobileUI"))
 Pulses.onReach = MapView.onReach

@@ -322,7 +322,7 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 			tr.acc = 0
 			Audio.footstep("FootWalk", root, 0)
 		end
-	elseif isMonster and model:GetAttribute("Rig") == 2 then
+	elseif isMonster and (model:GetAttribute("Rig") == 2 or model:GetAttribute("Rig") == 3) then
 		-- 전신 뼈대 괴물: 발이 실제로 땅에 닿는 순간 MonsterAnim 이 Audio.monsterFoot 을 부른다
 		tr.acc = 0
 	elseif isMonster then
