@@ -1,4 +1,4 @@
-﻿// Generates the five stage layouts (src/server/Stages/StageN.luau "Rows") from per-chapter themes:
+﻿// Generates the six stage layouts (src/server/Stages/StageN.luau "Rows") from per-chapter themes:
 // rooms of several kinds + winding corridors/tunnels between them (rooms-and-mazes), doors/arches on the
 // openings, pits / water channels crossed by bridges with stairs down, and chapter props. The exit is put
 // where the shortest walk from the start is about TARGET tiles (1 tile = 8 studs; 150 tiles ≈ 2 min walking).
@@ -161,6 +161,21 @@ const THEMES = {
 			{ name: "cell", w: [3, 3], h: [3, 3], weight: 3, decorate: (rm, pl, r) => { if (r() < 0.4) deco.pipeRun(rm, pl, r); deco.scatter(rm, pl, r, ["v", "m"], 1); } },
 		],
 		rooms: 10,
+	},
+	6: {
+		file: "Stage6.luau", W: 45, H: 43, seed: 6100, hides: 12, hidePrefer: ["guest", "kitchen", "laundry"], searches: 10, searchPrefer: ["guest", "lobby", "banquet"],
+		start: [5, 5], winding: 0.1, extra: 0.1, keepDead: 0.25, door: 0.75,
+		halls: [[1, 11, 29, 1], [13, 21, 29, 1], [1, 31, 27, 1], [33, 1, 1, 17]], arch: 0.08, corrArch: 0.0, corrDoor: 0.02, fans: 0.0,
+		pits: "p",
+		kinds: [
+			{ name: "guest", w: [3, 5], h: [3, 5], weight: 5, decorate: (rm, pl, r) => { deco.beds(rm, pl, r); deco.alongWalls(rm, pl, r, ["k"], 0.2); } },
+			{ name: "lobby", w: [9, 13], h: [5, 7], weight: 0, count: 1, decorate: (rm, pl, r) => { deco.pillars(rm, pl, r); deco.scatter(rm, pl, r, ["T"], 2); } },
+			{ name: "banquet", w: [9, 11], h: [5, 7], weight: 0, count: 1, decorate: (rm, pl, r) => { for (let y = rm.y + 1; y < rm.y + rm.h - 1; y += 2) for (let x = rm.x + 1; x < rm.x + rm.w - 1; x += 3) if (r() < 0.8) pl(x, y, "T"); } },
+			{ name: "kitchen", w: [5, 7], h: [3, 5], weight: 0, count: 1, decorate: (rm, pl, r) => { deco.alongWalls(rm, pl, r, ["m", "m", "c"], 0.45); } },
+			{ name: "laundry", w: [5, 5], h: [3, 5], weight: 0, count: 1, decorate: (rm, pl, r) => { deco.alongWalls(rm, pl, r, ["m", "c"], 0.4); } },
+			{ name: "boiler", w: [9, 11], h: [7, 7], count: 1, band: { rows: 3, bridge: () => "b" }, weight: 0 },
+		],
+		rooms: 34,
 	},
 };
 
@@ -533,7 +548,7 @@ function writeRows(file, rows) {
 const args = process.argv.slice(2);
 const dry = args.includes("--dry");
 const only = args.filter((a) => /^\d$/.test(a)).map(Number);
-for (const id of only.length ? only : [1, 2, 3, 4, 5]) {
+for (const id of only.length ? only : [1, 2, 3, 4, 5, 6]) {
 	const theme = THEMES[id];
 	let res = null, tries = 0, lastFail = null;
 	for (let s = theme.seed; s < theme.seed + 3000 && !res; s++) {

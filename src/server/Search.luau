@@ -60,6 +60,8 @@ local STYLES: { [string]: Style } = {
 	toolbox = { w = 3.4, h = 1.9, d = 2.0, kind = "lid", rows = 0, name = "공구함" }, -- 하수도
 	nightstand = { w = 2.6, h = 2.8, d = 2.2, kind = "drawers", rows = 2, name = "협탁" }, -- 병원
 	chest = { w = 3.6, h = 2.3, d = 2.4, kind = "lid", rows = 0, name = "궤짝" }, -- 심층 미로
+	dresser = { w = 3.8, h = 3.3, d = 2.4, kind = "drawers", rows = 3, name = "서랍장" }, -- 호텔: 객실 서랍장
+	safe = { w = 2.8, h = 2.6, d = 2.4, kind = "lid", rows = 0, name = "금고" }, -- 호텔: 객실 금고
 }
 Search.Styles = STYLES
 
