@@ -35,6 +35,7 @@ local STYLES: { [string]: Style } = {
 	wardrobe = { w = 5.6, d = 3.4, h = 8.0, doors = 2, louvers = true, legs = true, crown = true, tilt = 0 }, -- 병원: 병실 옷장
 	closet = { w = 4.8, d = 3.4, h = 8.6, doors = 1, louvers = false, legs = false, crown = true, tilt = 0 }, -- 심층 미로: 낡은 벽장
 	hotelcloset = { w = 5.0, d = 3.2, h = 8.2, doors = 2, louvers = false, legs = true, crown = true, tilt = 0 }, -- 호텔: 객실 옷장
+	cubby = { w = 4.4, d = 3.0, h = 6.6, doors = 2, louvers = false, legs = true, crown = false, tilt = 0.02 }, -- 폐유치원: 낮은 어린이 사물함(몸을 웅크려 들어간다)
 }
 Hiding.Styles = STYLES
 

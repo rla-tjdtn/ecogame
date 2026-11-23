@@ -240,4 +240,184 @@ function Props.Cabinet(ctx, i: number, j: number)
 	Kit.box(m, CFrame.lookAt(face + Vector3.new(0, 0.6, 0), face + Vector3.new(0, 0.6, 0) - side) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(0.08, 3.4, 0.1), { blocks = false, collide = false })
 end
 
+-- ── 폐유치원 ──
+-- 모든 것이 어른 눈높이보다 낮다(작은 놀이기구 옆에 숨은 괴물이 오히려 커 보이게).
+
+-- 미끄럼틀(U): 벽 쪽 사다리 + 작은 발판 + 방 안쪽으로 내려오는 미끄럼 판
+function Props.Slide(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j) or Vector3.new(0, 0, -1)
+	local across = Vector3.new(side.Z, 0, -side.X)
+	local top = 4.6
+	local deck = p + side * 1.6
+	local m = Instance.new("Model")
+	m.Name = "Slide"
+	m.Parent = ctx.props
+	-- 발판 + 네 기둥 + 난간
+	Kit.box(m, CFrame.lookAt(deck + Vector3.new(0, top, 0), deck + Vector3.new(0, top, 0) + side), Vector3.new(2.8, 0.25, 2.6), { blocks = false })
+	for _, a in { -1, 1 } do
+		for _, b in { -1, 1 } do
+			local c = deck + across * (a * 1.3) + side * (b * 1.2)
+			Kit.cylinder(m, c, c + Vector3.new(0, top + 2.2, 0), 0.12, { blocks = false })
+		end
+		local r0 = deck + across * (a * 1.3) + Vector3.new(0, top + 1.6, 0)
+		Kit.cylinder(m, r0 - side * 1.2, r0 + side * 1.2, 0.07, { blocks = false, collide = false })
+	end
+	-- 작은 삼각 지붕
+	for _, a in { -1, 1 } do
+		local c = deck + across * (a * 0.75) + Vector3.new(0, top + 2.65, 0)
+		Kit.box(m, CFrame.lookAt(c, c + side) * CFrame.Angles(0, 0, a * 0.55), Vector3.new(1.75, 0.15, 2.8), { blocks = false, collide = false })
+	end
+	-- 사다리(벽 쪽)
+	local lad = deck + side * 1.25
+	for _, a in { -1, 1 } do
+		local c = lad + across * (a * 0.8)
+		Kit.cylinder(m, c, c + Vector3.new(0, top, 0), 0.08, { blocks = false })
+	end
+	for k = 1, 4 do
+		local c = lad + Vector3.new(0, k * top / 5, 0)
+		Kit.cylinder(m, c - across * 0.8, c + across * 0.8, 0.06, { blocks = false, collide = false })
+	end
+	-- 미끄럼 판(방 안쪽으로 비스듬히) + 양옆 턱
+	local a0 = deck - side * 1.3 + Vector3.new(0, top, 0)
+	local a1 = p - side * 3.6 + Vector3.new(0, 0.6, 0)
+	local mid = (a0 + a1) / 2
+	local len = (a1 - a0).Magnitude
+	local cf = CFrame.lookAt(mid, a1)
+	Kit.box(m, cf, Vector3.new(1.8, 0.15, len), { blocks = false })
+	for _, a in { -1, 1 } do
+		Kit.box(m, cf * CFrame.new(a * 0.95, 0.3, 0), Vector3.new(0.12, 0.6, len), { blocks = false, collide = false })
+	end
+	Kit.box(m, CFrame.lookAt(p + Vector3.new(0, 2.5, 0), p + Vector3.new(0, 2.5, 0) + side), Vector3.new(3, 5, 6.5), { invisible = true, tag = false })
+end
+
+-- 작은 책걸상(t): 무릎 높이 탁자 + 작은 의자 둘
+function Props.SmallDesk(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local yaw = ctx.hash(i, j, 3) * 0.5 - 0.25
+	local cf = CFrame.new(p) * CFrame.Angles(0, yaw, 0)
+	local m = Instance.new("Model")
+	m.Name = "SmallDesk"
+	m.Parent = ctx.props
+	Kit.box(m, cf * CFrame.new(0, 2.1, 0), Vector3.new(3.8, 0.18, 2.2), { blocks = false })
+	for _, x in { -1.7, 1.7 } do
+		for _, z in { -0.9, 0.9 } do
+			Kit.box(m, cf * CFrame.new(x, 1.0, z), Vector3.new(0.18, 2.0, 0.18), { blocks = false })
+		end
+	end
+	for k, s in { -1, 1 } do
+		local ch = cf * CFrame.new(s * 0.9, 0, 1.9) * CFrame.Angles(0, (ctx.hash(i, j, 5 + k) - 0.5) * 0.8, 0)
+		Kit.box(m, ch * CFrame.new(0, 1.1, 0), Vector3.new(1.1, 0.14, 1.1), { blocks = false })
+		Kit.box(m, ch * CFrame.new(0, 1.75, 0.5), Vector3.new(1.1, 1.0, 0.12), { blocks = false })
+		for _, x in { -0.45, 0.45 } do
+			for _, z in { -0.45, 0.45 } do
+				Kit.box(m, ch * CFrame.new(x, 0.55, z), Vector3.new(0.1, 1.1, 0.1), { blocks = false })
+			end
+		end
+	end
+	Kit.box(m, cf * CFrame.new(0, 1.2, 0.6), Vector3.new(3.8, 2.4, 3.6), { invisible = true, tag = false })
+end
+
+-- 장난감 더미(y): 뚜껑 열린 장난감 상자 + 쌓기 블록 + 공 + 곰 인형
+function Props.ToyPile(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j) or Vector3.new(0, 0, -1)
+	local across = Vector3.new(side.Z, 0, -side.X)
+	local h = ctx.hash(i, j, 7)
+	local c = p + side * (ctx.T / 2 - 1.4)
+	local m = Instance.new("Model")
+	m.Name = "ToyPile"
+	m.Parent = ctx.props
+	local box = CFrame.lookAt(c + Vector3.new(0, 0.9, 0), c + Vector3.new(0, 0.9, 0) - side)
+	Kit.box(m, box, Vector3.new(3.0, 1.8, 1.9), { blocks = false })
+	Kit.box(m, box * CFrame.new(0, 1.3, 1.1) * CFrame.Angles(-1.2, 0, 0), Vector3.new(3.0, 0.15, 1.9), { blocks = false, collide = false })
+	-- 블록 탑
+	local b0 = c - side * 2.0 + across * (if h < 0.5 then 1.4 else -1.4)
+	for k = 0, 2 do
+		local s = 0.9 - k * 0.12
+		Kit.box(m, CFrame.new(b0 + Vector3.new(0, s / 2 + k * 0.85, 0)) * CFrame.Angles(0, k * 0.5 + h, 0), Vector3.new(s, s, s), { blocks = false })
+	end
+	Kit.ball(m, c - side * 2.4 + across * (if h < 0.5 then -1.2 else 1.2) + Vector3.new(0, 0.6, 0), 0.6, { blocks = false, collide = false })
+	-- 곰 인형(상자 위에 기대 앉은 실루엣)
+	local t = c + across * 0.6 + Vector3.new(0, 1.8, 0) - side * 0.3
+	Kit.ball(m, t + Vector3.new(0, 0.55, 0), 0.55, { blocks = false, collide = false })
+	Kit.ball(m, t + Vector3.new(0, 1.4, 0), 0.42, { blocks = false, collide = false })
+	for _, s in { -1, 1 } do
+		Kit.ball(m, t + Vector3.new(0, 1.78, 0) + across * (s * 0.32), 0.16, { blocks = false, collide = false })
+	end
+	Kit.box(m, CFrame.lookAt(c - side * 0.6 + Vector3.new(0, 1.2, 0), c - side * 0.6 + Vector3.new(0, 1.2, 0) + side), Vector3.new(3.4, 2.4, 3.2), { invisible = true, tag = false })
+end
+
+-- 볼풀(G): 밟고 지나가는 칸. 공 몇 개 + 볼풀이 아닌 쪽 가장자리에 낮은 쿠션 턱(통과됨)
+function Props.BallPit(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = Instance.new("Model")
+	m.Name = "BallPit"
+	m.Parent = ctx.props
+	for k = 1, 5 do
+		local a, b, r = ctx.hash(i, j, 10 + k), ctx.hash(i, j, 20 + k), 0.45 + ctx.hash(i, j, 30 + k) * 0.2
+		Kit.ball(m, p + Vector3.new((a - 0.5) * 6.4, r + (k % 2) * 0.3, (b - 0.5) * 6.4), r, { blocks = false, collide = false })
+	end
+	for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+		local n = ctx.at(i + d[1], j + d[2])
+		if n ~= "G" and not ctx.isWall(i + d[1], j + d[2]) then
+			local v = Vector3.new(d[1], 0, d[2])
+			local e = p + v * (ctx.T / 2 - 0.4) + Vector3.new(0, 0.6, 0)
+			Kit.box(m, CFrame.lookAt(e, e + v), Vector3.new(ctx.T, 1.2, 0.8), { blocks = false, collide = false })
+		end
+	end
+end
+
+-- 낮잠 매트(N): 밟고 지나가는 얇은 매트 + 베개
+function Props.NapMat(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = Instance.new("Model")
+	m.Name = "NapMat"
+	m.Parent = ctx.props
+	local cf = CFrame.new(p) * CFrame.Angles(0, (ctx.hash(i, j, 4) - 0.5) * 0.25, 0)
+	Kit.box(m, cf * CFrame.new(0, 0.15, 0), Vector3.new(2.6, 0.3, 5.6), { blocks = false, collide = false })
+	Kit.box(m, cf * CFrame.new(0, 0.45, -2.2), Vector3.new(1.8, 0.35, 0.9), { blocks = false, collide = false })
+	if ctx.hash(i, j, 6) < 0.4 then
+		Kit.box(m, cf * CFrame.new(0.2, 0.4, 0.8) * CFrame.Angles(0, 0.3, 0), Vector3.new(2.4, 0.15, 2.6), { blocks = false, collide = false }) -- 흐트러진 이불
+	end
+end
+
+-- 작은 변기·세면대(j)
+function Props.KidToilet(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j) or Vector3.new(0, 0, -1)
+	local c = p + side * (ctx.T / 2 - 1.2)
+	local m = Instance.new("Model")
+	m.Name = "KidToilet"
+	m.Parent = ctx.props
+	if ctx.hash(i, j, 8) < 0.5 then
+		Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 1.9, 0), c + Vector3.new(0, 1.9, 0) - side), Vector3.new(1.6, 1.0, 0.5), { blocks = false })
+		Kit.cylinder(m, c - side * 0.9, c - side * 0.9 + Vector3.new(0, 1.0, 0), 0.65, { blocks = false })
+		Kit.cylinder(m, c - side * 0.9 + Vector3.new(0, 1.0, 0), c - side * 0.9 + Vector3.new(0, 1.15, 0), 0.75, { blocks = false })
+	else
+		Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 2.2, 0) - side * 0.4, c + Vector3.new(0, 2.2, 0) - side), Vector3.new(2.2, 0.4, 1.4), { blocks = false })
+		Kit.cylinder(m, c - side * 0.3, c - side * 0.3 + Vector3.new(0, 2.0, 0), 0.25, { blocks = false })
+		Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 4.2, 0) + side * 0.4, c + Vector3.new(0, 4.2, 0) - side), Vector3.new(1.8, 1.4, 0.08), { blocks = false, collide = false }) -- 낮은 거울
+	end
+	Kit.box(m, CFrame.lookAt(c - side * 0.5 + Vector3.new(0, 1.2, 0), c - side * 0.5 + Vector3.new(0, 1.2, 0) + side), Vector3.new(2.4, 2.4, 2.4), { invisible = true, tag = false })
+end
+
+-- 낮은 기어가는 통로(q): 어린이 키 높이로 내려온 천장 + 칸마다 둥근 테(통과됨, 괴물도 지나간다)
+function Props.LowTunnel(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = Instance.new("Model")
+	m.Name = "LowTunnel"
+	m.Parent = ctx.props
+	local low = 6.4
+	Kit.box(m, CFrame.new(p + Vector3.new(0, low + 0.15, 0)), Vector3.new(ctx.T, 0.3, ctx.T), { blocks = false, collide = false })
+	local ns = ctx.isWall(i - 1, j) and ctx.isWall(i + 1, j) -- 양옆이 벽이면 남북 통로
+	local along = if ns then Vector3.new(0, 0, 1) else Vector3.new(1, 0, 0)
+	local across = Vector3.new(along.Z, 0, -along.X)
+	for _, s in { -1, 1 } do
+		local c = p + across * (s * (ctx.T / 2 - 0.5))
+		Kit.cylinder(m, c, c + Vector3.new(0, low, 0), 0.18, { blocks = false, collide = false })
+	end
+	Kit.cylinder(m, p - across * (ctx.T / 2 - 0.5) + Vector3.new(0, low - 0.2, 0), p + across * (ctx.T / 2 - 0.5) + Vector3.new(0, low - 0.2, 0), 0.18, { blocks = false, collide = false })
+end
+
 return Props

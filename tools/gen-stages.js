@@ -1,4 +1,4 @@
-﻿// Generates the seven stage layouts (src/server/Stages/StageN.luau "Rows") from per-chapter themes:
+﻿// Generates the eight stage layouts (src/server/Stages/StageN.luau "Rows") from per-chapter themes:
 // rooms of several kinds + winding corridors/tunnels between them (rooms-and-mazes), doors/arches on the
 // openings, pits / water channels crossed by bridges with stairs down, and chapter props. The exit is put
 // where the shortest walk from the start is about TARGET tiles (1 tile = 8 studs; 150 tiles ≈ 2 min walking).
@@ -193,6 +193,30 @@ const THEMES = {
 			{ name: "restroom", w: [3, 3], h: [3, 3], weight: 1, decorate: (rm, pl, r) => {  } },
 		],
 		rooms: 36,
+	},
+	8: {
+		file: "Stage8.luau", W: 45, H: 43, seed: 8301, hides: 13, hidePrefer: ["playroom", "classroom", "nap"], searches: 10, searchPrefer: ["playroom", "classroom", "ballpit"],
+		start: [5, 5], winding: 0.3, extra: 0.06, keepDead: 0.2, door: 0.65,
+		halls: [[1, 13, 21, 1]], arch: 0.15, corrArch: 0.02, corrDoor: 0.01, fans: 0.0,
+		pits: "p",
+		lowTunnels: { count: 7, len: 5 }, // 낮은 기어가는 통로(q): 통로 몇 군데의 천장을 낮춘다
+		kinds: [
+			// 놀이방: 미끄럼틀(U) 몇 개 + 장난감 더미(y), 가운데는 비워 둔다
+			{ name: "playroom", w: [9, 11], h: [7, 9], weight: 0, count: 2, decorate: (rm, pl, r) => { deco.scatter(rm, pl, r, ["U"], 3); deco.alongWalls(rm, pl, r, ["y"], 0.12); } },
+			// 볼풀방: 가장자리 한 줄만 남기고 바닥 전체가 볼풀(G, 걸어서 지나간다) + 구석에 미끄럼틀
+			{ name: "ballpit", w: [7, 9], h: [5, 7], weight: 0, count: 1, decorate: (rm, pl, r, pw) => { for (let y = rm.y + 1; y < rm.y + rm.h - 1; y++) for (let x = rm.x + 1; x < rm.x + rm.w - 1; x++) pw(x, y, "G"); deco.corners(rm, pl, r, "U"); } },
+			// 작은 교실: 작은 책걸상(t) 줄
+			{ name: "classroom", w: [5, 7], h: [5, 5], weight: 4, decorate: (rm, pl, r) => { for (let y = rm.y + 1; y < rm.y + rm.h - 1; y += 2) for (let x = rm.x + 1; x < rm.x + rm.w - 1; x += 2) if (r() < 0.8) pl(x, y, "t"); } },
+			// 낮잠방: 바닥 매트(N, 밟고 지나간다) 줄
+			{ name: "nap", w: [5, 7], h: [5, 5], weight: 0, count: 2, decorate: (rm, pl, r, pw) => { for (let y = rm.y + 1; y < rm.y + rm.h - 1; y += 2) for (let x = rm.x; x < rm.x + rm.w; x++) if (r() < 0.75) pw(x, y, "N"); } },
+			// 식당: 작은 식탁(t)
+			{ name: "dining", w: [7, 9], h: [5, 7], weight: 0, count: 1, decorate: (rm, pl, r) => { for (let y = rm.y + 1; y < rm.y + rm.h - 1; y += 2) for (let x = rm.x + 1; x < rm.x + rm.w - 1; x += 2) if (r() < 0.85) pl(x, y, "t"); } },
+			// 화장실: 작은 세면대·변기(j)
+			{ name: "restroom", w: [3, 3], h: [3, 5], weight: 1, decorate: (rm, pl, r) => { deco.alongWalls(rm, pl, r, ["j"], 0.35); } },
+			// 장난감 창고: 장난감 더미(y)
+			{ name: "storage", w: [3, 5], h: [3, 3], weight: 1, decorate: (rm, pl, r) => { deco.alongWalls(rm, pl, r, ["y"], 0.3); } },
+		],
+		rooms: 34,
 	},
 };
 
@@ -414,7 +438,7 @@ function generate(theme, seed) {
 		}
 
 	const pitSet = new Set(["p", "b", "s", "n", theme.pits]);
-	const PASS = new Set([".", "S", "E", "D", "A", "f", "P", "p", "w", "b", "n", "s"]);
+	const PASS = new Set([".", "S", "E", "D", "A", "f", "P", "p", "w", "b", "n", "s", "G", "N", "q"]); // G 볼풀·N 매트·q 낮은 통로는 밟고 지나간다
 	const lv = (c) => (pitSet.has(c) ? (c === "b" || c === "n" ? [0] : c === "s" ? [0, 1] : [1]) : [0]);
 	const bfs = (agent) => {
 		let S = null;
@@ -466,11 +490,14 @@ function generate(theme, seed) {
 		if (n === base - 1 && (!rm || roomWhole(rm))) base = n;
 		else g[y][x] = ".";
 	};
-	for (const rm of rooms) if (rm.kind && rm.kind.decorate && !rm.band) rm.kind.decorate(rm, place, r);
+	// 밟고 지나가는 소품(볼풀·매트): 길을 막지 않으므로 검사 없이 놓는다
+	const placeWalk = (x, y, ch) => { if (inb(x, y) && g[y][x] === "." && !avoid(x, y)) g[y][x] = ch; };
+	for (const rm of rooms) if (rm.kind && rm.kind.decorate && !rm.band) rm.kind.decorate(rm, place, r, placeWalk);
 
 	// 숨는 곳(L): 벽에 등을 대고 방 안쪽을 보는 칸. 어울리는 방을 먼저, 막다른 통로 끝도 가끔
 	const hides = [];
-	const backWall = (x, y) => D4.some(([dx, dy]) => at(x + dx, y + dy) === "#" && at(x - dx, y - dy) !== "#");
+	// 등질 벽은 check-layout·StageBuilder 처럼 첫 번째로 찾은 방향, 그 앞 칸은 지나갈 수 있어야 한다(소품이 막으면 안 됨)
+	const backWall = (x, y) => { const d = D4.find(([dx, dy]) => at(x + dx, y + dy) === "#" && at(x - dx, y - dy) !== "#"); return !!d && PASS.has(at(x - d[0], y - d[1])); };
 	const cands = [];
 	for (let y = 1; y < H - 1; y++)
 		for (let x = 1; x < W - 1; x++) {
@@ -532,6 +559,27 @@ function generate(theme, seed) {
 		}
 	if (!best || Math.abs(best.d - TARGET) > TOL) return { fail: "exit", maxd: best && best.d };
 	g[best.y][best.x] = "E";
+	// 낮은 기어가는 통로(q): 방이 아닌 곧은 통로 몇 군데(3~len 칸). 문·출구·숨는 곳·상자 옆은 피한다
+	if (theme.lowTunnels) {
+		const near = (x, y) => D4.some(([dx, dy]) => "DAELZq".includes(at(x + dx, y + dy)));
+		const ok = (x, y) => g[y][x] === "." && !roomAt(x, y) && openN(x, y) === 2 && !near(x, y);
+		let made = 0;
+		for (let t = 0; t < 600 && made < theme.lowTunnels.count; t++) {
+			let x = 1 + Math.floor(r() * (W - 2)), y = 1 + Math.floor(r() * (H - 2)), prev = null;
+			const run = [];
+			while (run.length < theme.lowTunnels.len && ok(x, y)) {
+				run.push([x, y]);
+				g[y][x] = "q"; // 다음 칸 고를 때 되돌아가지 않게 잠깐 표시
+				const nx = D4.map(([dx, dy]) => [x + dx, y + dy]).find(([a, b]) => at(a, b) === "." && !(prev && a === prev[0] && b === prev[1]));
+				g[y][x] = ".";
+				if (!nx) break;
+				prev = [x, y]; [x, y] = nx;
+			}
+			if (run.length < 3) continue;
+			for (const [a, b] of run) g[b][a] = "q";
+			made++;
+		}
+	}
 	const deadEnds = (() => { let n = 0; for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) if (g[y][x] === "." && openN(x, y) === 1) n++; return n; })();
 	return { rows: g.map((row) => row.join("")), dist: best.d, rooms: rooms.length, deadEnds, hides: hides.length, searches: searches.length, monsterDist: md.get(`${D4.map(([dx, dy]) => [best.x + dx, best.y + dy]).find(([nx, ny]) => at(nx, ny) !== "#").join(",")},0`) + 1 };
 }
@@ -565,7 +613,7 @@ function writeRows(file, rows) {
 const args = process.argv.slice(2);
 const dry = args.includes("--dry");
 const only = args.filter((a) => /^\d$/.test(a)).map(Number);
-for (const id of only.length ? only : [1, 2, 3, 4, 5, 6, 7]) {
+for (const id of only.length ? only : [1, 2, 3, 4, 5, 6, 7, 8]) {
 	const theme = THEMES[id];
 	let res = null, tries = 0, lastFail = null;
 	for (let s = theme.seed; s < theme.seed + 3000 && !res; s++) {

@@ -62,6 +62,7 @@ local STYLES: { [string]: Style } = {
 	chest = { w = 3.6, h = 2.3, d = 2.4, kind = "lid", rows = 0, name = "궤짝" }, -- 심층 미로
 	dresser = { w = 3.8, h = 3.3, d = 2.4, kind = "drawers", rows = 3, name = "서랍장" }, -- 호텔: 객실 서랍장
 	safe = { w = 2.8, h = 2.6, d = 2.4, kind = "lid", rows = 0, name = "금고" }, -- 호텔: 객실 금고
+	toybox = { w = 3.4, h = 2.1, d = 2.4, kind = "lid", rows = 0, name = "장난감 상자" }, -- 폐유치원: 뚜껑 달린 장난감 상자
 }
 Search.Styles = STYLES
 
