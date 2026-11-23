@@ -190,11 +190,12 @@ Config.Stages = {
 	{ Id = 6, Name = "STAGE 6 — 호텔", Module = "Stage6", Monsters = 3 },
 	{ Id = 7, Name = "STAGE 7 — 학교", Module = "Stage7", Monsters = 4 },
 	{ Id = 8, Name = "STAGE 8 — 폐유치원", Module = "Stage8", Monsters = 4 },
+	{ Id = 9, Name = "STAGE 9 — 지하 주차장", Module = "Stage9", Monsters = 4 },
+	{ Id = 10, Name = "STAGE 10 — 폐영화관", Module = "Stage10", Monsters = 5 },
 }
 
 -- ─────────────────────────────── 사운드 ───────────────────────────────
 -- 기본값은 Roblox 클라이언트에 기본 포함된 rbxasset:// 파일만 쓴다(외부 에셋 ID 없음).
-	{ Id = 9, Name = "STAGE 9 — 지하 주차장", Module = "Stage9", Monsters = 4 },
 -- 더 어울리는 소리가 있으면 Id 를 "rbxassetid://숫자" 로 바꾸면 된다. Id = "" 이면 그 소리는 재생하지 않는다.
 Config.Sounds = {
 	-- 사람 발소리: 실제 녹음된 발걸음 파일(2.5초 안에 4걸음) 중 가장 또렷한 한 걸음(1.22초 지점)만 짧게(Steps = {시작초, 재생길이초}).
