@@ -9,6 +9,26 @@
 --   그 밖   V 세면대·거울      U 화장실 칸     Q 짐수레(하역장)
 
 local Kit = require(script.Parent.Parent.MapKit)
+local PM = require(script.Parent.Parent.PropMesh) -- 다 지은 소품을 메시 에셋으로 바꿔 입힌다(없으면 기본 도형 그대로)
+
+-- (메시로 바꿀 파트 목록) m 의 BasePart 중 skip 집합(또는 이름 skip)에 없는 것
+local function partsExcept(m: Instance, skip: any): { BasePart }
+	local list = {}
+	for _, x in m:GetDescendants() do
+		if x:IsA("BasePart") and not (if type(skip) == "table" then skip[x] else x.Name == skip) then
+			table.insert(list, x)
+		end
+	end
+	return list
+end
+-- 지금 m 에 있는 파트 집합(나중에 새로 생긴 것만 고를 때)
+local function snapshot(m: Instance): { [Instance]: boolean }
+	local s = {}
+	for _, x in m:GetDescendants() do
+		s[x] = true
+	end
+	return s
+end
 
 local P = {}
 
@@ -97,6 +117,8 @@ function P.Seats(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(T / 2 - 0.15, 2.2, 0), Vector3.new(0.3, 0.25, 2.0), LINE)
 	end
 	solid(m, CFrame.new(p), Vector3.new(T, h + 4, T))
+	local rowEnd = ctx.at(i + 1, j) ~= "q" or ctx.at(i - 1, j) ~= "q"
+	PM.dress(m, if rowEnd then "Cinema.SeatsEnd" else "Cinema.Seats", cf, nil, partsExcept(m, "SeatRiser")) -- (소품 좌표: 단 위 의자 줄 가운데, -Z = 스크린. 단은 기본 도형 그대로)
 end
 
 -- j 무너진 좌석 더미: 뜯겨 넘어진 의자 줄 두 개
@@ -113,6 +135,7 @@ function P.BrokenSeats(ctx, i: number, j: number)
 		end
 	end
 	solid(m, CFrame.new(p), Vector3.new(6.6, 3.6, 5.6))
+	PM.dress(m, "Cinema.BrokenSeats", CFrame.new(p) * CFrame.Angles(0, yaw, 0))
 end
 
 -- W 스크린 벽: 벽에 붙은 큰 막(군데군데 찢어짐) + 위아래 테두리 + 낮은 무대, 줄 끝에는 막 옆 커튼
@@ -133,16 +156,28 @@ function P.Screen(ctx, i: number, j: number)
 	for _, y in { 2.3, 2.5 + sh + 0.2 } do
 		Kit.box(m, cf * CFrame.new(0, y, z - 0.1), Vector3.new(T, 0.5, 0.4), LINE)
 	end
+	local mainSet = snapshot(m)
 	for _, s in { -1, 1 } do
 		if ctx.at(i + s, j) ~= "W" then
 			-- 막 옆 커튼 주름 셋
+			local s0 = snapshot(m)
 			for k = 0, 2 do
 				local q = base(ctx, i, j) + Vector3.new(s * (T / 2 - 0.5 - k * 0.9), (ctx.H - 0.6) / 2, -cf.LookVector.Z * (T / 2 - 0.9))
 				Kit.box(m, CFrame.new(q) * CFrame.Angles(0, if k % 2 == 0 then 0.5 else -0.5, 0), Vector3.new(1.1, ctx.H - 1.6, 0.25), LINE)
 			end
+			-- (커튼 좌표: 칸 가운데, 세계 축. 왼쪽은 반 바퀴 돌린다. 천장 14 기준 높이를 늘인다)
+			local ccf = CFrame.new(base(ctx, i, j) + Vector3.new(0, 0, -cf.LookVector.Z * (T / 2 - 0.9))) * CFrame.Angles(0, if s < 0 then math.pi else 0, 0)
+			PM.dress(m, "Cinema.Curtain", ccf, Vector3.new(1, (ctx.H - 1.6) / 12.4, 1), partsExcept(m, s0))
 		end
 	end
 	Kit.box(m, cf * CFrame.new(0, 0.6, 1.0), Vector3.new(T, 1.2, T - 2.0), { name = "Stage" })
+	local mainParts = { m:FindFirstChild("Stage") }
+	for x in mainSet do
+		if x:IsA("BasePart") then
+			table.insert(mainParts, x)
+		end
+	end
+	PM.dress(m, (if ctx.hash(i, j, 101) < 0.25 then "Cinema.ScreenTorn" else "Cinema.Screen") .. math.round(sh), cf, nil, mainParts) -- (+Z = 벽)
 end
 
 -- a 통로 발밑등(작은 등 + 바닥 선) + 벽 스피커: 양옆 통로, 지나갈 수 있다
@@ -153,6 +188,7 @@ function P.AisleLight(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 0.7, z - 0.2), Vector3.new(1.0, 0.5, 0.3), LINE)
 	Kit.box(m, cf * CFrame.new(0, 7.4, z - 1.0) * CFrame.Angles(0.25, 0, 0), Vector3.new(2.0, 2.8, 1.4), LINE)
 	Kit.box(m, cf * CFrame.new(0, 7.6, z - 0.2), Vector3.new(0.4, 0.4, 0.6), LINE)
+	PM.dress(m, "Cinema.AisleLight", cf) -- (+Z = 벽)
 end
 
 -- x 잠긴 비상구: 두 짝 문 + 손잡이 봉에 감긴 쇠사슬·자물쇠 + EXIT 표지(지나갈 수 있는 칸, 문은 안 열린다)
@@ -169,6 +205,7 @@ function P.LockedExit(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 2.5, z - 0.8), Vector3.new(0.8, 0.9, 0.3), LINE) -- 자물쇠
 	Kit.word(m, "EXIT", at(cf, 0, 8.6, z - 0.3), -cf.RightVector, cf.LookVector, 1.4)
+	PM.dress(m, "Cinema.LockedExit", cf)
 end
 
 -- i 비상구 표지: 열리는 비상문 앞 천장에 매달린 표지판
@@ -181,6 +218,7 @@ function P.ExitSign(ctx, i: number, j: number)
 		Kit.cylinder(m, p + Vector3.new(x, y + 0.9, 0), p + Vector3.new(x, ctx.H, 0), 0.08, LINE)
 	end
 	Kit.word(m, "EXIT", p + Vector3.new(0, y, 0.1), Vector3.new(1, 0, 0), Vector3.new(0, 0, 1), 1.2)
+	PM.dress(m, "Cinema.ExitSign", CFrame.new(p + Vector3.new(0, ctx.H - 14, 0))) -- (소품 좌표: 천장 14 기준, 낮은 천장은 통째로 내린다. +Z = 글자 앞)
 end
 
 -- ── 매점 ──
@@ -202,6 +240,7 @@ function P.Counter(ctx, i: number, j: number)
 	elseif r > 0.75 then
 		Kit.cylinder(m, at(cf, -0.9, 3.6, -1.4), at(cf, -0.9, 5.0, -1.4), 0.6, LINE) -- 남은 팝콘 통
 	end
+	PM.dress(m, if r < 0.3 then "Cinema.CounterRegister" elseif r > 0.75 then "Cinema.CounterTub" else "Cinema.Counter", cf) -- (-Z = 카운터 길이 방향, +X = 손님 쪽)
 end
 
 -- M 팝콘 기계(벽 쪽): 아래 수납장 + 유리 상자(네 기둥) + 안쪽 솥 + 위 간판
@@ -220,6 +259,7 @@ function P.Popcorn(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 3.8, 0), Vector3.new(3.4, 0.3, 2.4), LINE) -- 남은 팝콘
 	Kit.box(m, cf * CFrame.new(0, 8.3, 0), Vector3.new(3.6, 1.4, 0.25), LINE)
 	solid(m, cf, Vector3.new(4.0, 7.6, 3.0))
+	PM.dress(m, "Cinema.Popcorn", cf)
 end
 
 -- N 음료 기계(벽 쪽): 몸통 + 앞으로 나온 머리 + 꼭지 넷 + 컵 탑
@@ -235,6 +275,7 @@ function P.Drink(ctx, i: number, j: number)
 	end
 	Kit.cylinder(m, at(cf, 1.9, 3.2, -0.8), at(cf, 1.9, 4.8, -0.8), 0.35, LINE)
 	solid(m, cf, Vector3.new(5.0, 7.4, 3.0))
+	PM.dress(m, "Cinema.Drink", cf)
 end
 
 -- Y 메뉴판(벽 높이 달린 판 + 글줄): 지나갈 수 있다
@@ -246,6 +287,7 @@ function P.MenuBoard(ctx, i: number, j: number)
 	for k = -1, 1 do
 		Kit.box(m, cf * CFrame.new(-0.6 + k * 0.4, 7.6 + k * 0.8, z - 0.65), Vector3.new(4.2, 0.18, 0.1), LINE)
 	end
+	PM.dress(m, "Cinema.MenuBoard", cf)
 end
 
 -- t 높은 원탁(서서 먹는 탁자): 기둥 + 둥근 판 + 남은 컵
@@ -258,6 +300,7 @@ function P.HighTable(ctx, i: number, j: number)
 	local c = p + Vector3.new((ctx.hash(i, j, 31) - 0.5) * 2, 4.05, 0.6)
 	Kit.cylinder(m, c, c + Vector3.new(0, 1.1, 0), 0.4, LINE)
 	solid(m, CFrame.new(p), Vector3.new(3.4, 4.2, 3.4))
+	PM.dress(m, "Cinema.HighTable", CFrame.new(p))
 end
 
 -- w 소파(대기 의자): 앉는 판 + 등받이 + 팔걸이. 남쪽을 본다
@@ -274,6 +317,8 @@ function P.Sofa(ctx, i: number, j: number)
 		end
 	end
 	solid(m, cf, Vector3.new(T - 0.4, 3.2, 3.8))
+	local armL, armR = ctx.at(i + 1, j) ~= "w", ctx.at(i - 1, j) ~= "w" -- (로컬 -X / +X 팔걸이)
+	PM.dress(m, "Cinema.Sofa" .. (if armL then "L" else "") .. (if armR then "R" else ""), cf)
 end
 
 -- y 입간판(등신대): 사람 모양 판 + 받침. 어둠 속에서 사람처럼 보인다
@@ -290,6 +335,7 @@ function P.Standee(ctx, i: number, j: number)
 	Kit.ball(m, at(cf, 0, 7.3, 0), 0.9, SOFT) -- 머리
 	Kit.box(m, cf * CFrame.new(0, 2.0, 0.8) * CFrame.Angles(-0.35, 0, 0), Vector3.new(0.4, 4.2, 0.15), LINE) -- 뒤 버팀대
 	solid(m, cf, Vector3.new(3.6, 7.6, 2.0))
+	PM.dress(m, "Cinema.Standee", cf)
 end
 
 -- d 분리수거대: 구멍 둘 난 통 + 윗선반에 쌓인 쟁반
@@ -302,6 +348,7 @@ function P.BinStation(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 4.4, 0.3), Vector3.new(2.6, 0.7, 1.6), LINE)
 	solid(m, cf, Vector3.new(5.6, 4.2, 2.6))
+	PM.dress(m, "Cinema.BinStation", cf)
 end
 
 -- ── 매표소 ──
@@ -324,6 +371,7 @@ function P.TicketWindow(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 4.9, 0), Vector3.new(0.1, 0.12, T - 0.6), LINE) -- 유리 아래 테
 	Kit.box(m, cf * CFrame.new(0, 5.6, 1.6) * CFrame.Angles(0, 0.2, 0), Vector3.new(0.3, 1.5, 2.0), LINE) -- 발권 화면
 	solid(m, cf, Vector3.new(3.0, 8.2, T))
+	PM.dress(m, if ctx.at(i + axis.X, j + axis.Z) ~= "B" then "Cinema.TicketWindowEnd" else "Cinema.TicketWindow", cf) -- (-Z = 창구 줄 방향)
 end
 
 -- H 상영 시간표(벽 위 큰 판 + 줄): 지나갈 수 있다
@@ -335,6 +383,7 @@ function P.Showtimes(ctx, i: number, j: number)
 	for k = 0, 3 do
 		Kit.box(m, cf * CFrame.new((ctx.hash(i, j, 60 + k) - 0.5), 5.9 + k * 0.85, z - 0.5), Vector3.new(5.6, 0.16, 0.1), LINE)
 	end
+	PM.dress(m, "Cinema.Showtimes", cf)
 end
 
 -- k 무인 발권기: 기둥 몸통 + 기울어진 화면 + 표 나오는 구멍
@@ -346,6 +395,7 @@ function P.Kiosk(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 2.8, -1.15), Vector3.new(1.4, 0.3, 0.1), LINE)
 	Kit.box(m, cf * CFrame.new(0, 7.2, 0), Vector3.new(2.8, 0.9, 0.4), LINE)
 	solid(m, cf, Vector3.new(3.0, 6.6, 2.2))
+	PM.dress(m, "Cinema.Kiosk", cf)
 end
 
 -- r 줄 세우기 기둥(벨트로 이어짐): 지나갈 수 있다(충돌 없음)
@@ -366,6 +416,8 @@ function P.Stanchion(ctx, i: number, j: number)
 		local sag = if ctx.hash(i, j, 108) < 0.3 then 1.6 else 0.2
 		Kit.box(m, CFrame.new((a + b) / 2 + Vector3.new(0, 2.9 - sag, 0)), Vector3.new(T - 1, 0.25, 0.1), LINE)
 	end
+	local belt = if ctx.hash(i, j, 107) >= 0.8 then "" elseif ctx.hash(i, j, 108) < 0.3 then "Sag" else "Belt"
+	PM.dress(m, "Cinema.Stanchion" .. (if ctx.at(i + 1, j) ~= "r" then "2" else "1") .. belt, CFrame.new(base(ctx, i, j))) -- (기둥 = x -3.5 / 3.5)
 end
 
 -- g 검표대: 작은 연단 + 기울어진 윗판
@@ -375,6 +427,7 @@ function P.TicketStand(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 1.9, 0), Vector3.new(2.6, 3.8, 2.0), { name = "TicketStandBody" })
 	Kit.box(m, cf * CFrame.new(0, 4.0, 0) * CFrame.Angles(0.3, 0, 0), Vector3.new(3.0, 0.2, 2.4), LINE)
 	Kit.box(m, cf * CFrame.new(2.4, 0.2, 1.5) * CFrame.Angles(0, 0.5, 0), Vector3.new(2.2, 0.3, 3.0), LINE) -- 넘어진 안내판
+	PM.dress(m, "Cinema.TicketStand", cf)
 end
 
 -- ── 복도 ──
@@ -385,6 +438,7 @@ function P.Poster(ctx, i: number, j: number)
 	local m = model(ctx, "PosterFrame")
 	Kit.box(m, cf, Vector3.new(3.6, 5.2, 0.35), LINE)
 	Kit.box(m, cf * CFrame.new(0, 0, -0.2), Vector3.new(3.0, 4.6, 0.08), LINE)
+	PM.dress(m, "Cinema.Poster", cf * CFrame.new(0, -5.2, 0)) -- (소품 좌표: 액자 가운데 y 5.2, +Z = 벽)
 end
 
 -- h 상영관 번호판: 벽에서 튀어나온 네모 판 + 굵은 숫자(막대 획). 열 위치로 1~4관을 정한다
@@ -418,6 +472,7 @@ function P.HallSign(ctx, i: number, j: number)
 			Kit.box(m, cf * CFrame.new(b[1], b[2], -0.35), if b[3] then Vector3.new(1.6, 0.35, 0.2) else Vector3.new(0.35, 1.6, 0.2), LINE)
 		end
 	end
+	PM.dress(m, "Cinema.HallSign" .. n, cf * CFrame.new(0, -6.6, 0)) -- (소품 좌표: 판 가운데 y 6.6, +Z = 벽)
 end
 
 -- ── 영사실 ──
@@ -441,6 +496,7 @@ function P.Projector(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 4.6, -ctx.T / 2 + 0.1), Vector3.new(2.4, 1.6, 0.3), LINE)
 	solid(m, cf, Vector3.new(2.6, 6, 3.8))
+	PM.dress(m, "Cinema.Projector", cf) -- (-Z = 영사창)
 end
 
 -- P 필름 플래터: 멀티플렉스 영사실의 큰 수평 원판 셋(필름을 풀고 감는 탑) + 가운데 기둥 + 받침 + 필름을 영사기로 보내는 팔(롤러)
@@ -461,6 +517,7 @@ function P.FilmPlatter(ctx, i: number, j: number)
 	Kit.cylinder(m, p + Vector3.new(0, 6.4, 0), tip, 0.12, LINE)
 	Kit.cylinder(m, tip + Vector3.new(0, -0.3, 0), tip + Vector3.new(0, 0.3, 0), 0.35, LINE)
 	solid(m, CFrame.new(p), Vector3.new(6.2, 6.6, 6.2))
+	PM.dress(m, "Cinema.FilmPlatter", CFrame.lookAt(p, p - side)) -- (-Z = 필름 팔 쪽)
 end
 
 -- G 필름 되감기 대: 작업대 + 양끝에 선 릴 둘 + 사이를 잇는 필름 선
@@ -475,6 +532,7 @@ function P.RewindBench(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 3.5, 0), Vector3.new(4.2, 0.1, 0.1), LINE)
 	solid(m, cf, Vector3.new(6.6, 3.6, 2.6))
+	PM.dress(m, "Cinema.RewindBench", cf)
 end
 
 -- e 앰프·전원 랙: 키 큰 장 + 칸 나눔 + 손잡이
@@ -488,6 +546,7 @@ function P.AmpRack(ctx, i: number, j: number)
 	for _, x in { -1.0, 1.0 } do
 		Kit.cylinder(m, at(cf, x, 6.4, -1.2), at(cf, x, 6.4, -1.5), 0.35, LINE) -- 계기
 	end
+	PM.dress(m, "Cinema.AmpRack", cf)
 end
 
 -- R 필름 깡통 선반: 기둥 틀 + 선반 셋 + 세워 둔 둥근 필름통
@@ -506,6 +565,7 @@ function P.FilmRack(ctx, i: number, j: number)
 		end
 	end
 	solid(m, cf, Vector3.new(6.6, 7.2, 2.2))
+	PM.dress(m, "Cinema.FilmRack", cf)
 end
 
 -- ── 화장실·하역장 ──
@@ -524,6 +584,7 @@ function P.Sink(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 1.3, z), Vector3.new(T - 1.5, 2.6, 1.6), LINE)
 	Kit.box(m, cf * CFrame.new(0, 6.0, T / 2 - 0.2), Vector3.new(T - 1.0, 3.0, 0.1), LINE)
 	solid(m, cf * CFrame.new(0, 0, z), Vector3.new(T - 0.5, 3.4, 2.2))
+	PM.dress(m, "Cinema.Sink", cf) -- (+Z = 벽)
 end
 
 -- U 화장실 칸: 옆 칸막이 + 반쯤 열린 문 + 변기
@@ -540,6 +601,7 @@ function P.ToiletStall(ctx, i: number, j: number)
 	Kit.cylinder(m, at(cf, 0, 1.6, 1.4), at(cf, 0, 1.85, 1.4), 1.0, LINE)
 	Kit.box(m, cf * CFrame.new(0, 2.6, 3.1), Vector3.new(1.8, 1.8, 0.9), SOFT)
 	solid(m, cf * CFrame.new(0, 0, 1.4), Vector3.new(6.6, 7, 5.2))
+	PM.dress(m, "Cinema.ToiletStall", cf) -- (+Z = 벽)
 end
 
 -- Q 짐수레(하역장): 바닥판 + 손잡이 틀 + 필름 상자 둘
@@ -557,6 +619,7 @@ function P.HandCart(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0.2, 1.9, -1.0) * CFrame.Angles(0, 0.1, 0), Vector3.new(2.6, 1.8, 2.4), SOFT)
 	Kit.box(m, cf * CFrame.new(-0.1, 3.4, -0.9) * CFrame.Angles(0, -0.2, 0), Vector3.new(2.0, 1.2, 2.0), SOFT)
 	solid(m, cf, Vector3.new(3.6, 4, 6))
+	PM.dress(m, "Cinema.HandCart", cf) -- (+Z = 손잡이 쪽)
 end
 
 return P

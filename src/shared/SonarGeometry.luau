@@ -13,6 +13,9 @@
 -- (이음매 제거 판정에 쓰며, 원통의 원처럼 판정이 필요 없는 선은 nil).
 
 local Geo = {}
+--   Mesh     : 소품 메시(속성 SonarShape = "Mesh", SonarMesh = 키). 선은 Shared/PropMeshData 에 미리 뽑아 둔 윤곽·꺾임선,
+--              실루엣(원통·원뿔대·구)은 SonarWorld 가 viewParts 로 하나씩 올린다(Geo.meshViews)
+local PropMeshData = require(script.Parent:WaitForChild("PropMeshData"))
 
 export type EdgeList = {
 	A: { Vector3 },
@@ -218,6 +221,66 @@ function Geo.staticEdges(part: BasePart, out: EdgeList, noNormals: boolean?)
 	elseif shape == "Cylinder" then
 		local rings = part:GetAttribute("SonarRings")
 		Geo.cylinderRings(cf, size, out, if type(rings) == "number" then rings else nil)
+	elseif shape == "Mesh" then
+		local key = part:GetAttribute("SonarMesh")
+		local item = if type(key) == "string" then PropMeshData.get(key) else nil
+		if item then
+			local sc = size / item.size
+			local s = item.seg
+			for i = 1, #s, 6 do
+				push(out, cf * Vector3.new(s[i] * sc.X, s[i + 1] * sc.Y, s[i + 2] * sc.Z), cf * Vector3.new(s[i + 3] * sc.X, s[i + 4] * sc.Y, s[i + 5] * sc.Z))
+			end
+		end
+	end
+end
+
+-- 메시 소품의 실루엣 항목: fn(cf, size, ball, taper) — cf·size 는 원통 파트처럼(축 = 로컬 X), taper = 끝 반지름 / 시작 반지름
+function Geo.meshViews(part: BasePart, fn: (cf: CFrame, size: Vector3, ball: boolean, taper: number?) -> ())
+	local key = part:GetAttribute("SonarMesh")
+	local item = if type(key) == "string" then PropMeshData.get(key) else nil
+	if not item then
+		return
+	end
+	local cf = part.CFrame
+	local sc = part.Size / item.size
+	local rs = math.min(sc.X, sc.Y, sc.Z)
+	local v = item.view
+	for i = 1, #v, 9 do
+		local a = cf * Vector3.new(v[i + 1] * sc.X, v[i + 2] * sc.Y, v[i + 3] * sc.Z)
+		local r1 = v[i + 7] * rs
+		if v[i] == 1 then
+			fn(CFrame.new(a), Vector3.one * (r1 * 2), true, nil)
+		else
+			local b = cf * Vector3.new(v[i + 4] * sc.X, v[i + 5] * sc.Y, v[i + 6] * sc.Z)
+			local d = b - a
+			local L = d.Magnitude
+			if L > 0.02 and r1 > 0.005 then
+				local dir = d / L
+				local up = if math.abs(dir.Y) > 0.95 then Vector3.xAxis else Vector3.yAxis
+				local r2 = v[i + 8] * rs
+				fn(CFrame.fromMatrix((a + b) / 2, dir, dir:Cross(up).Unit), Vector3.new(L, r1 * 2, r1 * 2), false, if math.abs(r2 - r1) > 0.01 then r2 / r1 else nil)
+			end
+		end
+	end
+end
+
+-- 원뿔대 실루엣 2줄: 원통 실루엣과 같고 +X 끝 반지름만 taper 배
+function Geo.coneSilhouette(cf: CFrame, size: Vector3, taper: number, view: Vector3, out: EdgeList)
+	local r = math.min(size.Y, size.Z) / 2
+	local r2 = r * taper
+	local rm = (r + r2) / 2
+	local hx = size.X / 2
+	local lv = cf:PointToObjectSpace(view)
+	local d = math.sqrt(lv.Y * lv.Y + lv.Z * lv.Z)
+	if d <= rm * 1.02 then
+		return
+	end
+	local phi0 = math.atan2(lv.Z, lv.Y)
+	local theta = math.acos(rm / d)
+	for _, s in { -1, 1 } do
+		local phi = phi0 + s * theta
+		local cy, cz = math.cos(phi), math.sin(phi)
+		push(out, cf:PointToWorldSpace(Vector3.new(-hx, cy * r, cz * r)), cf:PointToWorldSpace(Vector3.new(hx, cy * r2, cz * r2)))
 	end
 end
 

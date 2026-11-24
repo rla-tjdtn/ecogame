@@ -12,6 +12,7 @@
 
 local Kit = require(script.Parent.Parent.MapKit)
 local Props = require(script.Parent.Parent.Props)
+local PM = require(script.Parent.Parent.PropMesh) -- 다 지은 소품을 메시 에셋으로 바꿔 입힌다(없으면 기본 도형 그대로)
 
 local Sewer = {}
 
@@ -58,6 +59,7 @@ function Sewer.Ladder(ctx, i: number, j: number)
 	-- 천장 맨홀 테(둥근 구멍 둘레)
 	local h = w - side * 0.9 + Vector3.new(0, top - 0.2, 0)
 	Kit.cylinder(m, h - Vector3.new(0, 0.3, 0), h, 1.9, { blocks = false, collide = false, rings = 2 })
+	PM.dress(m, "Sewer.Ladder", CFrame.lookAt(w, w - side)) -- (사다리 발치 바닥, -Z = 방 쪽, 천장 14 기준)
 end
 
 -- M 원심 펌프: 받침 위 모터(원통) + 달팽이 몸통 + 토출관(위로, 천장 배관으로)
@@ -78,6 +80,7 @@ function Sewer.Pump(ctx, i: number, j: number)
 	Kit.pipe(m, body + across * 0.9, body + across * 3.6, 0.8, { 0 }, true)
 	Kit.pipe(m, body + Vector3.new(0, 1.9, 0), Vector3.new(body.X, ctx.H, body.Z), 0.75, { 0.15, 0.85 }, true)
 	solid(m, p, Vector3.new(6.6, 4.4, 6.6))
+	PM.dress(m, "Sewer.Pump", CFrame.lookAt(p, p + ax)) -- (-Z = 펌프 몸통 쪽, 토출관은 천장 14 기준)
 end
 
 -- V 밸브 스탠드: 바닥 플랜지에서 솟은 기둥, 위에 큰 손바퀴(바큇살 넷)
@@ -96,6 +99,7 @@ function Sewer.ValveStand(ctx, i: number, j: number)
 	-- 바닥 아래로 내려가는 관(바닥 위로 조금 보이는 플랜지)
 	Kit.pipe(m, p + Vector3.new(1.8, 0, 0), p + Vector3.new(1.8, 2.2, 0), 0.6, { 1 }, true)
 	solid(m, p, Vector3.new(4.4, 5, 4.4))
+	PM.dress(m, "Sewer.ValveStand", CFrame.new(p)) -- (월드 축, 관 = +X)
 end
 
 -- Y 계기 제어반: 벽에 붙은 키 큰 함, 둥근 압력계 2x3, 스위치 줄
@@ -116,6 +120,7 @@ function Sewer.GaugePanel(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(a * 1.0, -1.4, -1.15), Vector3.new(0.3, 0.6, 0.3), { blocks = false, collide = false })
 	end
 	solid(m, p + side * (ctx.T / 2 - 1.3), Vector3.new(if side.X ~= 0 then 2.6 else 6.4, 6.8, if side.X ~= 0 then 6.4 else 2.6))
+	PM.dress(m, "Sewer.GaugePanel", cf * CFrame.new(0, -3.4, 0)) -- (함 아래 바닥, -Z = 방 쪽)
 end
 
 -- G 수문 승강기: 벽 쪽 문틀(두 기둥 + 들보), 가운데 닫힌 철판 수문, 위로 솟은 나사봉 + 손바퀴
@@ -141,6 +146,7 @@ function Sewer.SluiceGate(ctx, i: number, j: number)
 	local hub = c - side * 0.9 + Vector3.new(0, 10.6, 0)
 	Kit.cylinder(m, hub, hub - side * 0.2, 1.3, { blocks = false, collide = false, rings = 1 })
 	solid(m, c, Vector3.new(if side.X ~= 0 then 2.6 else 7.4, 10, if side.X ~= 0 then 7.4 else 2.6))
+	PM.dress(m, "Sewer.SluiceGate", CFrame.lookAt(c, c - side)) -- (수문 아래 바닥, -Z = 방 쪽)
 end
 
 -- H 협잡물 스크린(수로 칸): 물 + 수로를 가로지르는 비스듬한 철창(쓰레기를 걸러 낸다)
@@ -159,6 +165,7 @@ function Sewer.BarScreen(ctx, i: number, j: number)
 	-- 위 가로대(보행로 높이)
 	local t = c + flow * 1.2 + Vector3.new(0, 0.4, 0)
 	Kit.box(m, CFrame.lookAt(t, t + across), Vector3.new(0.5, 0.5, ctx.T), { blocks = false })
+	PM.dress(m, "Sewer.BarScreen", CFrame.lookAt(c, c + flow)) -- (보행로 높이 칸 가운데, -Z = 물 흐름, 바닥 = y -6)
 end
 
 -- J 정비 작업대: 철제 작업대 + 바이스 + 벽 공구판
@@ -181,6 +188,7 @@ function Sewer.Workbench(ctx, i: number, j: number)
 		Kit.box(m, board * CFrame.new(k * 1.2, -0.2 + (k % 2) * 0.5, -0.15), Vector3.new(0.18, 1.3, 0.12), { blocks = false, collide = false })
 	end
 	solid(m, c, Vector3.new(if side.X ~= 0 then 3.4 else 7, 4, if side.X ~= 0 then 7 else 3.4))
+	PM.dress(m, "Sewer.Workbench", cf) -- (-Z = 방 쪽, +Z = 벽 공구판)
 end
 
 -- I 배관 자재 더미: 굵은 관 토막 3+2 단(받침목 위), 고정 띠
@@ -204,6 +212,7 @@ function Sewer.PipeStack(ctx, i: number, j: number)
 		Kit.cylinder(m, c - ax * half, c + ax * half, r, { rings = 1 })
 	end
 	solid(m, p, Vector3.new(6.6, 4.6, 6.6))
+	PM.dress(m, "Sewer.PipeStack", CFrame.lookAt(p, p + ax)) -- (-Z = 관 방향)
 end
 
 -- ── 물길 칸(아래층 높이, Stage3 의 PitTiles) ──
@@ -267,6 +276,7 @@ function Sewer.Channel(ctx, i: number, j: number)
 		end
 		prev = p
 	end
+	PM.dress(m, if half > 13.7 then "Sewer.Channel4" else "Sewer.Channel3", CFrame.lookAt(c, c + Vector3.new(across.Z, 0, -across.X)), Vector3.new(half / (if half > 13.7 then 15.7 else 11.7), 1, 1)) -- (터널 가운데 보행로 높이, X = 터널 가로, 천장 14 기준)
 end
 
 -- Q 낙차 유입관: 물 + 벽에서 튀어나온 큰 관 입구(플랜지) + 수로로 떨어지는 오수 기둥 + 물보라 테.
@@ -292,6 +302,7 @@ function Sewer.DropInlet(ctx, i: number, j: number)
 	local water = Vector3.new(mouth.X, c.Y + ctx.PIT_Y + 1.2, mouth.Z)
 	Kit.cylinder(m, mouth, water, 0.9, { blocks = false, collide = false })
 	Kit.cylinder(m, water, water + Vector3.new(0, 0.12, 0), 2.6, { blocks = false, collide = false, rings = 2 })
+	PM.dress(m, if side then "Sewer.DropInletWall" else "Sewer.DropInletCeiling", if side then CFrame.lookAt(c, c + side) else CFrame.new(c)) -- (칸 가운데 보행로 높이, 벽 관 = -Z, 천장 14 기준)
 end
 
 -- K 배관 다리(랜드마크): 물 + 수로 위를 벽에서 벽까지 가로지르는 굵은 관(보행로 머리 위 높이 — 밑으로 걸어 지나간다) + 매달이 띠 둘 + 플랜지
@@ -311,6 +322,7 @@ function Sewer.PipeBridge(ctx, i: number, j: number)
 		local hanger = c + across * (s * (T / 2 + 2.0)) + Vector3.new(0, 2.4, 0)
 		Kit.box(m, CFrame.new(hanger), Vector3.new(0.3, 3.2, 0.3), { blocks = false, collide = false })
 	end
+	PM.dress(m, "Sewer.PipeBridge", CFrame.lookAt(c, c + across), Vector3.new(1, 1, half / 15.8)) -- (원점 = 관 가운데 축, -Z = 관 방향)
 end
 
 -- U 월류 위어: 물 + 수로를 가로막은 낮은 콘크리트 둑(보행로 바로 아래까지) + 수위 눈금 막대
@@ -323,6 +335,7 @@ function Sewer.Weir(ctx, i: number, j: number)
 	Kit.box(m, CFrame.lookAt(wallC, wallC + Vector3.new(across.Z, 0, across.X)), Vector3.new(ctx.T, 4.2, 1.2), { name = "Weir" })
 	local staff = c + Vector3.new(across.Z, 0, across.X) * 1.0 + across * 2.6
 	Kit.box(m, CFrame.new(staff + Vector3.new(0, ctx.PIT_Y + 4.5, 0)), Vector3.new(0.3, 9, 0.3), { blocks = false, collide = false, axis = "Y" })
+	PM.dress(m, "Sewer.Weir", CFrame.lookAt(c, c + Vector3.new(across.Z, 0, across.X)), nil, { m:FindFirstChild("Weir") :: any }) -- (둑만, 수위 막대는 방향마다 좌우가 바뀌어 기본 도형 그대로)
 end
 
 -- R 맨홀 수직갱: 바닥의 둥근 갱구(턱 + 막는 충돌) + 천장으로 솟은 원통 갱(지상 맨홀까지)
@@ -338,6 +351,7 @@ function Sewer.ManholeShaft(ctx, i: number, j: number)
 		Kit.cylinder(m, q + Vector3.new(0, 0.9, 0), q + Vector3.new(0, 3.6, 0), 0.12, { blocks = false })
 	end
 	solid(m, p, Vector3.new(6.8, 3.6, 6.8))
+	PM.dress(m, "Sewer.ManholeShaft", CFrame.new(p)) -- (갱구 바닥 가운데, 천장 14 기준)
 end
 
 return Sewer

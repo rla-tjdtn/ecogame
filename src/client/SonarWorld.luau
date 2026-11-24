@@ -35,6 +35,9 @@ World.viewCF = {} :: { CFrame }
 World.viewSize = {} :: { Vector3 }
 World.viewBall = {} :: { boolean }
 World.viewBlocks = {} :: { [number]: { number } }
+-- (소품 메시는 파트 하나에 실루엣 항목이 여럿: 항목마다 고유 키(선 번호가 겹치지 않게)·원뿔대 비율)
+World.viewKey = {} :: { [number]: any }
+World.viewTaper = {} :: { [number]: number }
 World.BLOCK = 4
 World.bnx, World.bny, World.bnz = 0, 0, 0
 -- 격자
@@ -312,6 +315,7 @@ function World.build(stage: Folder)
 	World.unattached = 0
 	World.cellSegs = {}
 	World.viewParts, World.viewCF, World.viewSize, World.viewBall, World.viewBlocks = {}, {}, {}, {}, {}
+	World.viewKey, World.viewTaper = {}, {}
 
 	-- 정적 파트
 	local statics: { BasePart } = {}
@@ -353,6 +357,10 @@ function World.build(stage: Folder)
 	type Info = { px: number, py: number, pz: number, xx: number, xy: number, xz: number, yx: number, yy: number, yz: number, zx: number, zy: number, zz: number, hx: number, hy: number, hz: number, shape: string }
 	local hbuckets: { [number]: { Info } } = {}
 	for _, p in statics do
+		-- (소품 메시는 상자 크기로 다른 선을 묻지 않게 뺀다: 메시 둘레 상자는 실제 몸보다 훨씬 크다)
+		if Geo.shapeOf(p) == "Mesh" then
+			continue
+		end
 		local cf, sz = p.CFrame, p.Size / 2
 		local info: Info = {
 			px = cf.Position.X, py = cf.Position.Y, pz = cf.Position.Z,
@@ -449,7 +457,9 @@ function World.build(stage: Folder)
 	local segLen = S.SegmentLength
 	local n = 0
 	for _, p in statics do
-		if Geo.shapeOf(p) ~= "None" then
+		-- (SonarHidden: 메시로 바꿔 입힌 소품의 숨긴 기본 도형 — 충돌·음파 막기·묻힌 선 판정은 그대로, 선만 없음)
+		local hidden = p:GetAttribute("SonarHidden") == true
+		if not hidden and Geo.shapeOf(p) ~= "None" then
 			list.n = 0
 			Geo.staticEdges(p, list)
 			for i = 1, list.n do
@@ -527,13 +537,16 @@ function World.build(stage: Folder)
 				end
 			end
 		end
-		if Geo.hasViewEdges(p) then
+		local function addView(cf: CFrame, sz: Vector3, ball: boolean, taper: number?, key: any)
 			table.insert(World.viewParts, p)
 			local i = #World.viewParts
-			local cf, sz = p.CFrame, p.Size
 			World.viewCF[i] = cf
 			World.viewSize[i] = sz
-			World.viewBall[i] = Geo.shapeOf(p) == "Ball"
+			World.viewBall[i] = ball
+			World.viewKey[i] = key
+			if taper then
+				World.viewTaper[i] = taper
+			end
 			local X, Y, Z = cf.XVector, cf.YVector, cf.ZVector
 			local h = sz / 2
 			local blocks = World.viewBlocks
@@ -551,6 +564,16 @@ function World.build(stage: Folder)
 					table.insert(l, i)
 				end
 			)
+		end
+		if not hidden then
+			local shape = Geo.shapeOf(p)
+			if shape == "Mesh" then
+				Geo.meshViews(p, function(cf: CFrame, sz: Vector3, ball: boolean, taper: number?)
+					addView(cf, sz, ball, taper, {}) -- (항목마다 새 키)
+				end)
+			elseif Geo.hasViewEdges(p) then
+				addView(p.CFrame, p.Size, shape == "Ball", nil, nil)
+			end
 		end
 		yieldSometimes()
 	end

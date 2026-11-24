@@ -11,6 +11,7 @@
 --   a 약품 카트(서랍 + 바퀴)                    R 병원 침대(받침 + 매트리스 + 머리판·발판 + 난간, 6부품)
 
 local Kit = require(script.Parent.Parent.MapKit)
+local PM = require(script.Parent.Parent.PropMesh) -- 다 지은 소품을 메시 에셋으로 바꿔 입힌다(없으면 기본 도형 그대로)
 
 local P = {}
 
@@ -72,6 +73,7 @@ function P.Counter(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(0.1, 4.3, 1.2), Vector3.new(1.0, 0.45, 1.4), LINE)
 	end
 	solid(m, cf, Vector3.new(3.2, 4.1, L))
+	PM.dress(m, if ctx.hash(i, j, 21) > 0.5 then "Hospital.CounterMonitor" else "Hospital.Counter", cf)
 end
 
 -- w 대기 의자 줄: 한 칸에 의자 셋(연결 다리)
@@ -89,6 +91,7 @@ function P.Bench(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(x, 0.6, 0), Vector3.new(0.2, 1.2, 1.8), LINE)
 	end
 	solid(m, cf, Vector3.new(7.6, 3.4, 2.4))
+	PM.dress(m, "Hospital.Bench", cf)
 end
 
 -- C 침대 사이 커튼: 천장 레일 + 세로 주름 천(지나갈 수 있다)
@@ -102,6 +105,7 @@ function P.Curtain(ctx, i: number, j: number)
 		local z = 3.0 - k * 2.0
 		Kit.box(m, cf * CFrame.new(if k % 2 == 0 then 0.18 else -0.18, (top + 1.2) / 2, z) * CFrame.Angles(0, if k % 2 == 0 then 0.35 else -0.35, 0), Vector3.new(0.1, top - 1.2, 2.1), LINE)
 	end
+	PM.dress(m, "Hospital.Curtain", cf)
 end
 
 -- I 수액 걸이대
@@ -118,6 +122,7 @@ function P.IVStand(ctx, i: number, j: number)
 	Kit.box(m, CFrame.new(c + Vector3.new(0.8, 6.0, 0)), Vector3.new(0.9, 1.5, 0.35), LINE) -- 수액 주머니
 	Kit.box(m, CFrame.new(c + Vector3.new(0, 3.8, 0.3)), Vector3.new(0.9, 1.1, 0.6), LINE) -- 펌프
 	solid(m, CFrame.new(c), Vector3.new(1.8, 7, 1.8))
+	PM.dress(m, "Hospital.IVStand", CFrame.new(c))
 end
 
 -- G 들것: 매트리스 + 바퀴 다리 + 옆 난간
@@ -136,6 +141,7 @@ function P.Gurney(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 1.0, 0), Vector3.new(2.0, 0.15, 4.6), LINE)
 	solid(m, cf, Vector3.new(2.8, 4.2, 6.6))
+	PM.dress(m, "Hospital.Gurney", cf)
 end
 
 -- W 휠체어
@@ -153,6 +159,7 @@ function P.Wheelchair(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(x * 0.45, 0.6, -1.9), Vector3.new(0.9, 0.12, 0.9), LINE) -- 발판
 	end
 	solid(m, cf, Vector3.new(3, 4.4, 3.6))
+	PM.dress(m, "Hospital.Wheelchair", cf)
 end
 
 -- u 세면대 + 거울
@@ -167,6 +174,7 @@ function P.Sink(ctx, i: number, j: number)
 	Kit.cylinder(m, (cf * CFrame.new(0, 4.1, z + 0.7)).Position, (cf * CFrame.new(0, 4.0, z - 0.1)).Position, 0.1, LINE)
 	Kit.box(m, cf * CFrame.new(0, 6.2, ctx.T / 2 - 0.25), Vector3.new(2.4, 2.6, 0.1), LINE) -- 거울
 	solid(m, cf * CFrame.new(0, 0, z), Vector3.new(3, 3.4, 2.2))
+	PM.dress(m, "Hospital.Sink", cf)
 end
 
 -- Y 엑스선 촬영대: 긴 촬영 침대 + 천장 기둥에 매달린 관구
@@ -185,6 +193,7 @@ function P.XRay(ctx, i: number, j: number)
 		Kit.cylinder(m, (cf * CFrame.new(1.2 + s * 1.3, 6.2, -0.2)).Position, (cf * CFrame.new(1.2 + s * 1.9, 5.6, -1.0)).Position, 0.1, LINE)
 	end
 	solid(m, cf, Vector3.new(7.4, 3.2, 2.8))
+	PM.dress(m, if top > 12.5 then "Hospital.XRayTall" else "Hospital.XRay", cf) -- (천장 11 / 14: 천장 기둥 길이만 다르다)
 end
 
 -- F 시신 냉장고: 벽을 따라 3단 문 + 손잡이. 가끔 트레이가 나와 있다
@@ -204,6 +213,7 @@ function P.MorgueFridge(ctx, i: number, j: number)
 	if ctx.hash(i, j, 61) > 0.7 then
 		Kit.box(m, cf * CFrame.new(-L / 4, 1.2, z - 2.3), Vector3.new(L / 2 - 0.9, 0.25, 1.6), LINE)
 	end
+	PM.dress(m, if ctx.hash(i, j, 61) > 0.7 then "Hospital.MorgueFridgeTray" else "Hospital.MorgueFridge", cf)
 end
 
 -- H 약장·차트 선반: 양면 5단 선반 + 상자 몇 개
@@ -226,6 +236,7 @@ function P.MedShelf(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(if r > 0.5 then 0.65 else -0.65, 1.1 + math.floor(r * 4) * 1.65, (ctx.hash(i, j, 80 + k) - 0.5) * (L - 2.4)), Vector3.new(0.9, 1.0, 1.6), LINE)
 	end
 	solid(m, cf, Vector3.new(2.4, h, L))
+	PM.dress(m, "Hospital.MedShelf", cf)
 end
 
 -- j 화장실 칸: 양옆 칸막이 + 반쯤 열린 문 + 변기
@@ -242,6 +253,7 @@ function P.ToiletStall(ctx, i: number, j: number)
 	Kit.cylinder(m, (cf * CFrame.new(0, 1.6, 1.4)).Position, (cf * CFrame.new(0, 1.85, 1.4)).Position, 1.0, LINE)
 	Kit.box(m, cf * CFrame.new(0, 2.6, 3.1), Vector3.new(1.8, 1.8, 0.9), SOFT)
 	solid(m, cf * CFrame.new(0, 0, 1.4), Vector3.new(6.6, 7, 5.2))
+	PM.dress(m, "Hospital.ToiletStall", cf)
 end
 
 -- e 엘리베이터 문(벽면): 문틀 + 두 짝 문 + 층 표시 + 호출 단추
@@ -256,6 +268,7 @@ function P.Elevator(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 8.5, z), Vector3.new(6.5, 0.5, 0.5), LINE)
 	Kit.box(m, cf * CFrame.new(0, 9.3, z), Vector3.new(1.8, 0.8, 0.3), LINE)
 	Kit.box(m, cf * CFrame.new(3.6, 4.2, z), Vector3.new(0.5, 1.2, 0.2), LINE)
+	PM.dress(m, "Hospital.Elevator", cf)
 end
 
 -- M 감시 모니터: 바퀴 달린 대 + 화면 둘 + 늘어진 선
@@ -274,6 +287,7 @@ function P.Monitor(ctx, i: number, j: number)
 	end
 	Kit.cylinder(m, (cf * CFrame.new(1.2, 4.6, 0.2)).Position, (cf * CFrame.new(1.9, 0.6, 0.6)).Position, 0.08, LINE)
 	solid(m, cf, Vector3.new(3.4, 6, 2.2))
+	PM.dress(m, "Hospital.Monitor", cf)
 end
 
 -- U CT 촬영기: 여덟 조각 고리(갠트리, 음파에 둥근 고리로 보인다) + 고리를 지나는 환자 테이블 + 받침
@@ -292,6 +306,7 @@ function P.CTScanner(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(-2.6, 1.35, 0), Vector3.new(2.4, 2.7, 1.2), SOFT) -- 테이블 받침
 	Kit.box(m, cf * CFrame.new(-3.4, 3.2, 0), Vector3.new(0.6, 0.25, 1.2), LINE) -- 머리 받침
 	solid(m, cf, Vector3.new(7.2, 6.6, 6.4))
+	PM.dress(m, "Hospital.CTScanner", cf)
 end
 
 -- Q 멈춘 회전문: 지붕·바닥 원판, 양옆 곡면 유리(판 셋씩), 가운데 기둥과 날개 넷. 지나갈 수 없다(옆 여닫이문 E 가 출구)
@@ -319,6 +334,7 @@ function P.RevolvingDoor(ctx, i: number, j: number)
 		Kit.box(m, c * CFrame.new(0, 0, 0), Vector3.new(0.3, 0.25, R - 0.3), SOFT) -- 날개 손잡이 가로대
 	end
 	solid(m, CFrame.new(p), Vector3.new(R * 2, top, R * 2))
+	PM.dress(m, "Hospital.RevolvingDoor", CFrame.new(p))
 end
 
 -- g 유리 바람막이·칸막이: 금속 틀(기둥 둘·위아래 가로대·가운데 띠) + 얇은 판. 이어진 방향으로 한 칸 길이, 막힌다
@@ -337,6 +353,7 @@ function P.GlassScreen(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 0.2, 0), Vector3.new(0.4, 0.4, L), SOFT)
 	Kit.box(m, cf * CFrame.new(0, 3.4, 0), Vector3.new(0.3, 0.15, L), LINE) -- 손 닿는 높이 띠(부딪힘 방지 표시)
 	solid(m, cf, Vector3.new(0.6, h, L))
+	PM.dress(m, "Hospital.GlassScreen", cf)
 end
 
 -- B 방화 셔터: 천장 셔터 박스에서 바닥까지 내려온 철판 + 가로 살 줄 + 아래 막대. 줄 끝(벽 쪽)에 안내 레일
@@ -359,6 +376,7 @@ function P.FireShutter(ctx, i: number, j: number)
 			Kit.box(m, cf * CFrame.new(0, h / 2, s * (L / 2 - 0.2)), Vector3.new(0.9, h, 0.4), SOFT)
 		end
 	end
+	PM.dress(m, "Hospital.FireShutter" .. (if ctx.at(i - math.round(axis.X), j - math.round(axis.Z)) ~= "B" then "A" else "") .. (if ctx.at(i + math.round(axis.X), j + math.round(axis.Z)) ~= "B" then "B" else ""), cf, Vector3.new(1, h / 11, 1)) -- (A/B = -Z/+Z 끝 안내 레일)
 end
 
 -- P 평행봉: 바닥 판 + 손잡이 봉 둘(이어진 방향) + 기둥
@@ -376,6 +394,7 @@ function P.ParallelBars(ctx, i: number, j: number)
 		end
 	end
 	solid(m, cf, Vector3.new(3.4, 3.2, L))
+	PM.dress(m, "Hospital.ParallelBars", cf)
 end
 
 -- d 협탁 + 오버베드 테이블: 벽 쪽 작은 서랍장(서랍 선 하나) + ㄱ자 식사 테이블(기둥 + 판). 5부품(QA 2차 부품 줄이기)
@@ -389,6 +408,7 @@ function P.Bedside(ctx, i: number, j: number)
 	Kit.cylinder(m, (cf * CFrame.new(-1.1, 0.1, tz)).Position, (cf * CFrame.new(-1.1, 3.6, tz)).Position, 0.12, LINE)
 	Kit.box(m, cf * CFrame.new(0, 3.7, tz), Vector3.new(2.8, 0.15, 1.3), SOFT) -- 식사 판
 	solid(m, cf * CFrame.new(0, 0, z - 1), Vector3.new(3, 3.8, 3.6))
+	PM.dress(m, "Hospital.Bedside", cf)
 end
 
 -- R 병원 침대(병원 전용, 공용 Props.Bed 11부품 대신 6부품): 머리를 벽에 붙인 침대 받침 + 매트리스 + 머리판·발판 + 한쪽 난간
@@ -410,6 +430,7 @@ function P.Bed(ctx, i: number, j: number)
 	local a = head - side * 1.2 + across * 1.65 + Vector3.new(0, 2.8, 0)
 	Kit.cylinder(m, a, a - side * 3.2, 0.07, LINE) -- 난간
 	Kit.box(m, look(mid + Vector3.new(0, 1.5, 0)), Vector3.new(3.2, 3, 6.4), { invisible = true, tag = false })
+	PM.dress(m, "Hospital.Bed", look(mid)) -- (소품 좌표: 바닥 가운데, -Z = 머리 쪽 벽)
 end
 
 -- a 약품 카트: 서랍 몸체(서랍 선 셋) + 위 쟁반 테 + 손잡이 + 바퀴 넷
@@ -429,6 +450,7 @@ function P.MedCart(ctx, i: number, j: number)
 		end
 	end
 	solid(m, cf, Vector3.new(3.2, 3.8, 2.6))
+	PM.dress(m, "Hospital.MedCart", cf)
 end
 
 return P

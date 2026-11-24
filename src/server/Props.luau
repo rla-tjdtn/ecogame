@@ -6,6 +6,7 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Kit = require(script.Parent.MapKit)
+local PM = require(script.Parent.PropMesh)
 
 local Props = {}
 
@@ -69,6 +70,7 @@ local function rack(ctx, i: number, j: number, axis: Vector3)
 	end
 	-- 보이지 않는 충돌(선반 사이로 들어가지 않게)
 	Kit.box(m, CFrame.lookAt(p + Vector3.new(0, 1.5, 0), p + Vector3.new(0, 1.5, 0) + axis), Vector3.new(depth, 3, len), { invisible = true, tag = false })
+	PM.dress(m, "Props.Rack", CFrame.lookAt(p, p + axis)) -- (소품 좌표: 바닥 가운데, -Z = 선반이 뻗는 방향)
 end
 function Props.RackX(ctx, i, j)
 	rack(ctx, i, j, Vector3.new(1, 0, 0))
@@ -105,6 +107,7 @@ function Props.Container(ctx, i: number, j: number, stacked: boolean?)
 			Kit.cylinder(m, a, a + Vector3.new(0, h - 0.6, 0), 0.09, { blocks = false, collide = false })
 		end
 		Kit.box(m, CFrame.lookAt(front, front + axis), Vector3.new(0.12, h - 0.4, 0.08), { blocks = false, collide = false })
+		PM.dress(m, "Props.Container", CFrame.lookAt(p + Vector3.new(0, y0, 0), p + Vector3.new(0, y0, 0) + axis)) -- (-Z = 문 쪽)
 	end
 end
 function Props.ContainerStack(ctx, i, j)
@@ -124,6 +127,10 @@ end
 
 -- 대형 배관(머리 위, 타일을 가로지른다)
 function Props.BigPipe(ctx, i: number, j: number)
+	local old = {}
+	for _, x in ctx.props:GetChildren() do
+		old[x] = true
+	end
 	local c = ctx.center(i, j)
 	local axis = Vector3.new(1, 0, 0)
 	if ctx.isWall(i - 1, j) and ctx.isWall(i + 1, j) then
@@ -141,6 +148,27 @@ function Props.BigPipe(ctx, i: number, j: number)
 	end
 	local cross = c + Vector3.new(0, ctx.floorY(i, j) + y - 1.9, 0)
 	Kit.box(ctx.props, CFrame.lookAt(cross, cross + axis), Vector3.new(5.2, 0.4, 0.5), { blocks = false })
+	-- (부품이 ctx.props 에 바로 들어간다: 이번에 생긴 배관 모델 + 받침 파트를 모아 배관 모델에 한 번 입힌다)
+	local pipeModel: Instance? = nil
+	local made = {}
+	for _, x in ctx.props:GetChildren() do
+		if not old[x] then
+			if x:IsA("BasePart") then
+				table.insert(made, x)
+			else
+				pipeModel = x
+				for _, d in x:GetDescendants() do
+					if d:IsA("BasePart") then
+						table.insert(made, d)
+					end
+				end
+			end
+		end
+	end
+	if pipeModel then
+		local f = c + Vector3.new(0, ctx.floorY(i, j), 0)
+		PM.dress(pipeModel, "Props.BigPipe", CFrame.lookAt(f, f + axis), nil, made) -- (바닥 가운데, -Z = 배관 방향)
+	end
 end
 
 -- ── 병원 ──
@@ -172,6 +200,7 @@ function Props.Bed(ctx, i: number, j: number)
 		Kit.cylinder(m, a, a - side * 3.2, 0.06, { blocks = false, collide = false })
 	end
 	Kit.box(m, CFrame.lookAt(mid + Vector3.new(0, 1.5, 0), mid + Vector3.new(0, 1.5, 0) + side), Vector3.new(3.2, 3, 6.4), { invisible = true, tag = false })
+	PM.dress(m, "Props.Bed", CFrame.lookAt(mid, mid + side)) -- (-Z = 머리 쪽 벽)
 end
 
 -- 책상 + 의자
@@ -199,6 +228,7 @@ function Props.Desk(ctx, i: number, j: number)
 		end
 	end
 	Kit.box(m, cf * CFrame.new(0, 1.5, 0), Vector3.new(4.6, 3, 2.4), { invisible = true, tag = false })
+	PM.dress(m, "Props.Desk", cf)
 end
 
 -- 수술대 + 천장 원형 조명(꺼진) + 기구 카트
@@ -224,6 +254,7 @@ function Props.Surgery(ctx, i: number, j: number)
 		end
 	end
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 1.5, 0)), Vector3.new(2.4, 3, 6), { invisible = true, tag = false })
+	PM.dress(m, "Props.Surgery", CFrame.new(p))
 end
 
 -- 캐비닛(벽에 붙은 키 큰 수납장)
@@ -238,6 +269,8 @@ function Props.Cabinet(ctx, i: number, j: number)
 	local face = c - side * 0.95
 	Kit.box(m, CFrame.lookAt(face, face - side), Vector3.new(0.08, 6.4, 0.1), { blocks = false, collide = false })
 	Kit.box(m, CFrame.lookAt(face + Vector3.new(0, 0.6, 0), face + Vector3.new(0, 0.6, 0) - side) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(0.08, 3.4, 0.1), { blocks = false, collide = false })
+	local fl = c - Vector3.new(0, 3.5, 0)
+	PM.dress(m, "Props.Cabinet", CFrame.lookAt(fl, fl - side)) -- (바닥 가운데, -Z = 문 쪽(방 안))
 end
 
 -- ── 폐유치원 ──
@@ -289,6 +322,7 @@ function Props.Slide(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(a * 0.95, 0.3, 0), Vector3.new(0.12, 0.6, len), { blocks = false, collide = false })
 	end
 	Kit.box(m, CFrame.lookAt(p + Vector3.new(0, 2.5, 0), p + Vector3.new(0, 2.5, 0) + side), Vector3.new(3, 5, 6.5), { invisible = true, tag = false })
+	PM.dress(m, "Props.Slide", CFrame.lookAt(p, p + side)) -- (칸 가운데 바닥, -Z = 벽(사다리) 쪽)
 end
 
 -- 작은 책걸상(t): 무릎 높이 탁자 + 작은 의자 둘
@@ -316,6 +350,7 @@ function Props.SmallDesk(ctx, i: number, j: number)
 		end
 	end
 	Kit.box(m, cf * CFrame.new(0, 1.2, 0.6), Vector3.new(3.8, 2.4, 3.6), { invisible = true, tag = false })
+	PM.dress(m, "Props.SmallDesk", cf)
 end
 
 -- 장난감 더미(y): 뚜껑 열린 장난감 상자 + 쌓기 블록 + 공 + 곰 인형
@@ -346,6 +381,7 @@ function Props.ToyPile(ctx, i: number, j: number)
 		Kit.ball(m, t + Vector3.new(0, 1.78, 0) + across * (s * 0.32), 0.16, { blocks = false, collide = false })
 	end
 	Kit.box(m, CFrame.lookAt(c - side * 0.6 + Vector3.new(0, 1.2, 0), c - side * 0.6 + Vector3.new(0, 1.2, 0) + side), Vector3.new(3.4, 2.4, 3.2), { invisible = true, tag = false })
+	PM.dress(m, if h < 0.5 then "Props.ToyPile1" else "Props.ToyPile2", CFrame.lookAt(p, p + side)) -- (칸 가운데 바닥, -Z = 벽 쪽)
 end
 
 -- 볼풀(G): 밟고 지나가는 칸. 공 몇 개 + 볼풀이 아닌 쪽 가장자리에 낮은 쿠션 턱(통과됨)
@@ -358,6 +394,7 @@ function Props.BallPit(ctx, i: number, j: number)
 		local a, b, r = ctx.hash(i, j, 10 + k), ctx.hash(i, j, 20 + k), 0.45 + ctx.hash(i, j, 30 + k) * 0.2
 		Kit.ball(m, p + Vector3.new((a - 0.5) * 6.4, r + (k % 2) * 0.3, (b - 0.5) * 6.4), r, { blocks = false, collide = false })
 	end
+	PM.dress(m, "Props.BallPit", CFrame.new(p), nil, m:GetChildren() :: any) -- (공만: 가장자리 쿠션 턱은 기본 도형 그대로)
 	for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
 		local n = ctx.at(i + d[1], j + d[2])
 		if n ~= "G" and not ctx.isWall(i + d[1], j + d[2]) then
@@ -380,6 +417,7 @@ function Props.NapMat(ctx, i: number, j: number)
 	if ctx.hash(i, j, 6) < 0.4 then
 		Kit.box(m, cf * CFrame.new(0.2, 0.4, 0.8) * CFrame.Angles(0, 0.3, 0), Vector3.new(2.4, 0.15, 2.6), { blocks = false, collide = false }) -- 흐트러진 이불
 	end
+	PM.dress(m, if ctx.hash(i, j, 6) < 0.4 then "Props.NapMat2" else "Props.NapMat1", cf)
 end
 
 -- 작은 변기·세면대(j)
@@ -400,6 +438,7 @@ function Props.KidToilet(ctx, i: number, j: number)
 		Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 4.2, 0) + side * 0.4, c + Vector3.new(0, 4.2, 0) - side), Vector3.new(1.8, 1.4, 0.08), { blocks = false, collide = false }) -- 낮은 거울
 	end
 	Kit.box(m, CFrame.lookAt(c - side * 0.5 + Vector3.new(0, 1.2, 0), c - side * 0.5 + Vector3.new(0, 1.2, 0) + side), Vector3.new(2.4, 2.4, 2.4), { invisible = true, tag = false })
+	PM.dress(m, if ctx.hash(i, j, 8) < 0.5 then "Props.KidToilet" else "Props.KidSink", CFrame.lookAt(c, c - side)) -- (벽 앞 바닥, -Z = 방 안쪽)
 end
 
 -- 낮은 기어가는 통로(q): 어린이 키 높이로 내려온 천장 + 칸마다 둥근 테(통과됨, 괴물도 지나간다)
@@ -418,6 +457,7 @@ function Props.LowTunnel(ctx, i: number, j: number)
 		Kit.cylinder(m, c, c + Vector3.new(0, low, 0), 0.18, { blocks = false, collide = false })
 	end
 	Kit.cylinder(m, p - across * (ctx.T / 2 - 0.5) + Vector3.new(0, low - 0.2, 0), p + across * (ctx.T / 2 - 0.5) + Vector3.new(0, low - 0.2, 0), 0.18, { blocks = false, collide = false })
+	PM.dress(m, "Props.LowTunnel", CFrame.lookAt(p, p + along)) -- (-Z = 통로 방향)
 end
 
 return Props

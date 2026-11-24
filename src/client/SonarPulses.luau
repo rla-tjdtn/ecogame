@@ -251,15 +251,19 @@ local function enterBlock(p: Pulse, b: number): number
 				local cf, size = World.viewCF[i], World.viewSize[i]
 				if (cf.Position - p.origin).Magnitude <= S.Radius + size.Magnitude / 2 then
 					list.n = 0
+					local taper = World.viewTaper[i]
 					if World.viewBall[i] then
 						Geo.ballSilhouette(cf, size, p.cam, list)
+					elseif taper then
+						Geo.coneSilhouette(cf, size, taper, p.cam, list)
 					else
 						Geo.cylinderSilhouette(cf, size, p.cam, list)
 					end
 					if list.n > 0 then
 						local vid = viewIds[i]
 						if not vid then
-							vid = dynId(World.viewParts[i])
+							-- (소품 메시는 파트 하나에 실루엣이 여럿: 항목 키로 번호를 따로 받는다)
+							vid = dynId((World.viewKey[i] or World.viewParts[i]) :: any)
 							viewIds[i] = vid
 						end
 						addSegments(p, -(1e8 + vid * 64), nil)

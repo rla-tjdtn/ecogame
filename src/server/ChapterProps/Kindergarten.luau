@@ -9,6 +9,7 @@
 --   Q 낮은 나무 울타리(마당)  l 가로등(후문, 지나감)  t 마른 나무(마당)
 
 local Kit = require(script.Parent.Parent.MapKit)
+local PM = require(script.Parent.Parent.PropMesh) -- 다 지은 소품을 메시 에셋으로 바꿔 입힌다(없으면 기본 도형 그대로)
 
 local P = {}
 
@@ -83,6 +84,7 @@ function P.ShoeCubby(ctx, i: number, j: number)
 			Kit.box(m, cf * CFrame.new(x, h + 0.2, (ctx.hash(i, j, 4) - 0.5) * 4), Vector3.new(0.5, 0.35, 1.1), LINE)
 		end
 	end
+	PM.dress(m, "Kindergarten.ShoeCubby", cf) -- (소품 좌표: 바닥 가운데, Z = 신발장 길이)
 end
 
 -- r 안내 창구: 어른 허리 높이 카운터 + 유리 틀 + 출석부
@@ -98,6 +100,7 @@ function P.Reception(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 7.2, 0), Vector3.new(0.2, 0.2, L), LINE)
 	Kit.box(m, cf * CFrame.new(0.4, 3.7, 1.2) * CFrame.Angles(0, 0.3, 0), Vector3.new(1.2, 0.15, 1.6), LINE)
+	PM.dress(m, "Kindergarten.Reception", cf)
 end
 
 -- T 모둠 책상: 육각으로 읽히는 둥근 판 + 작은 의자 넷(하나는 넘어졌다)
@@ -118,6 +121,7 @@ function P.KidTable(ctx, i: number, j: number)
 		kidChair(m, cf * CFrame.new(-2.4, 0.6, -1.8) * CFrame.Angles(math.pi / 2, 0.6, 0))
 	end
 	solid(m, cf, Vector3.new(4.4, 2.4, 4.4))
+	PM.dress(m, "Kindergarten.KidTable", cf)
 end
 
 -- B 칠판(벽, 낮게) + 자석 글자판 + 아래 교구 선반
@@ -139,6 +143,7 @@ function P.Board(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(k * 1.8, 1.2, z - 1.74), Vector3.new(0.1, 2.2, 0.08), LINE)
 	end
 	solid(m, cf * CFrame.new(0, 0, z - 0.9), Vector3.new(7.2, 2.6, 1.8))
+	PM.dress(m, "Kindergarten.Board", cf) -- (벽 등진 좌표: +Z = 벽)
 end
 
 -- k 가방장: 벽에 붙은 칸칸이 장 + 걸린 가방
@@ -156,6 +161,7 @@ function P.BagCubby(ctx, i: number, j: number)
 	local x = -2.7 + s * 1.8
 	Kit.box(m, cf * CFrame.new(x, 2.6, z - 1.1), Vector3.new(1.1, 1.3, 0.6), LINE) -- 남은 가방
 	solid(m, cf * CFrame.new(0, 0, z), Vector3.new(7.2, h, 1.8))
+	PM.dress(m, "Kindergarten.BagCubby", cf)
 end
 
 -- P 풍금 + 작은 의자
@@ -176,6 +182,7 @@ function P.Organ(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(x, 0.7, -0.8), Vector3.new(0.2, 1.4, 1.0), LINE)
 	end
 	solid(m, cf * CFrame.new(0, 0, 1.8), Vector3.new(5.8, 4.2, 3.2))
+	PM.dress(m, "Kindergarten.Organ", cf)
 end
 
 -- h 앞면 책장: 낮은 2단(양쪽에서 책 표지가 보이는 경사 선반)
@@ -197,6 +204,7 @@ function P.KidShelf(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(s * 0.7, (if k < 2 then 1.1 else 3.0), (r - 0.5) * (L - 3)) * CFrame.Angles(0, 0, s * 0.3), Vector3.new(0.12, 1.4, 1.2), LINE)
 	end
 	solid(m, cf, Vector3.new(2.6, h, L))
+	PM.dress(m, "Kindergarten.KidShelf", cf)
 end
 
 -- M 쌓인 낮잠 매트 + 접은 이불
@@ -209,6 +217,7 @@ function P.MatPile(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0.4, 3.5, 1.6) * CFrame.Angles(0, 0.2, 0), Vector3.new(2.6, 0.6, 2.0), LINE)
 	solid(m, cf * CFrame.new(0, 0, 1.6), Vector3.new(6, 3.6, 3.4))
+	PM.dress(m, "Kindergarten.MatPile", cf)
 end
 
 -- i 놀이집: 어린이 키만 한 집(벽 네 장·문 구멍·뾰족 지붕)
@@ -230,6 +239,7 @@ function P.Playhouse(ctx, i: number, j: number)
 	Kit.ball(m, at(cf, 0.4, 0.8, 1.2), 0.8, LINE)
 	Kit.ball(m, at(cf, 0.4, 2.0, 1.2), 0.6, LINE)
 	solid(m, cf, Vector3.new(5.8, 5.4, 5.4))
+	PM.dress(m, "Kindergarten.Playhouse", cf)
 end
 
 -- X 큰 스펀지 블록(아치·원기둥·삼각)
@@ -244,6 +254,7 @@ function P.SoftBlocks(ctx, i: number, j: number)
 	Kit.cylinder(m, at(cf, -1.2, 1.0, 2.6), at(cf, 1.4, 1.0, 2.6), 1.0, LINE)
 	Kit.box(m, cf * CFrame.new(2.4, 0.7, -2.4) * CFrame.Angles(0, 0.5, 0), Vector3.new(1.4, 1.4, 1.4), LINE)
 	solid(m, cf, Vector3.new(5.6, 4.2, 4))
+	PM.dress(m, "Kindergarten.SoftBlocks", cf)
 end
 
 -- x 보건실 어린이 침대 + 걷힌 커튼
@@ -262,6 +273,7 @@ function P.SickBed(ctx, i: number, j: number)
 	Kit.cylinder(m, at(cf, 2.6, 7.2, 3.6), at(cf, 2.6, 7.2, -2.6), 0.08, LINE)
 	Kit.box(m, cf * CFrame.new(2.6, 4.2, 2.8), Vector3.new(0.5, 5.6, 1.4), LINE)
 	solid(m, cf * CFrame.new(0, 0, 1.0), Vector3.new(3.2, 2.6, 5.4))
+	PM.dress(m, "Kindergarten.SickBed", cf)
 end
 
 -- I 어린이 세면대: 무릎 높이 긴 개수대 + 낮은 거울 + 수도 셋
@@ -277,6 +289,7 @@ function P.KidSink(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 4.4, ctx.T / 2 - 0.25), Vector3.new(6.8, 1.8, 0.1), LINE)
 	solid(m, cf * CFrame.new(0, 0, z), Vector3.new(7.2, 2.4, 2.2))
+	PM.dress(m, "Kindergarten.KidSink", cf)
 end
 
 -- a 유희실 무대 한 칸: 무릎 높이 단 + 앞판 + 뒤 막 주름 + 위 장식 띠
@@ -291,6 +304,7 @@ function P.Stage(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 9.4, T / 2 - 1.0), Vector3.new(T, 1.0, 0.2), LINE)
 	solid(m, cf, Vector3.new(T, 2.0, T - 0.6))
+	PM.dress(m, "Kindergarten.Stage", cf)
 end
 
 -- F 낮은 식탁: 긴 상 + 붙은 긴 의자, 식판
@@ -313,6 +327,7 @@ function P.LunchTable(ctx, i: number, j: number)
 		end
 	end
 	solid(m, cf, Vector3.new(4.8, 2.2, L))
+	PM.dress(m, "Kindergarten.LunchTable", cf)
 end
 
 -- V 배식대: 카운터 + 국통 + 위 선반
@@ -329,6 +344,7 @@ function P.ServingCounter(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 5.8, 0), Vector3.new(2.2, 0.2, L), LINE)
 	local c = at(cf, 0, 3.2, (ctx.hash(i, j, 25) - 0.5) * 3)
 	Kit.cylinder(m, c, c + Vector3.new(0, 1.2, 0), 1.0, LINE)
+	PM.dress(m, "Kindergarten.ServingCounter", cf)
 end
 
 -- R 조리대(벽): 화구 둘 + 큰 솥 + 배기 후드
@@ -348,6 +364,7 @@ function P.Range(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, y, z), Vector3.new(7.6, 1.4, 3.2), SOFT)
 	Kit.box(m, cf * CFrame.new(0, (y + 0.7 + ctx.H) / 2, z + 0.6), Vector3.new(2.0, ctx.H - y - 0.7, 1.6), LINE)
 	solid(m, cf * CFrame.new(0, 0, z), Vector3.new(7.8, 3.4, 3.2))
+	PM.dress(m, "Kindergarten.Range", cf, Vector3.new(1, ctx.H / 14, 1))
 end
 
 -- K 조리 작업대: 스테인리스 상판 + 아래 선반 + 도마·양동이
@@ -367,6 +384,7 @@ function P.PrepTable(ctx, i: number, j: number)
 	local c = at(cf, -0.2, 1.0, (ctx.hash(i, j, 6) - 0.5) * 4)
 	Kit.cylinder(m, c, c + Vector3.new(0, 1.2, 0), 0.8, LINE)
 	solid(m, cf, Vector3.new(3.6, 3.4, L))
+	PM.dress(m, "Kindergarten.PrepTable", cf)
 end
 
 -- J 정글짐: 3x3 기둥 + 두 층 가로대
@@ -388,6 +406,7 @@ function P.JungleGym(ctx, i: number, j: number)
 		end
 	end
 	solid(m, cf, Vector3.new(s * 2 + 0.3, h, s * 2 + 0.3))
+	PM.dress(m, "Kindergarten.JungleGym", cf)
 end
 
 -- w 그네: A 자 다리 + 가로대 + 줄에 매달린 자리(하나는 비뚤어져 멈춰 있다)
@@ -408,6 +427,7 @@ function P.Swing(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 1.5 + math.abs(off) * 0.3, off) * CFrame.Angles(off * 0.15, 0, 0), Vector3.new(2.0, 0.18, 0.9), LINE)
 	solid(m, cf, Vector3.new(L - 0.4, 6, 3.4))
+	PM.dress(m, "Kindergarten.Swing", cf)
 end
 
 -- e 시소: 받침 + 기운 긴 판 + 손잡이
@@ -425,6 +445,7 @@ function P.Seesaw(ctx, i: number, j: number)
 		Kit.cylinder(m, at(plank, -0.5, 1.2, z), at(plank, 0.5, 1.2, z), 0.08, LINE)
 	end
 	solid(m, cf, Vector3.new(2.2, 2.6, 7.2))
+	PM.dress(m, "Kindergarten.Seesaw", cf)
 end
 
 -- H 스프링 목마: 용수철 + 말 몸통·목·머리
@@ -442,6 +463,7 @@ function P.SpringHorse(ctx, i: number, j: number)
 	Kit.cylinder(m, at(body, -1.1, 1.5, -1.5), at(body, 1.1, 1.5, -1.5), 0.1, LINE) -- 손잡이
 	Kit.box(m, body * CFrame.new(0, 0.4, 1.8) * CFrame.Angles(0.5, 0, 0), Vector3.new(0.3, 1.4, 0.3), LINE) -- 꼬리
 	solid(m, cf, Vector3.new(2.4, 4, 3.6))
+	PM.dress(m, "Kindergarten.SpringHorse", cf)
 end
 
 -- g 모래밭(지나간다): 가장자리 턱 + 버려진 양동이·삽
@@ -475,6 +497,7 @@ function P.Planter(ctx, i: number, j: number)
 		Kit.cylinder(m, at(cf, -2.2 + k * 1.5, 1.6, z), at(cf, -2.2 + k * 1.5 + (r - 0.5) * 1.6, 3.2 + r * 1.2, z - (r - 0.3)), 0.08, LINE)
 	end
 	solid(m, cf * CFrame.new(0, 0, z), Vector3.new(6.2, 2, 2.2))
+	PM.dress(m, "Kindergarten.Planter", cf)
 end
 
 -- ── 바깥 마당(QA 재작업: 마당이 실내 방이 아니라 바깥으로 읽히게) ──
@@ -496,6 +519,7 @@ function P.Fence(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(0, 1.6, z), Vector3.new(0.3, 3.2, 0.5), LINE)
 	end
 	Kit.box(m, cf * CFrame.new(0, 3.5, 0), Vector3.new(0.12, 7.0, L), { invisible = true, tag = false }) -- (넘어가지 못하게)
+	PM.dress(m, "Kindergarten.Fence", cf)
 end
 
 -- l 가로등(후문 양옆, 지나갈 수 있다): 받침 + 기둥 + 팔 + 등갓 = 부품 5개
@@ -513,6 +537,7 @@ function P.LampPost(ctx, i: number, j: number)
 	Kit.cylinder(m, a, a + out * 1.6, 0.1, LINE)
 	Kit.wedge(m, CFrame.lookAt(a + out * 1.6 - Vector3.new(0, 0.5, 0), a + out * 1.6 - Vector3.new(0, 0.5, 0) + out), Vector3.new(1.2, 0.6, 1.0), LINE)
 	Kit.box(m, CFrame.new(a + out * 1.6 - Vector3.new(0, 0.95, 0)), Vector3.new(0.7, 0.3, 0.7), LINE)
+	PM.dress(m, "Kindergarten.LampPost", CFrame.lookAt(p, p + out), Vector3.new(1, top / 11, 1)) -- (-Z = 팔 방향)
 end
 
 -- t 마른 나무(마당): 줄기 + 가지 셋 + 듬성한 잎 덩어리 = 부품 6개, 줄기만 막는다
@@ -530,6 +555,7 @@ function P.Tree(ctx, i: number, j: number)
 	end
 	Kit.ball(m, p + Vector3.new(0.4, top * 0.85, -0.3), 2.2, LINE)
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 0.1, 0)), Vector3.new(3.0, 0.2, 3.0), LINE) -- 나무 둘레 보호판
+	PM.dress(m, "Kindergarten.Tree", CFrame.new(p), Vector3.new(1, top / 11, 1))
 end
 
 return P

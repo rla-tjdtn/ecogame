@@ -2,6 +2,7 @@
 -- 서브 괴물 자기 자리에 맵에 없던 소품을 더 놓는다(Shared/CreatureHomes 의 prop): 욕조 · 칠판 · 풍금 · 모빌 달린 아기 침대 · 천장 봉.
 -- 스테이지를 지을 때(폴더가 workspace 에 들어가기 전) 같이 만들어서 음파 선에 다른 소품처럼 그려진다. 부딪히지 않는다(길을 막지 않게).
 local Kit = require(script.Parent.MapKit)
+local PM = require(script.Parent.PropMesh)
 
 local HomeProps = {}
 local T = 8
@@ -132,7 +133,9 @@ function HomeProps.place(info: any, homes: { [string]: any }, ids: { string }, p
 				m.Name = "Home_" .. h.prop
 				m:SetAttribute("HomeOf", id)
 				m.Parent = parent
-				make(m, CFrame.new((ci - 0.5) * T, y, (cj - 0.5) * T))
+				local cf = CFrame.new((ci - 0.5) * T, y, (cj - 0.5) * T)
+				make(m, cf)
+				PM.dress(m, "Home." .. h.prop, cf)
 				n += 1
 			end
 		end

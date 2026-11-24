@@ -10,6 +10,7 @@
 --   x 벽 소화전 함(벽에 붙은 얕은 함 + 호스 릴 + 위 비상등, 지나갈 수 있음 — 정비 통로 대피 칸 표시)
 
 local Kit = require(script.Parent.Parent.MapKit)
+local PM = require(script.Parent.Parent.PropMesh) -- 다 지은 소품을 메시 에셋으로 바꿔 입힌다(없으면 기본 도형 그대로)
 
 local Facility = {}
 
@@ -68,6 +69,7 @@ function Facility.Console(ctx, i: number, j: number)
 	Kit.box(m, ch * CFrame.new(0, 1.85, 0), Vector3.new(1.7, 0.25, 1.7), { blocks = false })
 	Kit.box(m, ch * CFrame.new(0, 3.0, 0.8), Vector3.new(1.7, 2.0, 0.2), { blocks = false })
 	solid(m, p, Vector3.new(6.6, 3.2, 6.6))
+	PM.dress(m, "Facility.Console", cf) -- (소품 좌표: 바닥 가운데, -Z = 화면 쪽)
 end
 
 -- W 상황판: 북쪽 벽(가장 가까운 벽)에 붙은 3x2 화면 + 테두리. 낮은 곳이 비어 있어 칸은 지나갈 수 있다
@@ -89,6 +91,7 @@ function Facility.VideoWall(ctx, i: number, j: number)
 		local t = c + across * (s * 3.2) + Vector3.new(0, 2.3, 0)
 		Kit.cylinder(m, t, t + Vector3.new(0, math.max(0.5, ctx.H - 9.5), 0), 0.12, { collide = false, blocks = false })
 	end
+	PM.dress(m, "Facility.VideoWall", cf * CFrame.new(0, -7.2, 0)) -- (화면 아래 바닥, -Z = 방 쪽, 받침은 천장 14 기준)
 end
 
 -- F 서류 캐비닛 줄: 이어진 방향으로 길게, 양면 4단 서랍
@@ -106,6 +109,7 @@ function Facility.FileCabinet(ctx, i: number, j: number)
 		end
 		Kit.box(m, cf * CFrame.new(s * 1.55, 0, 0), Vector3.new(0.08, h - 0.4, 0.12), { blocks = false, collide = false })
 	end
+	PM.dress(m, "Facility.FileCabinet", CFrame.lookAt(p, p + axis), nil, m:GetChildren() :: any) -- (위 상자는 칸마다 달라 기본 도형 그대로)
 	-- 위에 쌓인 상자 하나(칸마다 다르게)
 	if ctx.hash(i, j, 11) > 0.5 then
 		Kit.crate(m, p + Vector3.new(0, h, 0) + axis * ((ctx.hash(i, j, 12) - 0.5) * 3), Vector3.new(2.2, 1.4, 2.6), ctx.hash(i, j, 13) * 0.6)
@@ -138,6 +142,7 @@ function Facility.Generator(ctx, i: number, j: number)
 	Kit.box(m, CFrame.new(cb), Vector3.new(2.6, 3.0, 0.9), { blocks = false })
 	Kit.cylinder(m, cb + Vector3.new(1.0, -1.5, 0), p + Vector3.new(3.2, 0.3, -6.5), 0.22, { blocks = false, collide = false })
 	solid(m, p, Vector3.new(2 * T - 1.2, 7.5, 2 * T - 1.2))
+	PM.dress(m, "Facility.Generator", CFrame.new(p)) -- (2x2 가운데 바닥, 월드 축, 굴뚝은 천장 14 기준)
 end
 
 -- g 발전기 나머지 칸(G 가 다 짓는다)
@@ -168,6 +173,7 @@ function Facility.Switchgear(ctx, i: number, j: number)
 		Kit.cylinder(m, a, Vector3.new(a.X, ctx.H, a.Z), 0.3, { blocks = false, collide = false })
 	end
 	solid(m, p + side * (ctx.T / 2 - 1.5), Vector3.new(if side.X ~= 0 then 3 else 7.6, 7.2, if side.X ~= 0 then 7.6 else 3))
+	PM.dress(m, "Facility.Switchgear", cf * CFrame.new(0, -3.6, 0)) -- (함 아래 바닥, -Z = 방 쪽)
 end
 
 -- U 냉각 배관 선반: 굵은 배관 3단이 이어진 방향으로 지나간다(벽 대신 서 있는 배관 벽)
@@ -196,6 +202,7 @@ function Facility.PipeRack(ctx, i: number, j: number)
 	Kit.box(m, CFrame.lookAt(p + Vector3.new(0, 9.6, 0), p + Vector3.new(0, 9.6, 0) + axis), Vector3.new(4.2, 0.35, 0.4), { blocks = false })
 	-- 보이지 않는 충돌(배관 사이로 넘어가지 않게, 천장까지)
 	Kit.box(m, CFrame.lookAt(p + Vector3.new(0, ctx.H / 2, 0), p + Vector3.new(0, ctx.H / 2, 0) + axis), Vector3.new(4.4, ctx.H, ctx.T), { invisible = true, tag = false })
+	PM.dress(m, "Facility.PipeRack", CFrame.lookAt(p, p + axis)) -- (-Z = 배관 방향)
 end
 
 -- j 정비 작업대: 철제 작업대 + 바이스 + 서랍, 벽 쪽 공구판
@@ -223,6 +230,7 @@ function Facility.Workbench(ctx, i: number, j: number)
 		Kit.box(m, board * CFrame.new(k * 1.2, -0.2 + (k % 2) * 0.5, -0.15), Vector3.new(0.18, 1.3, 0.12), { blocks = false, collide = false })
 	end
 	solid(m, c, Vector3.new(if side.X ~= 0 then 3.4 else 7, 4, if side.X ~= 0 then 7 else 3.4))
+	PM.dress(m, "Facility.Workbench", cf) -- (-Z = 방 쪽, +Z = 벽 공구판)
 end
 
 -- Y 공조기(2칸, 이 칸이 서쪽 끝, y 가 동쪽 칸): 상자 몸통, 남쪽으로 향한 둥근 송풍기 얼굴, 천장으로 올라가는 큰 덕트
@@ -245,6 +253,7 @@ function Facility.AirHandler(ctx, i: number, j: number)
 	local d = p + Vector3.new(0, 7.2, -1.2)
 	Kit.box(m, CFrame.new(Vector3.new(d.X, (d.Y + ctx.H) / 2, d.Z)), Vector3.new(5.0, math.max(1, ctx.H - d.Y), 3.4), { blocks = false })
 	solid(m, p + Vector3.new(0, 0, -0.4), Vector3.new(14, 7.5, 7))
+	PM.dress(m, "Facility.AirHandler", CFrame.new(p)) -- (2칸 가운데 바닥, 월드 축, 송풍기 = +Z, 덕트는 천장 14 기준)
 end
 
 -- h 바닥 경고 줄무늬(화물 엘리베이터 앞·구덩이 둘레): 바닥에 얕게 솟은 빗금 판. 걸어서 지나간다
@@ -273,6 +282,7 @@ function Facility.HoseCabinet(ctx, i: number, j: number)
 	Kit.cylinder(m, r, r - side * 0.3, 1.2, { blocks = false, collide = false, rings = 1 })
 	local l = (face * CFrame.new(0, 2.9, -0.3)).Position
 	Kit.box(m, CFrame.lookAt(l, l - side), Vector3.new(1.6, 0.6, 0.6), { blocks = false, collide = false })
+	PM.dress(m, "Facility.HoseCabinet", face * CFrame.new(0, -3.4, 0)) -- (함 아래 바닥, -Z = 방 쪽)
 end
 
 return Facility

@@ -7,6 +7,25 @@
 -- 부품 수(성능): 차 5개 + 바닥선 2~3, 덮개 차 5개, 기둥 약 13개(번호판 한 면), 빈 칸 2~3개.
 
 local Kit = require(script.Parent.Parent.MapKit)
+local PM = require(script.Parent.Parent.PropMesh) -- 다 지은 소품을 메시 에셋으로 바꿔 입힌다(없으면 기본 도형 그대로)
+
+-- (ctx.props 에 바로 넣는 소품: 지금 있는 것 기록 → 이 함수가 새로 만든 파트만 PM.dress 에 넘긴다)
+local function snap(f: Instance): { [Instance]: boolean }
+	local s = {}
+	for _, c in f:GetChildren() do
+		s[c] = true
+	end
+	return s
+end
+local function fresh(f: Instance, s: { [Instance]: boolean }): { BasePart }
+	local out = {}
+	for _, c in f:GetChildren() do
+		if not s[c] and c:IsA("BasePart") then
+			table.insert(out, c)
+		end
+	end
+	return out
+end
 
 local P = {}
 
@@ -82,6 +101,7 @@ function P.Car(ctx: any, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 3.9, 0.8), Vector3.new(5.0, 1.6, 5.6), { name = "CarCabin" })
 	Kit.wedge(m, cf * CFrame.new(0, 3.9, -3.0), Vector3.new(5.0, 1.6, 2.0), LINE) -- 앞 유리
 	Kit.wedge(m, cf * CFrame.new(0, 3.9, 4.3) * CFrame.Angles(0, math.pi, 0), Vector3.new(5.0, 1.6, 1.4), LINE) -- 뒤 유리
+	PM.dress(m, "Parking.Car", cf) -- (소품 좌표: 차 바닥 가운데, -Z = 차 앞)
 end
 
 -- W 덮개 씌운 장기 주차 차: 차 모양 덩어리 위로 천이 늘어진다 = 부품 5개(+ 바닥선)
@@ -97,6 +117,7 @@ function P.CoveredCar(ctx: any, i: number, j: number)
 	-- 바닥까지 끌린 천 자락(한쪽 옆)
 	local s = if ctx.hash(i, j, 94) < 0.5 then 1 else -1
 	Kit.box(m, cf * CFrame.new(s * 3.3, 1.2, 1.5) * CFrame.Angles(0, 0, s * 0.25), Vector3.new(0.12, 2.6, 7.0), LINE)
+	PM.dress(m, "Parking.CoveredCar", cf)
 end
 
 -- I 사고 차량: 차로를 가로질러 비스듬히 멈춘 차(앞이 찌그러지고 문 하나가 바닥에) = 부품 6개
@@ -110,6 +131,7 @@ function P.CrashedCar(ctx: any, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0.3, 3.8, 1.6) * CFrame.Angles(0, 0, 0.12), Vector3.new(4.8, 1.5, 5.2), { name = "CarCabin" })
 	Kit.box(m, cf * CFrame.new(-4.6, 0.15, -0.5) * CFrame.Angles(0, 0.6, 0), Vector3.new(0.3, 0.3, 3.4), LINE) -- 떨어진 문짝
 	Kit.box(m, cf * CFrame.new(3.6, 0.06, -3.0), Vector3.new(2.6, 0.08, 1.8), LINE) -- 유리 조각 더미
+	PM.dress(m, "Parking.CrashedCar", cf)
 end
 
 -- l 빈 주차 칸(두 칸 바닥선만)
@@ -193,11 +215,13 @@ function P.Cart(ctx: any, i: number, j: number)
 		Kit.cylinder(m, (cf * CFrame.new(x, 0.9, -1.8)).Position, (cf * CFrame.new(x, 3.6, -1.9)).Position, 0.08, { blocks = false, collide = false })
 	end
 	Kit.cylinder(m, (cf * CFrame.new(-1.0, 3.6, -1.9)).Position, (cf * CFrame.new(1.0, 3.6, -1.9)).Position, 0.08, { blocks = false, collide = false })
+	PM.dress(m, "Parking.Cart", cf)
 end
 
 -- 소화전: 벽에 붙은 소화전함 + 바닥 소화전
 function P.Hydrant(ctx: any, i: number, j: number)
 	local Kit = ctx.Kit
+	local s0 = snap(ctx.props)
 	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, -1)
 	local p = base(ctx, i, j)
 	local face = p + side * (ctx.T / 2 - 0.4)
@@ -207,11 +231,13 @@ function P.Hydrant(ctx: any, i: number, j: number)
 	Kit.cylinder(ctx.props, post, post + Vector3.new(0, 2.2, 0), 0.4, { blocks = false })
 	Kit.ball(ctx.props, post + Vector3.new(0, 2.3, 0), 0.42, { blocks = false, collide = false })
 	Kit.cylinder(ctx.props, post + Vector3.new(0, 1.5, 0) - Vector3.new(side.Z, 0, -side.X) * 0.7, post + Vector3.new(0, 1.5, 0) + Vector3.new(side.Z, 0, -side.X) * 0.7, 0.18, { blocks = false, collide = false })
+	PM.dress(ctx.props, "Parking.Hydrant", CFrame.lookAt(face, face - side), nil, fresh(ctx.props, s0), ctx.props) -- (소품 좌표: 벽면 바닥, -Z = 방 안쪽)
 end
 
 -- 엘리베이터 문(벽면): 문틀 + 두 짝 + 호출 버튼
 function P.Elevator(ctx: any, i: number, j: number)
 	local Kit = ctx.Kit
+	local s0 = snap(ctx.props)
 	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, -1)
 	local right = Vector3.new(side.Z, 0, -side.X)
 	local face = base(ctx, i, j) + side * (ctx.T / 2 - 0.15)
@@ -225,11 +251,13 @@ function P.Elevator(ctx: any, i: number, j: number)
 	Kit.box(ctx.props, CFrame.lookAt(top, top - side), Vector3.new(6.4, 0.8, 0.5), { blocks = false })
 	local btn = face + right * 3.8 + Vector3.new(0, 4.0, 0) - side * 0.1
 	Kit.box(ctx.props, CFrame.lookAt(btn, btn - side), Vector3.new(0.5, 1.0, 0.15), { blocks = false, collide = false })
+	PM.dress(ctx.props, "Parking.Elevator", CFrame.lookAt(face, face - side), nil, fresh(ctx.props, s0), ctx.props)
 end
 
 -- 셔터(하역장 벽면): 말린 셔터 통 + 가로 살
 function P.Shutter(ctx: any, i: number, j: number)
 	local Kit = ctx.Kit
+	local s0 = snap(ctx.props)
 	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, 1)
 	local right = Vector3.new(side.Z, 0, -side.X)
 	local face = base(ctx, i, j) + side * (ctx.T / 2 - 0.2)
@@ -241,11 +269,13 @@ function P.Shutter(ctx: any, i: number, j: number)
 	-- 하역장 바닥 정지선
 	local st = face - side * 2.5 + Vector3.new(0, 0.04, 0)
 	Kit.box(ctx.props, CFrame.lookAt(st, st - side), Vector3.new(ctx.T - 1, 0.08, 0.35), { blocks = false, collide = false })
+	PM.dress(ctx.props, "Parking.Shutter", CFrame.lookAt(face, face - side), nil, fresh(ctx.props, s0), ctx.props)
 end
 
 -- 차량 출구 차단기: 벽 쪽 기둥 + 위로 들린 막대
 function P.Barrier(ctx: any, i: number, j: number)
 	local Kit = ctx.Kit
+	local s0 = snap(ctx.props)
 	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, -1)
 	local p = base(ctx, i, j)
 	local post = p + side * (ctx.T / 2 - 1.0)
@@ -256,11 +286,13 @@ function P.Barrier(ctx: any, i: number, j: number)
 	-- 바닥 정지선
 	local axis = Vector3.new(side.Z, 0, -side.X)
 	Kit.box(ctx.props, CFrame.lookAt(p + Vector3.new(0, 0.04, 0), p + Vector3.new(0, 0.04, 0) + axis), Vector3.new(ctx.T - 0.5, 0.08, 0.4), { blocks = false, collide = false })
+	PM.dress(ctx.props, "Parking.Barrier", CFrame.lookAt(post, post - side), nil, fresh(ctx.props, s0), ctx.props) -- (소품 좌표: 기둥 바닥, -Z = 차로 쪽)
 end
 
 -- 주차 정산기(벽에 붙은 키오스크)
 function P.PayMachine(ctx: any, i: number, j: number)
 	local Kit = ctx.Kit
+	local s0 = snap(ctx.props)
 	local side = wallDir(ctx, i, j) or Vector3.new(0, 0, -1)
 	local p = base(ctx, i, j) + side * (ctx.T / 2 - 1.1)
 	Kit.box(ctx.props, CFrame.lookAt(p + Vector3.new(0, 2.6, 0), p + Vector3.new(0, 2.6, 0) - side), Vector3.new(2.6, 5.2, 1.8), { name = "PayMachine" })
@@ -268,6 +300,7 @@ function P.PayMachine(ctx: any, i: number, j: number)
 	Kit.box(ctx.props, CFrame.lookAt(f + Vector3.new(0, 3.9, 0), f + Vector3.new(0, 3.9, 0) - side), Vector3.new(1.8, 1.2, 0.06), { blocks = false, collide = false })
 	Kit.box(ctx.props, CFrame.lookAt(f + Vector3.new(0, 2.6, 0), f + Vector3.new(0, 2.6, 0) - side), Vector3.new(1.0, 0.2, 0.15), { blocks = false, collide = false })
 	Kit.box(ctx.props, CFrame.lookAt(f + Vector3.new(0, 1.3, 0), f + Vector3.new(0, 1.3, 0) - side), Vector3.new(1.6, 0.5, 0.2), { blocks = false, collide = false })
+	PM.dress(ctx.props, "Parking.PayMachine", CFrame.lookAt(p, p - side), nil, fresh(ctx.props, s0), ctx.props)
 end
 
 
@@ -304,6 +337,7 @@ function P.CctvDesk(ctx: any, i: number, j: number)
 	Kit.box(m, c * CFrame.new(0, 1.9, 0), Vector3.new(1.9, 0.3, 1.9), LINE)
 	Kit.box(m, c * CFrame.new(0, 3.2, -0.9), Vector3.new(1.8, 2.0, 0.2), LINE)
 	solid(m, cf * CFrame.new(0, 0, 2.2), Vector3.new(7.6, 4.2, 2.8))
+	PM.dress(m, "Parking.CctvDesk", cf) -- (소품 좌표: 벽 앞 바닥, -Z = 방 안쪽)
 end
 
 -- t 전기차 충전기: 기둥 + 화면 + 늘어진 케이블 + 바닥 보호대
@@ -319,6 +353,7 @@ function P.EvCharger(ctx: any, i: number, j: number)
 		Kit.cylinder(m, at(cf, x, 0, 0.4), at(cf, x, 2.6, 0.4), 0.3, SOFT)
 	end
 	solid(m, cf * CFrame.new(0, 0, 1.8), Vector3.new(4.8, 4, 3.2))
+	PM.dress(m, "Parking.EvCharger", cf)
 end
 
 -- N(위층)·q(지하 2층) 천장 안내 표지: 매단 판 + 화살표 + EXIT
@@ -340,6 +375,7 @@ function P.HangSign(ctx: any, i: number, j: number)
 	for _, s in { -1, 1 } do
 		Kit.box(m, cf * CFrame.new(-2.6, y + s * 0.2, -0.2) * CFrame.Angles(0, 0, s * 0.8), Vector3.new(0.6, 0.18, 0.1), LINE)
 	end
+	PM.dress(m, if top < 12 then "Parking.HangSign11" else "Parking.HangSign", cf) -- (천장 11 / 14: 매단 높이가 달라 두 가지)
 end
 
 -- j(위층)·a(지하 2층) 제트 팬: 천장에 매단 긴 원통 + 걸쇠
@@ -353,6 +389,7 @@ function P.JetFan(ctx: any, i: number, j: number)
 		Kit.cylinder(m, p + ax * (s * 2.4) + Vector3.new(0, y, 0), p + ax * (s * 3.6) + Vector3.new(0, y, 0), 1.3, LINE)
 		Kit.box(m, CFrame.new(p + ax * (s * 1.6) + Vector3.new(0, y + 1.5, 0)), Vector3.new(0.2, 1.0, 2.4), LINE)
 	end
+	PM.dress(m, "Parking.JetFan", CFrame.new(p + Vector3.new(0, y, 0))) -- (소품 좌표: 팬 축 가운데, 천장 = +2.0)
 end
 
 -- d 환기 덕트: 천장의 네모 덕트 + 이음 띠 + 아래로 열린 취출구
@@ -366,6 +403,7 @@ function P.Duct(ctx: any, i: number, j: number)
 		Kit.box(m, CFrame.new(p + Vector3.new(k * T, y, 0)), Vector3.new(0.4, 2.1, 3.3), LINE)
 	end
 	Kit.box(m, CFrame.new(p + Vector3.new(0, y - 1.2, 0)), Vector3.new(2.6, 0.6, 2.2), LINE)
+	PM.dress(m, "Parking.Duct", CFrame.new(p + Vector3.new(0, y, 0))) -- (소품 좌표: 덕트 가운데, 천장 = +1.8)
 end
 
 -- i 라바콘 셋(걸어서 지나간다)
@@ -379,6 +417,7 @@ function P.Cone(ctx: any, i: number, j: number)
 			Kit.cylinder(m, c + Vector3.new(0, 0.2 + n * 0.7, 0), c + Vector3.new(0, 0.9 + n * 0.7, 0), 0.5 - n * 0.16, LINE)
 		end
 	end
+	PM.dress(m, "Parking.Cone", CFrame.new(p))
 end
 
 -- w 과속 방지턱(차로를 가로지른다, 세로로 이어짐)
@@ -391,6 +430,7 @@ function P.SpeedBump(ctx: any, i: number, j: number)
 		Kit.box(m, CFrame.new(p + Vector3.new(s * 1.4, 0.1, 0)) * CFrame.Angles(0, 0, -s * 0.22), Vector3.new(1.3, 0.1, T), LINE)
 	end
 	Kit.box(m, CFrame.new(p + Vector3.new(3.2, 0.04, 0)), Vector3.new(0.35, 0.08, T - 2), LINE)
+	PM.dress(m, "Parking.SpeedBump", CFrame.new(p))
 end
 
 -- G 비상 발전기: 엔진 덩어리 + 방열판 + 배기관 + 축전지
@@ -409,6 +449,7 @@ function P.Generator(ctx: any, i: number, j: number)
 	Kit.cylinder(m, at(cf, 0.2, 5.6, 0), at(cf, 0.2, 8.2, 0), 0.95, LINE) -- 소음통
 	Kit.box(m, cf * CFrame.new(-0.8, 1.2, 2.2), Vector3.new(2.4, 1.2, 0.9), LINE) -- 축전지
 	solid(m, cf, Vector3.new(7.4, 4.4, 4.2))
+	PM.dress(m, if ctx.H < 12 then "Parking.Generator11" else "Parking.Generator", cf)
 end
 
 -- R 배전반: 벽에 붙은 키 큰 철제 함 + 문 두 짝 + 계기 + 천장 전선관
@@ -426,6 +467,7 @@ function P.Switchgear(ctx: any, i: number, j: number)
 		Kit.cylinder(m, at(cf, x, 8.4, 2.8), at(cf, x, ctx.H, 2.8), 0.4, LINE)
 	end
 	solid(m, cf * CFrame.new(0, 0, 2.6), Vector3.new(7.6, 8.4, 2.6))
+	PM.dress(m, if ctx.H < 12 then "Parking.Switchgear11" else "Parking.Switchgear", cf)
 end
 
 -- P 소화 펌프: 받침 + 모터 원통 + 펌프 몸통 + 위로 오르는 굵은 배관 + 밸브 바퀴
@@ -442,6 +484,7 @@ function P.FirePump(ctx: any, i: number, j: number)
 	Kit.cylinder(m, at(cf, 0, 5.0, -1.6), at(cf, 1.6, 5.0, -1.6), 0.15, LINE)
 	Kit.cylinder(m, at(cf, 1.6, 5.0, -1.6), at(cf, 1.75, 5.0, -1.6), 0.9, LINE)
 	solid(m, cf, Vector3.new(3.2, 4, 6))
+	PM.dress(m, if ctx.H < 12 then "Parking.FirePump11" else "Parking.FirePump", cf)
 end
 
 -- H 저수조: 칸을 채우는 큰 패널 탱크(가로세로 이음 선 + 사다리)
@@ -463,6 +506,7 @@ function P.WaterTank(ctx: any, i: number, j: number)
 	for k = 1, 6 do
 		Kit.cylinder(m, at(cf, -0.6, k * 1.3, -w / 2 - 0.3), at(cf, 0.6, k * 1.3, -w / 2 - 0.3), 0.06, LINE)
 	end
+	PM.dress(m, "Parking.WaterTank", cf)
 end
 
 -- V 급배기 팬 유닛: 네모 함 + 둥근 팬 구멍 + 날개 + 천장 덕트
@@ -477,6 +521,7 @@ function P.FanUnit(ctx: any, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, (6.4 + ctx.H) / 2, 1.6), Vector3.new(3.4, ctx.H - 6.4, 3.0), SOFT)
 	solid(m, cf * CFrame.new(0, 0, 1.2), Vector3.new(6.8, 6.6, 5.2))
+	PM.dress(m, if ctx.H < 12 then "Parking.FanUnit11" else "Parking.FanUnit", cf)
 end
 
 -- U 탑차(세로 두 칸): 위쪽 칸 = 운전석, 아래쪽 칸 = 짐칸. 뒷문이 반쯤 열려 있다
@@ -501,6 +546,7 @@ function P.Truck(ctx: any, i: number, j: number)
 		end
 		Kit.box(m, cf * CFrame.new(-3.2, 6.0, T / 2 - 0.4) * CFrame.Angles(0, -0.9, 0) * CFrame.new(1.5, 0, 0), Vector3.new(3.0, 7.2, 0.2), LINE) -- 열린 문짝
 		solid(m, cf, Vector3.new(6.8, 8, T))
+		PM.dress(m, "Parking.TruckBox", cf) -- (짐칸: 뒷문 = +Z)
 	else
 		-- 운전석
 		Kit.box(m, cf * CFrame.new(0, 2.9, 0.6), Vector3.new(6.2, 2.6, 5.4))
@@ -512,6 +558,7 @@ function P.Truck(ctx: any, i: number, j: number)
 			Kit.box(m, cf * CFrame.new(s * 3.6, 5.4, -1.0), Vector3.new(0.5, 1.4, 0.3), LINE) -- 거울
 		end
 		solid(m, cf * CFrame.new(0, 0, 0.6), Vector3.new(6.6, 7, 6.2))
+		PM.dress(m, "Parking.TruckCab", cf) -- (운전석: 앞 = -Z)
 	end
 end
 
@@ -529,6 +576,7 @@ function P.PalletJack(ctx: any, i: number, j: number)
 	Kit.cylinder(m, at(cf, 0, 1.4, 2.4), at(cf, 0, 4.2, 3.4), 0.12, LINE)
 	Kit.cylinder(m, at(cf, -0.8, 4.2, 3.4), at(cf, 0.8, 4.2, 3.4), 0.12, LINE)
 	solid(m, cf * CFrame.new(0, 0, 0.2), Vector3.new(4.4, 3.2, 5.8))
+	PM.dress(m, "Parking.PalletJack", cf)
 end
 
 -- Y 재활용 수거함: 바퀴 달린 큰 통 + 기울어진 뚜껑 + 넘친 봉투
@@ -547,6 +595,7 @@ function P.RecycleBin(ctx: any, i: number, j: number)
 		Kit.ball(m, at(cf, -1.4 + k * 2.6, 0.8, -1.8 + ctx.hash(i, j, 6 + k)), 0.9, LINE)
 	end
 	solid(m, cf * CFrame.new(0, 0, 1.2), Vector3.new(5.8, 4.8, 4.0))
+	PM.dress(m, "Parking.RecycleBin", cf)
 end
 
 
@@ -587,6 +636,7 @@ function P.SumpPit(ctx: any, i: number, j: number)
 	Kit.cylinder(m, at(cf, 1.8, 0.3, 1.8), at(cf, 1.8, 2.6, 1.8), 0.9)
 	Kit.cylinder(m, at(cf, 1.8, 2.6, 1.8), at(cf, 1.8, roomH(ctx, i, j), 1.8), 0.35, LINE)
 	solid(m, cf, Vector3.new(6.4, 2.8, 6.4))
+	PM.dress(m, if ctx.H < 12 then "Parking.SumpPit11" else "Parking.SumpPit", cf)
 end
 
 -- K 압력 탱크(세로 원통 + 다리 + 위로 오르는 배관) = 부품 5개
@@ -600,6 +650,7 @@ function P.PressureTank(ctx: any, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(x, 0.5, 0), Vector3.new(0.3, 1.0, 3.2), LINE)
 	end
 	Kit.cylinder(m, at(cf, 0, 8.4, 0), at(cf, 0, roomH(ctx, i, j), 0), 0.4, LINE)
+	PM.dress(m, if ctx.H < 12 then "Parking.PressureTank11" else "Parking.PressureTank", cf)
 end
 
 -- F 발전기 연료 탱크(눕힌 원통 + 받침 둘 + 주유구) = 부품 5개
@@ -613,6 +664,7 @@ function P.FuelTank(ctx: any, i: number, j: number)
 	end
 	Kit.cylinder(m, at(cf, 0, 4.2, 1.0), at(cf, 0, 5.0, 1.0), 0.35, LINE)
 	solid(m, cf, Vector3.new(4.0, 4.4, 6.0))
+	PM.dress(m, "Parking.FuelTank", cf)
 end
 
 -- a 세대 창고 철망 칸(아파트 지하 창고): 네 모서리 기둥 + 위 테두리 + 철망 면(가는 살) + 맹꽁이 자물쇠 + 안쪽 짐 하나 = 부품 약 10개.
@@ -634,6 +686,7 @@ function P.Cage(ctx: any, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 3.6, -s - 0.12), Vector3.new(0.5, 0.7, 0.2), LINE) -- 자물쇠
 	Kit.crate(m, p + Vector3.new((ctx.hash(i, j, 7) - 0.5) * 2, 0, (ctx.hash(i, j, 8) - 0.5) * 2), Vector3.new(3.4, 2.6 + ctx.hash(i, j, 9) * 1.6, 3.0), ctx.hash(i, j, 10))
 	solid(m, cf, Vector3.new(2 * s + 0.35, h, 2 * s + 0.35))
+	PM.dress(m, "Parking.Cage", cf)
 end
 
 return P

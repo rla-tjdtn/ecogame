@@ -17,6 +17,7 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Kit = require(script.Parent.MapKit)
+local PM = require(script.Parent.PropMesh) -- 타일 구조물(기둥·기계·환풍기·출구 사다리·다리)을 메시 에셋으로(없으면 기본 도형 그대로)
 local Doors = require(script.Parent.Doors)
 local Hiding = require(script.Parent.Hiding)
 local Search = require(script.Parent.Search)
@@ -592,17 +593,19 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 				Kit.word(props, "EXIT", wallFace + Vector3.new(0, 8.5, 0) - right * 0.7, -right, -back, 1.4)
 				-- 사다리와 천장 해치
 				local lad = wallFace - back * 0.6 + right * 3.0
+				local ladParts: { BasePart } = {}
 				for _, s in { -0.7, 0.7 } do
-					Kit.cylinder(props, lad + right * s, lad + right * s + Vector3.new(0, H, 0), 0.1, { blocks = false })
+					table.insert(ladParts, Kit.cylinder(props, lad + right * s, lad + right * s + Vector3.new(0, H, 0), 0.1, { blocks = false }))
 				end
 				for y = 1, H - 1, 1.2 do
-					Kit.cylinder(props, lad + right * -0.7 + Vector3.new(0, y, 0), lad + right * 0.7 + Vector3.new(0, y, 0), 0.07, { blocks = false, collide = false })
+					table.insert(ladParts, Kit.cylinder(props, lad + right * -0.7 + Vector3.new(0, y, 0), lad + right * 0.7 + Vector3.new(0, y, 0), 0.07, { blocks = false, collide = false }))
 				end
 				local hatch = lad + back * 0.4 + Vector3.new(0, H - 0.2, 0)
 				for _, s in { -1, 1 } do
-					Kit.box(props, CFrame.lookAt(hatch + right * s * 1.4, hatch + right * s * 1.4 + back), Vector3.new(0.3, 0.4, 3.0), { blocks = false, collide = false })
-					Kit.box(props, CFrame.lookAt(hatch + back * s * 1.4, hatch + back * s * 1.4 + right), Vector3.new(0.3, 0.4, 3.0), { blocks = false, collide = false })
+					table.insert(ladParts, Kit.box(props, CFrame.lookAt(hatch + right * s * 1.4, hatch + right * s * 1.4 + back), Vector3.new(0.3, 0.4, 3.0), { blocks = false, collide = false }))
+					table.insert(ladParts, Kit.box(props, CFrame.lookAt(hatch + back * s * 1.4, hatch + back * s * 1.4 + right), Vector3.new(0.3, 0.4, 3.0), { blocks = false, collide = false }))
 				end
+				PM.dress(props, "Kit.ExitLadder", CFrame.lookAt(lad, lad + back), Vector3.new(1, H / 14, 1), ladParts, props)
 				info.exitCFrame = CFrame.lookAt(c + Vector3.new(0, 4, 0) + back * 0.8, c + Vector3.new(0, 4, 0) + back * 2)
 				info.exitSize = Vector3.new(T - 1, 8, T - 2.5)
 			elseif ch == "D" then
@@ -632,9 +635,12 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 				Kit.archPortal(geo, c + Vector3.new(0, fy, 0), across, T, 6, H - fy)
 			elseif ch == "O" then
 				local p = c + Vector3.new(0, fy, 0)
-				Kit.box(geo, CFrame.new(p + Vector3.new(0, (H - fy) / 2, 0)), Vector3.new(2.4, H - fy, 2.4), { name = "Pillar" })
-				Kit.box(geo, CFrame.new(p + Vector3.new(0, 0.4, 0)), Vector3.new(3.4, 0.8, 3.4), { name = "PillarBase" })
-				Kit.box(geo, CFrame.new(p + Vector3.new(0, H - fy - 0.6, 0)), Vector3.new(3.2, 1.2, 3.2), { name = "PillarCap" })
+				local pil = {
+					Kit.box(geo, CFrame.new(p + Vector3.new(0, (H - fy) / 2, 0)), Vector3.new(2.4, H - fy, 2.4), { name = "Pillar" }),
+					Kit.box(geo, CFrame.new(p + Vector3.new(0, 0.4, 0)), Vector3.new(3.4, 0.8, 3.4), { name = "PillarBase" }),
+					Kit.box(geo, CFrame.new(p + Vector3.new(0, H - fy - 0.6, 0)), Vector3.new(3.2, 1.2, 3.2), { name = "PillarCap" }),
+				}
+				PM.dress(geo, "Kit.Pillar", CFrame.new(p), Vector3.new(1, (H - fy) / 14, 1), pil, geo)
 			elseif ch == "c" then
 				-- 벽 쪽으로 붙인 상자 더미
 				local side = Vector3.new(-1, 0, 0)
@@ -653,14 +659,17 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 				Kit.box(props, CFrame.new(base + along * 1.7 + Vector3.new(0, 0.12, 0)) * CFrame.Angles(0, yaw, 0), Vector3.new(3.6, 0.24, 3.0), { blocks = false })
 			elseif ch == "m" then
 				local p = c + Vector3.new(0, fy, 0)
-				Kit.box(props, CFrame.new(p + Vector3.new(0, 0.4, 0)), Vector3.new(5.4, 0.8, 4.2), { name = "MachineBase" })
-				Kit.box(props, CFrame.new(p + Vector3.new(-0.6, 2.4, 0)), Vector3.new(3.6, 3.2, 3.4), { name = "Machine" })
-				Kit.box(props, CFrame.new(p + Vector3.new(1.9, 1.9, 0)), Vector3.new(1.0, 2.2, 1.6), { name = "Panel" })
+				local mach = {
+					Kit.box(props, CFrame.new(p + Vector3.new(0, 0.4, 0)), Vector3.new(5.4, 0.8, 4.2), { name = "MachineBase" }),
+					Kit.box(props, CFrame.new(p + Vector3.new(-0.6, 2.4, 0)), Vector3.new(3.6, 3.2, 3.4), { name = "Machine" }),
+					Kit.box(props, CFrame.new(p + Vector3.new(1.9, 1.9, 0)), Vector3.new(1.0, 2.2, 1.6), { name = "Panel" }),
+				}
 				Kit.pipe(props, p + Vector3.new(-2.4, 5.2, 0), p + Vector3.new(1.6, 5.2, 0), 1.1, { 0, 1 }, true)
 				Kit.pipe(props, p + Vector3.new(1.0, 6.3, 0), p + Vector3.new(1.0, H - fy, 0), 0.45, { 0.05, 0.95 }, false)
 				for _, s in { -1, 1 } do
-					Kit.box(props, CFrame.new(p + Vector3.new(-0.4 + s * 1.4, 4.4, 0)), Vector3.new(0.4, 1.0, 2.2), { blocks = false })
+					table.insert(mach, Kit.box(props, CFrame.new(p + Vector3.new(-0.4 + s * 1.4, 4.4, 0)), Vector3.new(0.4, 1.0, 2.2), { blocks = false }))
 				end
+				PM.dress(props, "Kit.Machine", CFrame.new(p), nil, mach, props)
 				local em = Kit.box(props, CFrame.new(p + Vector3.new(0, 3, 0)), Vector3.new(0.2, 0.2, 0.2), { invisible = true, collide = false, tag = false })
 				em.CanQuery = false
 				em:SetAttribute("Sound", "AmbientFan")
@@ -694,12 +703,13 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 				Kit.pipe(props, p + spots[1] + Vector3.new(0, 10, 0), p + spots[3] + Vector3.new(0, 10, 0), 0.4, { 0.5 }, false)
 			elseif ch == "f" then
 				local p = c + Vector3.new(0, H, 0)
-				Kit.cylinder(props, p - Vector3.new(0, 1.2, 0), p, 2.4, { blocks = false, collide = false, rings = 1 })
+				local fan = { Kit.cylinder(props, p - Vector3.new(0, 1.2, 0), p, 2.4, { blocks = false, collide = false, rings = 1 }) }
 				for k = 0, 3 do
 					local a = k * math.pi / 2 + 0.4
 					local bp = p - Vector3.new(0, 1.0, 0) + Vector3.new(math.cos(a), 0, math.sin(a)) * 1.05
-					Kit.box(props, CFrame.lookAt(bp, bp + Vector3.new(math.cos(a), 0, math.sin(a))) * CFrame.Angles(0, 0, 0.35), Vector3.new(0.7, 0.08, 1.8), { blocks = false, collide = false })
+					table.insert(fan, Kit.box(props, CFrame.lookAt(bp, bp + Vector3.new(math.cos(a), 0, math.sin(a))) * CFrame.Angles(0, 0, 0.35), Vector3.new(0.7, 0.08, 1.8), { blocks = false, collide = false }))
 				end
+				PM.dress(props, "Kit.CeilingFan", CFrame.new(p), nil, fan, props)
 				local em = Kit.box(props, CFrame.new(p - Vector3.new(0, 1.5, 0)), Vector3.new(0.2, 0.2, 0.2), { invisible = true, collide = false, tag = false })
 				em.CanQuery = false
 				em:SetAttribute("Sound", "AmbientFan")
@@ -711,20 +721,22 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 				local across = Vector3.new(ax.Z, 0, -ax.X)
 				local w = if ch == "n" then 3.2 else 5 -- (좁은 다리 n: 괴물은 지나갈 수 없다)
 				local deck = c + Vector3.new(0, -0.25, 0)
-				Kit.box(geo, CFrame.lookAt(deck, deck + ax), Vector3.new(w, 0.5, T), { name = "Catwalk" })
+				local bridge = { Kit.box(geo, CFrame.lookAt(deck, deck + ax), Vector3.new(w, 0.5, T), { name = "Catwalk" }) }
 				for _, s in { -1, 1 } do
 					local beam = c + across * s * (w / 2 - 0.3) + Vector3.new(0, -0.9, 0)
-					Kit.box(props, CFrame.lookAt(beam, beam + ax), Vector3.new(0.4, 0.8, T), { blocks = false })
+					table.insert(bridge, Kit.box(props, CFrame.lookAt(beam, beam + ax), Vector3.new(0.4, 0.8, T), { blocks = false }))
 					local ra = c + across * s * (w / 2 - 0.15) - ax * (T / 2)
 					Kit.railing(props, ra, ra + ax * T, 3.3, 2.65)
 				end
-				Kit.box(props, CFrame.lookAt(c + Vector3.new(0, -1.0, 0), c + Vector3.new(0, -1.0, 0) + across), Vector3.new(0.4, 0.6, w), { blocks = false })
-				if (i + j) % 2 == 0 then
+				table.insert(bridge, Kit.box(props, CFrame.lookAt(c + Vector3.new(0, -1.0, 0), c + Vector3.new(0, -1.0, 0) + across), Vector3.new(0.4, 0.6, w), { blocks = false }))
+				local cols = (i + j) % 2 == 0
+				if cols then
 					for _, s in { -1, 1 } do
 						local col = c + across * s * (w / 2 - 0.3)
-						Kit.box(props, CFrame.new(col + Vector3.new(0, (PIT_Y - 1.3) / 2, 0)), Vector3.new(0.5, -1.3 - PIT_Y, 0.5), { blocks = false })
+						table.insert(bridge, Kit.box(props, CFrame.new(col + Vector3.new(0, (PIT_Y - 1.3) / 2, 0)), Vector3.new(0.5, -1.3 - PIT_Y, 0.5), { blocks = false }))
 					end
 				end
+				PM.dress(props, "Kit.Catwalk" .. (if ch == "n" then "3" else "5") .. (if cols then "C" else ""), CFrame.lookAt(c, c + ax), nil, bridge, props)
 			elseif ch == "s" then
 				-- 계단: 위층 이웃 쪽으로 올라간다
 				local up = dirs[1]

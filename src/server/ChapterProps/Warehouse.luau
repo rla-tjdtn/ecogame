@@ -12,6 +12,7 @@
 
 
 local Kit = require(script.Parent.Parent.MapKit)
+local PM = require(script.Parent.Parent.PropMesh) -- 다 지은 소품을 메시 에셋으로 바꿔 입힌다(없으면 기본 도형 그대로)
 
 local W = {}
 
@@ -59,6 +60,7 @@ function W.Forklift(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 1.0, -2.0), Vector3.new(2.4, 1.4, 0.15), { blocks = false, collide = false }) -- 포크 등판
 	Kit.box(m, cf * CFrame.new(0, 1.8, 0.2), Vector3.new(3.4, 3.6, 6.4), { invisible = true, tag = false })
+	PM.dress(m, "Warehouse.Forklift", cf) -- (소품 좌표: 바닥, -Z = 포크 쪽)
 end
 
 -- 팔레트 적재: 나무 팔레트 + 랩 감은 상자 더미(높이 제각각)
@@ -73,6 +75,7 @@ function W.PalletStack(ctx, i: number, j: number)
 		Kit.box(m, CFrame.new(q + Vector3.new(0, 0.6 + tall / 2, 0)) * CFrame.Angles(0, (h - 0.5) * 0.2, 0), Vector3.new(3.1, tall, 3.1), { blocks = false })
 	end
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 2, 0)), Vector3.new(7.4, 4, 3.6), { invisible = true, tag = false })
+	PM.dress(m, "Warehouse.PalletStack" .. (math.floor(h * 4) % 3 + 1), CFrame.new(p)) -- (더미 높이 3가지: 같은 식으로 고른다)
 end
 
 -- 컨베이어: 허리 높이 롤러 줄(긴 옆판 두 줄 + 롤러) + 다리. 벽과 나란히
@@ -97,6 +100,7 @@ function W.Conveyor(ctx, i: number, j: number)
 	-- 상자 하나(포장 중)
 	Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 3.9, 0) + axis * 1.4, c + Vector3.new(0, 3.9, 0) + axis * 2.4), Vector3.new(1.6, 1.4, 1.8), { blocks = false })
 	Kit.box(m, CFrame.lookAt(c + Vector3.new(0, 1.6, 0), c + Vector3.new(0, 1.6, 0) + axis), Vector3.new(2.6, 3.2, 8), { invisible = true, tag = false })
+	PM.dress(m, "Warehouse.Conveyor", CFrame.lookAt(c, c + axis)) -- (바닥, -Z = 줄 방향)
 end
 
 -- 지게차 충전기: 벽에 붙은 캐비닛 + 표시창 + 바닥으로 늘어진 케이블
@@ -112,6 +116,7 @@ function W.Charger(ctx, i: number, j: number)
 	Kit.cylinder(m, a - side * 2.2 - Vector3.new(0, 2.0, 0), a - side * 3.4 - Vector3.new(0, 2.1, 0), 0.15, { blocks = false, collide = false })
 	-- 바닥 정차 표시(낮은 선)
 	Kit.box(m, CFrame.lookAt(p - side * 1.5 + Vector3.new(0, 0.05, 0), p - side * 2.5 + Vector3.new(0, 0.05, 0)), Vector3.new(4.5, 0.1, 0.2), { blocks = false, collide = false })
+	PM.dress(m, "Warehouse.Charger", CFrame.lookAt(c, c - side)) -- (바닥 벽 쪽, -Z = 방 쪽)
 end
 
 -- 냉동기 증발기: 벽 위쪽에 매단 팬 상자(지나갈 수 있음)
@@ -126,6 +131,7 @@ function W.Evaporator(ctx, i: number, j: number)
 		local f = c - side * 1.25 + across * s
 		Kit.cylinder(m, f, f - side * 0.1, 0.9, { blocks = false, collide = false, rings = 1 })
 	end
+	PM.dress(m, "Warehouse.Evaporator", CFrame.lookAt(c, c - side)) -- (소품 좌표 = 팬 상자 가운데(천장 높이가 층마다 달라서), -Z = 방 쪽)
 end
 
 -- 서버 랙: 키 큰 캐비닛 + 앞면 줄(장비 칸)
@@ -139,6 +145,7 @@ function W.ServerRack(ctx, i: number, j: number)
 		local y = 1.0 + k * 1.05
 		Kit.box(m, CFrame.lookAt(c - side * 1.62 + Vector3.new(0, y, 0), c - side * 2.62 + Vector3.new(0, y, 0)), Vector3.new(2.2, 0.12, 0.08), { blocks = false, collide = false })
 	end
+	PM.dress(m, "Warehouse.ServerRack", CFrame.lookAt(c, c - side)) -- (바닥, -Z = 앞면)
 end
 
 -- ── 줄로 짓는 설비(랙·선반·컨베이어) ──
@@ -202,6 +209,8 @@ local function shelfRun(ctx, i: number, j: number, alongX: boolean, o: { name: s
 	-- 보이지 않는 충돌(선반 사이로 들어가거나 올라가지 못하게)
 	local cc = r.center + Vector3.new(0, height / 2, 0)
 	Kit.box(m, CFrame.lookAt(cc, cc + r.axis), Vector3.new(depth, height, len), { invisible = true, tag = false })
+	-- 메시: 기둥 칸 수(posts)·두께(deep)마다 하나(칸 길이 16 기준), 줄 길이에 맞춰 Z 로 늘인다
+	PM.dress(m, string.format("Warehouse.%s%dx%d", o.name, posts, r.deep), CFrame.lookAt(r.center, r.center + r.axis), Vector3.new(1, 1, len / (posts * 2 * T - 0.6)))
 end
 
 local RACK = { name = "Rack", height = 10.2, levels = { 0.2, 3.6, 7.0 }, depthPad = 2.4, tilt = 0, load = Vector3.new(4.6, 2.6, 6.2) }
@@ -257,6 +266,7 @@ function W.ConveyorRun(ctx, i: number, j: number)
 	end
 	local cc = c + Vector3.new(0, 1.7, 0)
 	Kit.box(m, CFrame.lookAt(cc, cc + axis), Vector3.new(3.6, 3.4, len), { invisible = true, tag = false })
+	PM.dress(m, "Warehouse.ConveyorRun" .. legs, CFrame.lookAt(c, c + axis), Vector3.new(1, 1, len / (legs * 2 * T - 0.4))) -- (다리 칸 수마다 하나, 길이에 맞춰 늘인다)
 end
 
 -- ── 벽 틈 설비(문 칸처럼 양옆이 벽인 칸) ──
@@ -292,6 +302,17 @@ function W.DockDoor(ctx, i: number, j: number)
 	end
 	local lev = p + Vector3.new(0, 0.06, 0)
 	Kit.box(m, CFrame.lookAt(lev, lev + ax), Vector3.new(T - 1.2, 0.12, T - 1.0), { blocks = false, collide = false })
+	-- (문 위 벽 DoorWall 은 층 높이마다 달라지는 평범한 벽판이라 기본 도형 그대로 둔다)
+	local dressParts = {}
+	for _, x in m:GetChildren() do
+		if x:IsA("BasePart") and x.Name ~= "DoorWall" then
+			table.insert(dressParts, x)
+		end
+	end
+	local rgt = ax:Cross(Vector3.yAxis) -- (소품 +X 쪽) 레일은 벽이 있는 쪽에만: 변형 L·R·LR·없음
+	local wl = ctx.isWall(i - math.round(rgt.X), j - math.round(rgt.Z))
+	local wr = ctx.isWall(i + math.round(rgt.X), j + math.round(rgt.Z))
+	PM.dress(m, "Warehouse.DockDoor" .. (if wl then "L" else "") .. (if wr then "R" else ""), CFrame.lookAt(p, p + ax), nil, dressParts) -- (바닥, -Z = 통로 축)
 end
 
 -- x 내려온 화재 셔터: 벽 틈을 바닥까지 막은 철판(막힘) + 가로 줄무늬 + 위쪽 셔터 통 + 양옆 레일
@@ -314,6 +335,7 @@ function W.FireShutter(ctx, i: number, j: number)
 		local rp = p + across * (f * (T / 2 - 0.3)) + Vector3.new(0, (H - 1.8) / 2, 0)
 		Kit.box(m, CFrame.lookAt(rp, rp + ax), Vector3.new(0.5, H - 1.8, 1.1), { blocks = false, axis = "Y" })
 	end
+	PM.dress(m, "Warehouse.FireShutter", CFrame.lookAt(p, p + ax), Vector3.new(1, H / 11, 1)) -- (층 높이 11 기준, 높이에 맞춰 늘인다)
 end
 
 -- ── 낱개 장비 ──
@@ -334,6 +356,7 @@ function W.PackStation(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(-1.4, 4.1, -0.2) * CFrame.Angles(0, 0.2, 0), Vector3.new(2.2, 1.6, 1.8), { blocks = false }) -- 포장 중인 상자
 	Kit.cylinder(m, (cf * CFrame.new(0.2, 3.6, -0.6)).Position - along * 0.4, (cf * CFrame.new(0.2, 3.6, -0.6)).Position + along * 0.4, 0.45, { blocks = false, collide = false }) -- 테이프
 	Kit.box(m, cf * CFrame.new(0, 1.8, 0), Vector3.new(6.4, 3.6, 3.2), { invisible = true, tag = false })
+	PM.dress(m, "Warehouse.PackStation", cf) -- (바닥, -Z = 작업하는 쪽)
 end
 
 -- W 랩 감는 기계: 둥근 회전판 + 옆 기둥(마스트) + 필름 수레 + 랩이 감긴 팔레트
@@ -348,6 +371,7 @@ function W.StretchWrapper(ctx, i: number, j: number)
 	Kit.box(m, CFrame.lookAt(mast - side * 0.8 + Vector3.new(0, -0.5, 0), mast - side * 2 + Vector3.new(0, -0.5, 0)), Vector3.new(1.8, 1.4, 1.2), { blocks = false }) -- 필름 수레
 	Kit.box(m, CFrame.lookAt(p + side * 3.4 + Vector3.new(0, 0.6, 0), p + Vector3.new(0, 0.6, 0)), Vector3.new(2.4, 1.2, 2.0), { blocks = false }) -- 제어함 받침
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 2.5, 0)), Vector3.new(6.4, 5, 6.4), { invisible = true, tag = false })
+	PM.dress(m, "Warehouse.StretchWrapper", CFrame.lookAt(p, p - side)) -- (바닥 회전판 가운데, +Z = 기둥 쪽 벽)
 end
 
 -- B 정비 작업대: 두꺼운 판 + 다리 + 바이스 + 벽 공구판(구멍판)
@@ -365,6 +389,7 @@ function W.Workbench(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 6.2, 1.3), Vector3.new(6.0, 3.6, 0.12), { blocks = false, collide = false }) -- 공구판
 	Kit.box(m, cf * CFrame.new(1.4, 3.75, 0), Vector3.new(1.6, 0.9, 1.0), { blocks = false }) -- 공구함
 	Kit.box(m, cf * CFrame.new(0, 1.7, 0), Vector3.new(6.6, 3.4, 2.8), { invisible = true, tag = false })
+	PM.dress(m, "Warehouse.Workbench", cf) -- (바닥, -Z = 작업하는 쪽)
 end
 
 -- K 탑차: 줄(두 칸) 머리에서 — 짐칸 상자, 운전석, 바퀴 넷, 뒷문 이음선. 짐칸 뒤(문)가 도크 문(d) 쪽을 본다
@@ -400,6 +425,7 @@ function W.BoxTruck(ctx, i: number, j: number)
 			Kit.cylinder(m, w - across * 0.45, w + across * 0.45, 1.3, { blocks = false, collide = false, rings = 1 })
 		end
 	end
+	PM.dress(m, "Warehouse.BoxTruck", CFrame.lookAt(c, c + fwd), Vector3.new(1, 1, len / 15.2)) -- (바닥 가운데, -Z = 운전석 쪽, 두 칸 길이 기준)
 end
 
 -- G 정문 경비 초소: 네 기둥 + 허리 벽 + 지붕 판 + 창틀
@@ -414,6 +440,7 @@ function W.GuardBooth(ctx, i: number, j: number)
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 1.6, 0)), Vector3.new(5.4, 3.2, 5.4), { name = "BoothWall" })
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 7.8, 0)), Vector3.new(6.6, 0.4, 6.6), { blocks = false })
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 5.2, 0)), Vector3.new(5.6, 0.15, 5.6), { blocks = false, collide = false }) -- 창 아래 테
+	PM.dress(m, "Warehouse.GuardBooth", CFrame.new(p)) -- (바닥 가운데)
 end
 
 -- q 화물 승강기(1층·2층 같은 칸): 승강로 철망 틀(네 기둥 + 위·아래 테) + 앞쪽 접이문 막대 + 운반대. 막힘
@@ -435,6 +462,8 @@ function W.GoodsLift(ctx, i: number, j: number)
 		Kit.box(m, CFrame.new(g), Vector3.new(0.15, 8, 0.15), { blocks = false, collide = false }) -- 접이문
 	end
 	Kit.box(m, CFrame.new(p + Vector3.new(0, H / 2, 0)), Vector3.new(7.2, H, 7.2), { invisible = true, tag = false })
+	local liftH = if H >= 12.5 then 14 else 11 -- (층 높이 11·14 두 가지, 그 사이는 늘인다)
+	PM.dress(m, "Warehouse.GoodsLift" .. liftH, CFrame.lookAt(p, p - side), Vector3.new(1, H / liftH, 1)) -- (바닥 가운데, -Z = 접이문 쪽)
 end
 
 return W

@@ -14,6 +14,7 @@
 -- 각 함수는 StageBuilder 의 ctx 와 타일 좌표(i, j)를 받는다. 1층 천장은 11(2층 건물)이라 모든 소품은 바닥에서 10 아래.
 
 local Kit = require(script.Parent.Parent.MapKit)
+local PM = require(script.Parent.Parent.PropMesh) -- 다 지은 소품을 메시 에셋으로 바꿔 입힌다(없으면 기본 도형 그대로)
 
 local P = {}
 
@@ -93,6 +94,9 @@ function P.FrontDesk(ctx, i: number, j: number)
 		Kit.cylinder(m, (cf * CFrame.new(0.5, 4.2, -1.0)).Position, (cf * CFrame.new(0.5, 4.55, -1.0)).Position, 0.3, { blocks = false, collide = false })
 	end
 	Kit.box(m, cf * CFrame.new(0, 2.1, -0.2), Vector3.new(L, 4.2, 2.8), { invisible = true, tag = false })
+	local endL = not same(ctx, i - math.round(axis.X), j - math.round(axis.Z), "F")
+	local endR = not same(ctx, i + math.round(axis.X), j + math.round(axis.Z), "F")
+	PM.dress(m, if endL and endR then "Hotel.FrontDeskSolo" elseif endL then "Hotel.FrontDeskEndL" elseif endR then "Hotel.FrontDeskEndR" else "Hotel.FrontDesk", cf) -- (바닥 가운데, -Z = 손님 쪽, 옆판 = 줄 끝)
 end
 
 -- 짐 카트: 카펫 바닥판 + 바퀴 넷 + 기둥 넷 + 위 아치 손잡이 + 옷걸이 봉 + 여행 가방 둘
@@ -113,6 +117,7 @@ function P.LuggageCart(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 2.2, -0.9), Vector3.new(2.0, 2.4, 1.0), { blocks = false }) -- 가방
 	Kit.box(m, cf * CFrame.new(0.2, 1.7, 0.9) * CFrame.Angles(0, 0.2, 0), Vector3.new(1.8, 1.4, 1.4), { blocks = false })
 	Kit.box(m, cf * CFrame.new(0, 2.5, 0), Vector3.new(2.6, 5, 4.4), { invisible = true, tag = false })
+	PM.dress(m, "Hotel.LuggageCart", cf) -- (바닥 가운데, 긴 쪽 = Z)
 end
 
 -- 소파: 등받이는 벽 쪽(없으면 북쪽), 팔걸이 둘, 방석
@@ -131,6 +136,7 @@ function P.Sofa(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(-1.5, 1.6, off - 0.3), Vector3.new(2.8, 0.3, 2.2), { blocks = false, collide = false }) -- 방석 둘
 	Kit.box(m, cf * CFrame.new(1.5, 1.6, off - 0.3), Vector3.new(2.8, 0.3, 2.2), { blocks = false, collide = false })
 	Kit.box(m, cf * CFrame.new(0, 1.6, off), Vector3.new(6.4, 3.2, 3.2), { invisible = true, tag = false })
+	PM.dress(m, "Hotel.Sofa", cf * CFrame.new(0, 0, off)) -- (바닥 가운데, -Z = 앉는 쪽, +Z = 등받이)
 end
 
 -- ── 라운지 바 ──
@@ -155,6 +161,7 @@ function P.BarCounter(ctx, i: number, j: number)
 		Kit.cylinder(m, s.Position + Vector3.new(0, 2.8, 0), s.Position + Vector3.new(0, 3.05, 0), 0.75, { blocks = false, collide = false })
 	end
 	Kit.box(m, cf * CFrame.new(0, 2, -0.3), Vector3.new(L, 4, 2.6), { invisible = true, tag = false })
+	PM.dress(m, "Hotel.BarCounter", cf) -- (칸 가운데 바닥, -Z = 손님 쪽, +Z = 벽 술병 선반)
 end
 
 -- 원형 테이블 + 의자 넷(연회장·레스토랑)
@@ -172,6 +179,7 @@ function P.RoundTable(ctx, i: number, j: number)
 		Kit.box(m, c * CFrame.new(0, 2.9, -0.7), Vector3.new(1.5, 2.0, 0.15), { blocks = false, collide = false }) -- 등받이
 	end
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 1.5, 0)), Vector3.new(4.6, 3, 4.6), { invisible = true, tag = false })
+	PM.dress(m, "Hotel.RoundTable", cf) -- (테이블 다리 밑 바닥)
 end
 
 -- ── 주방 ──
@@ -194,6 +202,7 @@ function P.Range(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 7.0, back + 0.2), Vector3.new(7.8, 1.4, 3.4), { blocks = false }) -- 후드
 	Kit.wedge(m, cf * CFrame.new(0, 8.2, back + 0.6) * CFrame.Angles(0, math.pi, 0), Vector3.new(7.0, 1.0, 2.6), { blocks = false, collide = false })
 	Kit.box(m, cf * CFrame.new(0, 9.6, back + 1.0), Vector3.new(2.0, 1.8, 1.6), { blocks = false, collide = false }) -- 덕트
+	PM.dress(m, "Hotel.Range", cf * CFrame.new(0, 0, back)) -- (레인지 몸통 밑 바닥, -Z = 요리사 쪽)
 end
 
 -- 스테인리스 조리대: 상판 + 다리 넷 + 아래 선반 + 위 선반(양념통)
@@ -211,6 +220,7 @@ function P.PrepTable(ctx, i: number, j: number)
 	local h = ctx.hash(i, j, 64)
 	Kit.box(m, cf * CFrame.new((h - 0.5) * 3, 3.5, 0.4), Vector3.new(1.8, 0.8, 1.2), { blocks = false, collide = false }) -- 통
 	Kit.box(m, cf * CFrame.new(0, 1.5, 0), Vector3.new(L, 3, 3), { invisible = true, tag = false })
+	PM.dress(m, "Hotel.PrepTable", cf) -- (바닥 가운데, 긴 쪽 = X)
 end
 
 -- ── 세탁실·린넨실·하우스키핑 ──
@@ -227,6 +237,7 @@ function P.Washer(ctx, i: number, j: number)
 	Kit.cylinder(m, doorC.Position, (doorC * CFrame.new(0, 0, -0.35)).Position, 1.7, { blocks = false, collide = false }) -- 둥근 문
 	Kit.cylinder(m, (doorC * CFrame.new(0, 0, -0.35)).Position, (doorC * CFrame.new(0, 0, -0.5)).Position, 1.1, { blocks = false, collide = false })
 	Kit.box(m, cf * CFrame.new(0, 5.4, back - 2.55), Vector3.new(4.4, 0.8, 0.15), { blocks = false, collide = false }) -- 조작판
+	PM.dress(m, "Hotel.Washer", cf * CFrame.new(0, 0, back)) -- (몸통 밑 바닥, -Z = 둥근 문 쪽)
 end
 
 -- 린넨 선반: 철망 선반(기둥 넷 + 선반 넷) + 접힌 수건·시트 더미
@@ -248,6 +259,7 @@ function P.LinenShelf(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new((h - 0.5) * 2, y + 0.6, back), Vector3.new(L - 1.8, 1.0 + h * 0.4, 1.6), { blocks = false, collide = false })
 	end
 	Kit.box(m, cf * CFrame.new(0, 3.6, back), Vector3.new(L, 7.2, 2.0), { invisible = true, tag = false })
+	PM.dress(m, "Hotel.LinenShelf", cf * CFrame.new(0, 0, back)) -- (선반 밑 바닥, -Z = 앞)
 end
 
 -- 직원 사물함 줄: 벽에 붙은 좁은 사물함 셋(문 틈 선 + 환기 구멍 줄)
@@ -270,6 +282,7 @@ function P.StaffLockers(ctx, i: number, j: number)
 	for _, x in { -2.6, 2.6 } do
 		Kit.box(m, cf * CFrame.new(x, 0.45, back - 2.2), Vector3.new(0.25, 0.9, 1.0), { blocks = false, collide = false })
 	end
+	PM.dress(m, "Hotel.StaffLockers", cf * CFrame.new(0, 0, back)) -- (사물함 밑 바닥, -Z = 문 쪽)
 end
 
 -- 하우스키핑 카트: 선반 셋 상자 + 한쪽 빨래 자루 + 반대쪽 손잡이 + 바퀴
@@ -284,6 +297,7 @@ function P.HousekeepingCart(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(3.3, 2.0, 0), Vector3.new(1.8, 3.2, 2.0), { blocks = false }) -- 빨래 자루
 	Kit.cylinder(m, (cf * CFrame.new(-2.9, 3.6, -0.9)).Position, (cf * CFrame.new(-2.9, 3.6, 0.9)).Position, 0.1, { blocks = false, collide = false }) -- 손잡이
 	Kit.box(m, cf * CFrame.new(0.5, 2.2, 0), Vector3.new(6.6, 4.4, 2.4), { invisible = true, tag = false })
+	PM.dress(m, "Hotel.HousekeepingCart", cf) -- (선반 상자 밑 바닥, +X = 빨래 자루, -X = 손잡이)
 end
 
 -- 제빙기·자판기: 키 큰 상자 + 앞 비스듬한 얼음 칸 문 + 앞면 패널 선
@@ -306,6 +320,7 @@ function P.IceMachine(ctx, i: number, j: number)
 		Kit.wedge(m, cf * CFrame.new(0, 3.6, back - 1.8) * CFrame.Angles(0, math.pi, 0), Vector3.new(3.4, 1.6, 0.5), { blocks = false, collide = false })
 		Kit.box(m, cf * CFrame.new(0, 1.0, back - 1.62), Vector3.new(3.2, 0.5, 0.08), { blocks = false, collide = false }) -- 바람 구멍
 	end
+	PM.dress(m, if tall then "Hotel.VendingMachine" else "Hotel.IceMachine", cf * CFrame.new(0, 0, back)) -- (몸통 밑 바닥, -Z = 앞)
 end
 
 -- 엘리베이터 문: 벽에 붙은 문틀 + 두 짝 문(가운데 틈) + 위 층 표시판 + 옆 호출 버튼
@@ -324,6 +339,7 @@ function P.Elevator(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 9.1, wz + 0.1), Vector3.new(2.0, 0.7, 0.15), { blocks = false, collide = false }) -- 층 표시판
 	Kit.box(m, cf * CFrame.new(3.4, 4.2, wz + 0.1), Vector3.new(0.5, 1.0, 0.12), { blocks = false, collide = false }) -- 호출 버튼
 	Kit.box(m, cf * CFrame.new(0, 4.0, wz), Vector3.new(6.0, 8.0, 1.0), { invisible = true, tag = false })
+	PM.dress(m, "Hotel.Elevator", cf * CFrame.new(0, 0, wz)) -- (문틀 밑 바닥, -Z = 복도 쪽)
 end
 
 -- ── 객실 ──
@@ -367,6 +383,7 @@ function P.GuestBed(ctx, i: number, j: number)
 		nightstand(m, cf, s * 3.25)
 	end
 	Kit.box(m, cf * CFrame.new(0, 1.4, 0.45), Vector3.new(5.2, 2.8, 6.6), { invisible = true, tag = false })
+	PM.dress(m, "Hotel.GuestBed", cf) -- (칸 가운데 바닥, +Z = 머리판 벽)
 end
 
 -- 트윈 침대: 싱글 침대 둘 사이에 협탁 하나
@@ -381,6 +398,7 @@ function P.TwinBeds(ctx, i: number, j: number)
 	end
 	nightstand(m, cf, 0)
 	Kit.box(m, cf * CFrame.new(0, 1.4, 0.45), Vector3.new(7.2, 2.8, 6.6), { invisible = true, tag = false })
+	PM.dress(m, "Hotel.TwinBeds", cf) -- (칸 가운데 바닥, +Z = 머리판 벽)
 end
 
 -- 욕실: 칸 안을 칸막이로 막고(입구 쪽 칸막이에 문틈), 벽을 따라 욕조 · 변기 · 세면대
@@ -431,12 +449,21 @@ function P.Bathroom(ctx, i: number, j: number)
 		return p + a * u + b * v + Vector3.new(0, y, 0)
 	end
 	local rot = CFrame.lookAt(Vector3.zero, a).Rotation
+	local n0 = #m:GetChildren() -- (여기부터 설비: 메시로 입힌다. 칸막이는 벽 판이라 기본 도형 그대로)
 	local tubLong = if math.abs(b.X) > 0.5 then Vector3.new(5.4, 1.8, 2.6) else Vector3.new(2.6, 1.8, 5.4)
 	Kit.box(m, CFrame.new(at(T / 2 - 1.6, -1.0, 0.9)), tubLong, { blocks = false }) -- 욕조
 	-- 변기(둘째 벽 쪽, 욕조에서 먼 쪽)
 	Kit.cylinder(m, at(-0.6, T / 2 - 1.6, 0), at(-0.6, T / 2 - 1.6, 1.3), 0.7, { blocks = false }) -- 변기
 	-- 세면대 + 거울
 	Kit.box(m, CFrame.new(at(-2.6, T / 2 - 0.9, 1.4)) * rot, Vector3.new(2.2, 2.8, 1.6), { blocks = false }) -- 세면대 장
+	local fixtures = {}
+	for k, x in m:GetChildren() do
+		if k > n0 and x:IsA("BasePart") then
+			table.insert(fixtures, x)
+		end
+	end
+	local fcf = CFrame.fromMatrix(p, b, Vector3.yAxis) -- (소품 좌표: X = 둘째 벽 b, Z = b × 위 = ±첫째 벽 a)
+	PM.dress(m, if fcf.ZVector:Dot(a) > 0 then "Hotel.BathFixtures" else "Hotel.BathFixturesM", fcf, nil, fixtures)
 end
 
 -- 책상(창가 벽) + 의자 + 벽걸이 TV + 스탠드
@@ -454,6 +481,7 @@ function P.WritingDesk(ctx, i: number, j: number)
 	Kit.box(m, ch * CFrame.new(0, 0.95, 0), Vector3.new(1.7, 1.9, 1.7), { blocks = false, collide = false }) -- 의자(좌판까지 한 덩어리)
 	Kit.box(m, ch * CFrame.new(0, 2.9, -0.8), Vector3.new(1.7, 2.0, 0.15), { blocks = false, collide = false }) -- 등받이
 	Kit.box(m, cf * CFrame.new(0, 1.6, back - 0.6), Vector3.new(5.0, 3.2, 3.4), { invisible = true, tag = false })
+	PM.dress(m, "Hotel.WritingDesk", cf) -- (칸 가운데 바닥, +Z = 벽)
 end
 
 -- 짐 받침대(접이식 다리) + 여행 가방
@@ -470,6 +498,7 @@ function P.LuggageRack(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(0, 3.6, 1.1) * CFrame.Angles(0.35, 0, 0), Vector3.new(2.8, 1.8, 0.25), { blocks = false, collide = false })
 	end
 	Kit.box(m, cf * CFrame.new(0, 1.6, 0), Vector3.new(3.0, 3.2, 1.9), { invisible = true, tag = false })
+	PM.dress(m, if open then "Hotel.LuggageRackOpen" else "Hotel.LuggageRack", cf) -- (받침대 밑 바닥, +Z = 벽)
 end
 
 -- 붙박이 옷장(숨는 곳이 아닌 것): 벽에 붙은 키 큰 상자 + 문 틈 + 손잡이 둘
@@ -482,6 +511,7 @@ function P.Wardrobe(ctx, i: number, j: number)
 	local back = ctx.T / 2 - 1.1
 	Kit.box(m, cf * CFrame.new(0, 3.8, back), Vector3.new(4.4, 7.6, 2.2))
 	Kit.box(m, cf * CFrame.new(0, 3.8, back - 1.12), Vector3.new(0.08, 7.0, 0.08), { blocks = false, collide = false }) -- 문 틈
+	PM.dress(m, "Hotel.Wardrobe", cf * CFrame.new(0, 0, back)) -- (옷장 밑 바닥, -Z = 문 쪽)
 end
 
 -- ── 로비 ──
@@ -495,6 +525,7 @@ function P.Fountain(ctx, i: number, j: number)
 	Kit.cylinder(m, p + Vector3.new(0, 4.6, 0), p + Vector3.new(0, 5.2, 0), 3.6, { blocks = false }) -- 위 접시
 	Kit.cylinder(m, p + Vector3.new(0, 5.2, 0), p + Vector3.new(0, 7.0, 0), 0.45, { blocks = false, collide = false })
 	Kit.ball(m, p + Vector3.new(0, 7.3, 0), 0.6, { blocks = false, collide = false })
+	PM.dress(m, "Hotel.Fountain", CFrame.new(p)) -- (수반 가운데 바닥)
 end
 
 -- 분수가 덮는 빈 칸(아무것도 짓지 않는다: 막힌 칸 표시만)
@@ -509,6 +540,7 @@ function P.Chandelier(ctx, i: number, j: number)
 	Kit.cylinder(m, p + Vector3.new(0, top - 2.4, 0), p + Vector3.new(0, top - 2.1, 0), 3.0, { blocks = false, collide = false })
 	Kit.cylinder(m, p + Vector3.new(0, top - 3.3, 0), p + Vector3.new(0, top - 3.0, 0), 1.9, { blocks = false, collide = false })
 	Kit.cylinder(m, p + Vector3.new(0, top - 4.2, 0), p + Vector3.new(0, top - 2.1, 0), 0.35, { blocks = false, collide = false })
+	PM.dress(m, "Hotel.Chandelier", CFrame.new(p + Vector3.new(0, top - 13.9, 0))) -- (천장 13.9 기준 바닥, 낮은 천장이면 통째로 내린다)
 end
 
 -- ── 연회장 ──
@@ -524,6 +556,7 @@ function P.BanquetStage(ctx, i: number, j: number)
 		local lp = p + Vector3.new(0, 1.6, 0)
 		Kit.box(m, CFrame.lookAt(lp + Vector3.new(0, 1.9, 0), lp + Vector3.new(0, 1.9, 0) - side), Vector3.new(1.8, 3.8, 1.2), { blocks = false })
 	end
+	PM.dress(m, if ctx.hash(i, j, 69) > 0.6 then "Hotel.BanquetStagePodium" else "Hotel.BanquetStage", CFrame.lookAt(p, p - side)) -- (단 가운데 바닥, -Z = 객석 쪽)
 end
 
 return P

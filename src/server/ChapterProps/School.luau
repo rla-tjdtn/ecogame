@@ -9,6 +9,7 @@
 --   q 뜀틀·매트 더미          x 트로피 진열장(벽)          w 정수기(벽, 지나감)      P 프로젝터 스크린(벽)
 
 local Kit = require(script.Parent.Parent.MapKit)
+local PM = require(script.Parent.Parent.PropMesh) -- 다 지은 소품을 메시 에셋으로 바꿔 입힌다(없으면 기본 도형 그대로)
 
 local P = {}
 
@@ -80,6 +81,7 @@ function P.StudentDesk(ctx, i: number, j: number)
 		Kit.box(m, ch * CFrame.new(x, 0.8, -0.65), Vector3.new(0.1, 1.6, 0.1), LINE)
 	end
 	solid(m, cf * CFrame.new(0, 0, 0), Vector3.new(3, 2.8, 4))
+	PM.dress(m, if fallen then "School.StudentDeskFallen" else "School.StudentDesk", cf) -- (바닥 가운데, -Z = 앞(교탁 쪽), 의자는 +Z)
 end
 
 -- G 칠판(벽 가운데, 세로로 세 칸 길이) + 분필 받침 + 교탁
@@ -98,6 +100,7 @@ function P.Blackboard(ctx, i: number, j: number)
 	Kit.box(m, t * CFrame.new(0, 1.8, 0), Vector3.new(3.4, 3.6, 1.8), SOFT)
 	Kit.box(m, t * CFrame.new(0, 3.75, 0) * CFrame.Angles(0.15, 0, 0), Vector3.new(3.8, 0.2, 2.2), SOFT)
 	solid(m, t, Vector3.new(3.8, 4, 2.2))
+	PM.dress(m, "School.Blackboard", cf) -- (칸 가운데 바닥, +Z = 벽)
 end
 
 -- N 게시판(벽면): 판 + 종이 몇 장
@@ -110,6 +113,7 @@ function P.NoticeBoard(ctx, i: number, j: number)
 		local r = ctx.hash(i, j, 90 + k)
 		Kit.box(m, cf * CFrame.new(-2 + k * 2, 5.4 + r * 0.6, z - 0.1) * CFrame.Angles(0, 0, (r - 0.5) * 0.5), Vector3.new(1.1, 1.5, 0.05), LINE)
 	end
+	PM.dress(m, "School.NoticeBoard", cf)
 end
 
 -- k 학생 사물함(벽면 낮은 2단, 칸 반이 빈다)
@@ -122,6 +126,7 @@ function P.Locker(ctx, i: number, j: number)
 	for k = -1, 1 do
 		Kit.box(m, cf * CFrame.new(k * 1.8, 2.2, z - 0.93), Vector3.new(0.1, 4.2, 0.08), LINE)
 	end
+	PM.dress(m, "School.Locker", cf)
 end
 
 -- W 신발장: 현관의 낮은 칸칸이 선반
@@ -141,6 +146,7 @@ function P.ShoeLocker(ctx, i: number, j: number)
 			Kit.box(m, cf * CFrame.new(s * 1.34, h / 2, k * L / 4), Vector3.new(0.08, h - 0.2, 0.1), LINE)
 		end
 	end
+	PM.dress(m, "School.ShoeLocker", cf) -- (Z = 늘어선 방향)
 end
 
 -- U 화장실 칸
@@ -157,6 +163,7 @@ function P.ToiletStall(ctx, i: number, j: number)
 	Kit.cylinder(m, at(cf, 0, 1.6, 1.4), at(cf, 0, 1.85, 1.4), 1.0, LINE)
 	Kit.box(m, cf * CFrame.new(0, 2.6, 3.1), Vector3.new(1.8, 1.8, 0.9), SOFT)
 	solid(m, cf * CFrame.new(0, 0, 1.4), Vector3.new(6.6, 7, 5.2))
+	PM.dress(m, "School.ToiletStall", cf)
 end
 
 -- I 세면대 + 거울
@@ -172,6 +179,7 @@ function P.Sink(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 6.2, ctx.T / 2 - 0.25), Vector3.new(6.2, 2.4, 0.1), LINE)
 	solid(m, cf * CFrame.new(0, 0, z), Vector3.new(6.6, 3.3, 2.2))
+	PM.dress(m, "School.Sink", cf)
 end
 
 -- J 과학 실험대: 검은 상판 + 개수대 + 수도 + 비커 몇 개
@@ -193,6 +201,7 @@ function P.LabBench(ctx, i: number, j: number)
 		Kit.cylinder(m, c + Vector3.new(0, 1.9, 0), c + Vector3.new(0, 2.1, 0), 0.7, LINE)
 	end
 	solid(m, cf, Vector3.new(6.6, 3.5, 3.2))
+	PM.dress(m, "School.LabBench", cf)
 end
 
 -- Y 업라이트 피아노 + 의자
@@ -214,6 +223,7 @@ function P.Piano(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(x, 0.8, 2.4), Vector3.new(0.2, 1.6, 1.0), LINE)
 	end
 	solid(m, cf * CFrame.new(0, 0, -0.4), Vector3.new(6.2, 5.2, 3.2))
+	PM.dress(m, "School.Piano", cf) -- (-Z = 피아노 뒤판, +Z = 의자)
 end
 
 -- e 이젤 + 캔버스
@@ -227,6 +237,7 @@ function P.Easel(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 4.3, -0.4) * CFrame.Angles(0.1, 0, 0), Vector3.new(3.0, 3.4, 0.15), SOFT)
 	Kit.box(m, cf * CFrame.new(0, 2.5, -0.55), Vector3.new(3.0, 0.2, 0.5), LINE)
 	solid(m, cf, Vector3.new(3, 6, 2.6))
+	PM.dress(m, "School.Easel", cf)
 end
 
 -- M 방송 콘솔: 조절판 + 스피커 + 마이크
@@ -244,6 +255,7 @@ function P.BroadcastDesk(ctx, i: number, j: number)
 	Kit.cylinder(m, at(cf, 0.4, 3.8, 1.6), at(cf, 0, 5.2, 0.7), 0.08, LINE)
 	Kit.ball(m, at(cf, 0, 5.3, 0.6), 0.3, LINE)
 	solid(m, cf * CFrame.new(0, 0, 2.2), Vector3.new(7.6, 4, 2.8))
+	PM.dress(m, "School.BroadcastDesk", cf)
 end
 
 -- F 급식 식탁: 긴 상 + 붙은 긴 의자
@@ -265,6 +277,7 @@ function P.LunchTable(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(0.4, 2.9, 1.2) * CFrame.Angles(0, 0.4, 0), Vector3.new(1.4, 0.15, 1.0), LINE)
 	end
 	solid(m, cf, Vector3.new(5.2, 2.9, L))
+	PM.dress(m, if ctx.hash(i, j, 22) > 0.6 then "School.LunchTableTray" else "School.LunchTable", cf)
 end
 
 -- V 배식대: 카운터 + 유리 가림막 틀 + 국통
@@ -283,6 +296,7 @@ function P.ServingCounter(ctx, i: number, j: number)
 	local c = at(cf, 0, 3.6, (ctx.hash(i, j, 25) - 0.5) * 3)
 	Kit.cylinder(m, c, c + Vector3.new(0, 1.0, 0), 0.9, LINE)
 	solid(m, cf, Vector3.new(3.4, 3.6, L))
+	PM.dress(m, "School.ServingCounter", cf)
 end
 
 -- H 서가: 양면 5단 책꽂이
@@ -305,6 +319,7 @@ function P.Bookshelf(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(if r > 0.5 then 0.8 else -0.8, 1.15 + k * 1.75, (ctx.hash(i, j, 50 + k) - 0.5) * (L - 3.4)), Vector3.new(0.9, 1.3, 2.4), LINE)
 	end
 	solid(m, cf, Vector3.new(2.8, h, L))
+	PM.dress(m, "School.Bookshelf", cf)
 end
 
 -- g 농구대(벽): 벽 지지대 + 백보드 + 림
@@ -326,6 +341,7 @@ function P.Hoop(ctx, i: number, j: number)
 	-- 벽 아래 안전 매트(막힌 칸인 까닭)
 	Kit.box(m, cf * CFrame.new(0, 2.6, z - 0.6), Vector3.new(7.6, 5.2, 1.0))
 	solid(m, cf * CFrame.new(0, 0, z - 0.6), Vector3.new(7.6, 5.2, 1.1))
+	PM.dress(m, if y < 9 then "School.HoopLow" else "School.Hoop", cf)
 end
 
 -- u 체육관 단상: 무대 한 칸(낮은 단 + 앞판 선 + 뒤 막)
@@ -342,6 +358,7 @@ function P.Stage(ctx, i: number, j: number)
 	for k = 0, 2 do -- 뒤쪽 막 주름
 		Kit.box(m, cf * CFrame.new(-2.7 + k * 2.7, 3.4 + (ctx.H - 4.6) / 2, -L / 2 + 0.5) * CFrame.Angles(0, if k % 2 == 0 then 0.25 else -0.25, 0), Vector3.new(2.6, ctx.H - 4.6, 0.12), LINE)
 	end
+	PM.dress(m, if ctx.H < 12.5 then "School.StageLow" else "School.Stage", cf)
 end
 
 -- t 중정 나무: 굵은 줄기 + 사방 가지(잎 없는 겨울나무 — 음파에 가지 선이 또렷하다)
@@ -358,6 +375,7 @@ function P.Tree(ctx, i: number, j: number)
 	end
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 0.3, 0)), Vector3.new(4.4, 0.6, 4.4), LINE) -- 나무 둘레 보호틀
 	solid(m, CFrame.new(p), Vector3.new(2.2, top, 2.2))
+	PM.dress(m, "School.Tree", CFrame.new(p))
 end
 
 -- h 중정 동상: 두 단 받침대 + 책을 든 인물(머리·몸·팔 덩어리) — 중정 한가운데 랜드마크
@@ -373,6 +391,7 @@ function P.Statue(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(1.2, 6.9, 0.7) * CFrame.Angles(-0.9, 0, 0), Vector3.new(0.5, 2.0, 0.5), SOFT) -- 책 든 팔
 	Kit.box(m, cf * CFrame.new(1.2, 7.4, 1.4), Vector3.new(1.4, 1.0, 0.25), LINE) -- 책
 	solid(m, cf, Vector3.new(6.4, 9, 6.4))
+	PM.dress(m, "School.Statue", cf)
 end
 
 -- r 화단: 무릎 높이 벽돌 틀 + 마른 줄기 몇 개
@@ -388,6 +407,7 @@ function P.FlowerBed(ctx, i: number, j: number)
 		local x = (ctx.hash(i, j, 80 + k) - 0.5) * 2.4
 		Kit.cylinder(m, at(cf, x, 1.8, k * 2.4), at(cf, x * 1.2, 3.4, k * 2.6), 0.08, LINE)
 	end
+	PM.dress(m, "School.FlowerBed", cf)
 end
 
 -- j 중정 벤치: 앉는 판 + 등판 + 다리 둘
@@ -400,6 +420,7 @@ function P.Bench(ctx, i: number, j: number)
 		Kit.box(m, cf * CFrame.new(x, 0.85, 1.2), Vector3.new(0.3, 1.7, 1.6), LINE)
 	end
 	solid(m, cf * CFrame.new(0, 0, 1.2), Vector3.new(6.6, 2.0, 2.0))
+	PM.dress(m, "School.Bench", cf)
 end
 
 -- q 뜀틀 + 접은 매트 더미(체육관 창고에서 끌어낸 것)
@@ -412,6 +433,7 @@ function P.VaultBox(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(2.2, 0.9, 0) * CFrame.Angles(0, 0, 0.12), Vector3.new(2.4, 1.8, 5.6), SOFT) -- 접은 매트
 	solid(m, cf, Vector3.new(7, 4, 6))
+	PM.dress(m, "School.VaultBox", cf)
 end
 
 -- x 트로피 진열장(벽): 유리장 틀 + 선반 셋 + 트로피 몇 개
@@ -428,6 +450,7 @@ function P.TrophyCase(ctx, i: number, j: number)
 		Kit.cylinder(m, c, c + Vector3.new(0, 1.2, 0), 0.35, LINE)
 	end
 	solid(m, cf * CFrame.new(0, 0, z), Vector3.new(6.6, h, 2.1))
+	PM.dress(m, if h < 7.5 then "School.TrophyCaseLow" else "School.TrophyCase", cf)
 end
 
 -- w 정수기(벽, 지나감): 몸통 + 물통 + 컵 받침
@@ -438,6 +461,7 @@ function P.WaterCooler(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(1.8, 2.2, z), Vector3.new(1.8, 4.4, 1.8), SOFT)
 	Kit.cylinder(m, at(cf, 1.8, 4.4, z), at(cf, 1.8, 6.0, z), 0.8, LINE)
 	Kit.box(m, cf * CFrame.new(1.8, 3.0, z - 1.0), Vector3.new(1.2, 0.12, 0.3), LINE)
+	PM.dress(m, "School.WaterCooler", cf)
 end
 
 -- P 프로젝터 스크린(시청각실 앞 벽): 내려온 스크린 막 + 위 통 + 아래 교탁
@@ -450,6 +474,7 @@ function P.ProjectorScreen(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, top - 3.4, z - 0.1), Vector3.new(13, 6.2, 0.08), LINE)
 	Kit.box(m, cf * CFrame.new(-2.2, 1.6, z - 2.2), Vector3.new(2.4, 3.2, 1.6), SOFT)
 	solid(m, cf * CFrame.new(-2.2, 0, z - 2.2), Vector3.new(2.6, 3.4, 1.8))
+	PM.dress(m, if ctx.H < 12.5 then "School.ProjectorScreenLow" else "School.ProjectorScreen", cf)
 end
 
 return P

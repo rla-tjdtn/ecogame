@@ -3334,6 +3334,8 @@ task.spawn(function()
 			revealAll()
 		elseif args.Test == "reveal" then
 			revealTest()
+		elseif args.Test == "propmesh" or args.Test == "propshot" then
+			require(script.Parent.TestPropMesh)({ ask = ask, check = check, log = log, place = place, readyPlayers = readyPlayers, R = R, args = args })
 		elseif args.Test == "netaudio" or args.Test == "netflood" then
 			require(script.Parent.TestNetAudio)({ ask = ask, check = check, log = log, place = place, readyPlayers = readyPlayers, R = R, args = args })
 		elseif args.Test == "mobile" then

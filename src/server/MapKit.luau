@@ -6,6 +6,7 @@
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
+local PM = require(script.Parent.PropMesh) -- 플랜지·난간·계단·상자·EXIT·아치를 메시 에셋으로 바꿔 입힌다(없으면 기본 도형 그대로)
 
 local Kit = {}
 local TAG = Config.Tags.Renderable
@@ -118,7 +119,9 @@ function Kit.pipe(parent: Instance, a: Vector3, b: Vector3, r: number, flangeAt:
 		local c = a + dir * (math.clamp(t * len, 0.2, len - 0.2))
 		local fr = r * 1.35 + 0.08
 		local fl = Kit.cylinder(m, c - dir * 0.18, c + dir * 0.18, fr, { blocks = false })
-		if bolts and fr >= 0.6 then
+		local flParts: { BasePart } = { fl }
+		local bolted = bolts == true and fr >= 0.6
+		if bolted then
 			-- 볼트: 플랜지 둘레의 작은 원통 6개
 			local up = if math.abs(dir.Y) > 0.95 then Vector3.xAxis else Vector3.yAxis
 			local u = dir:Cross(up).Unit
@@ -127,10 +130,11 @@ function Kit.pipe(parent: Instance, a: Vector3, b: Vector3, r: number, flangeAt:
 				local ang = i / 6 * math.pi * 2 + 0.3
 				local bp = c + (u * math.cos(ang) + w * math.sin(ang)) * (fr - 0.17)
 				-- (지름 0.18 볼트: 음파 실루엣 2줄이 거의 겹치므로 정적 선 1줄 — 음파 한 발마다 다시 계산하는 viewParts 에서 빠진다)
-				Kit.cylinder(m, bp - dir * 0.3, bp + dir * 0.3, 0.09, { blocks = false, collide = false, shape = "Line" })
+				table.insert(flParts, Kit.cylinder(m, bp - dir * 0.3, bp + dir * 0.3, 0.09, { blocks = false, collide = false, shape = "Line" }))
 			end
 		end
-		local _ = fl
+		-- (플랜지 + 볼트 → 메시 하나: 기준 반지름 1 을 fr 로. 곧은 몸통은 원통 그대로 — 메시로 바꿔도 모양·선이 같고 파트만 는다)
+		PM.dress(m, if bolted then "Kit.PipeFlangeBolted" else "Kit.PipeFlange", CFrame.lookAt(c, c + dir), Vector3.new(fr, fr, 1), flParts, m)
 	end
 	return m
 end
@@ -145,17 +149,37 @@ function Kit.railing(parent: Instance, a: Vector3, b: Vector3, height: number?, 
 	local d = b - a
 	local len = d.Magnitude
 	local n = math.max(1, math.floor(len / st + 0.5))
+	local vis: { BasePart } = {}
 	for i = 0, n do
 		local p = a + d * (i / n)
-		Kit.cylinder(m, p, p + Vector3.new(0, h, 0), 0.11, { blocks = false })
+		table.insert(vis, Kit.cylinder(m, p, p + Vector3.new(0, h, 0), 0.11, { blocks = false }))
 	end
 	local up = Vector3.new(0, h, 0)
-	Kit.cylinder(m, a + up, b + up, 0.13, { blocks = false })
-	Kit.cylinder(m, a + up * 0.5, b + up * 0.5, 0.09, { blocks = false })
+	table.insert(vis, Kit.cylinder(m, a + up, b + up, 0.13, { blocks = false }))
+	table.insert(vis, Kit.cylinder(m, a + up * 0.5, b + up * 0.5, 0.09, { blocks = false }))
 	-- 발끝 막이(얇은 판)
 	local dir = d.Unit
 	local cf = CFrame.lookAt((a + b) / 2 + Vector3.new(0, 0.2, 0), (a + b) / 2 + Vector3.new(0, 0.2, 0) + dir)
-	Kit.box(m, cf, Vector3.new(0.1, 0.4, len), { blocks = false, collide = false })
+	table.insert(vis, Kit.box(m, cf, Vector3.new(0.1, 0.4, len), { blocks = false, collide = false }))
+	-- 메시: 평지(기둥 4 / 짧은 것 2) 또는 계단 경사(가로 8·높이 6 기준). 낮은 끝에서 높은 끝 쪽을 본다
+	do
+		local lo, hi = a, b
+		if hi.Y < lo.Y then
+			lo, hi = b, a
+		end
+		local flat = Vector3.new(hi.X - lo.X, 0, hi.Z - lo.Z)
+		local lh, dy = flat.Magnitude, hi.Y - lo.Y
+		if lh > 0.5 and h == 3.3 then
+			local frame = CFrame.lookAt(lo, lo + flat)
+			if dy > 0.5 then
+				PM.dress(m, "Kit.RailingSlope", frame, Vector3.new(1, dy / 6, lh / 8), vis, m)
+			elseif n + 1 <= 2 then
+				PM.dress(m, "Kit.RailingShort", frame, Vector3.new(1, 1, lh / 3.4), vis, m)
+			else
+				PM.dress(m, "Kit.Railing", frame, Vector3.new(1, 1, lh / 8), vis, m)
+			end
+		end
+	end
 	-- 보이지 않는 충돌 벽(떨어지지 않게)
 	Kit.box(m, CFrame.lookAt((a + b) / 2 + up / 2, (a + b) / 2 + up / 2 + dir), Vector3.new(0.3, h, len), { invisible = true, tag = false })
 	return m
@@ -170,10 +194,15 @@ function Kit.stairs(parent: Instance, bottomCenter: Vector3, forward: Vector3, w
 	local f = Vector3.new(forward.X, 0, forward.Z).Unit
 	local stepH = rise / steps
 	local stepD = run / steps
+	local vis: { BasePart } = {}
 	for i = 0, steps - 1 do
 		local top = (i + 1) * stepH
 		local c = bottomCenter + f * (stepD * (i + 0.5)) + Vector3.new(0, top / 2, 0)
-		Kit.box(m, CFrame.lookAt(c, c + f), Vector3.new(width, top, stepD), { collide = false, blocks = i >= steps / 2 })
+		table.insert(vis, Kit.box(m, CFrame.lookAt(c, c + f), Vector3.new(width, top, stepD), { collide = false, blocks = i >= steps / 2 }))
+	end
+	-- 메시: 콘크리트 계단(폭 6·높이 6·길이 8·8단 기준)
+	if rise > 0 and steps == 8 then
+		PM.dress(m, "Kit.Stairs", CFrame.lookAt(bottomCenter, bottomCenter + f), Vector3.new(width / 6, rise / 6, run / 8), vis, m)
 	end
 	-- 경사로(쐐기): 경사가 forward 방향으로 올라가도록 뒤(+Z)를 forward 쪽으로
 	local mid = bottomCenter + f * (run / 2) + Vector3.new(0, rise / 2, 0)
@@ -196,10 +225,11 @@ function Kit.archPortal(parent: Instance, center: Vector3, right: Vector3, span:
 	local ring = 0.7
 	local outer = inner + ring
 	local basis = CFrame.fromMatrix(center, r, Vector3.yAxis) -- X = 가로, Z = 진행 방향
+	local vis: { BasePart } = {}
 	-- 기둥(좌우)
 	for _, s in { -1, 1 } do
 		local x = s * (half - pier / 2)
-		Kit.box(m, basis * CFrame.new(x, spring / 2, 0), Vector3.new(pier, spring, depth))
+		table.insert(vis, Kit.box(m, basis * CFrame.new(x, spring / 2, 0), Vector3.new(pier, spring, depth)))
 	end
 	-- 반원 아치 조각
 	local segs = 9
@@ -211,7 +241,7 @@ function Kit.archPortal(parent: Instance, center: Vector3, right: Vector3, span:
 		local chord = 2 * outer * math.sin((a1 - a0) / 2)
 		local px, py = math.cos(am) * rm, spring + math.sin(am) * rm
 		local seg = basis * CFrame.new(px, py, 0) * CFrame.Angles(0, 0, am + math.pi / 2)
-		Kit.box(m, seg, Vector3.new(chord, ring, depth), { axis = "X" })
+		table.insert(vis, Kit.box(m, seg, Vector3.new(chord, ring, depth), { axis = "X" }))
 	end
 	-- 아치 위 막힌 벽(리브보다 얇게 → 리브가 튀어나와 윤곽이 보인다), 선 없는 채움
 	local wallD = depth * 0.55
@@ -229,7 +259,7 @@ function Kit.archPortal(parent: Instance, center: Vector3, right: Vector3, span:
 			local h = topY - yArc
 			if h > 0.05 then
 				local cx = s * (x0 + x1) / 2
-				Kit.box(m, basis * CFrame.new(cx, yArc + h / 2, 0), Vector3.new(x1 - x0 + 0.02, h, wallD), { shape = "None" })
+				table.insert(vis, Kit.box(m, basis * CFrame.new(cx, yArc + h / 2, 0), Vector3.new(x1 - x0 + 0.02, h, wallD), { shape = "None" }))
 			end
 		end
 		local _ = i
@@ -238,8 +268,12 @@ function Kit.archPortal(parent: Instance, center: Vector3, right: Vector3, span:
 		-- 바깥 원과 기둥 사이
 		local x0, x1 = outer, half
 		if x1 - x0 > 0.05 then
-			Kit.box(m, basis * CFrame.new(s * (x0 + x1) / 2, (spring + topY) / 2, 0), Vector3.new(x1 - x0, topY - spring, wallD), { shape = "None" })
+			table.insert(vis, Kit.box(m, basis * CFrame.new(s * (x0 + x1) / 2, (spring + topY) / 2, 0), Vector3.new(x1 - x0, topY - spring, wallD), { shape = "None" }))
 		end
+	end
+	-- 메시: 석조 아치 리브(기둥·홍예석·받침돌). 고리 위 막힌 벽은 평면이라 기본 도형 그대로
+	if math.abs(span - 8) < 0.01 and math.abs(spring - 6) < 0.01 and depth == 1.4 then
+		PM.dress(m, "Kit.Arch", basis, nil, vis, m)
 	end
 	return m
 end
@@ -249,12 +283,14 @@ function Kit.crate(parent: Instance, bottom: Vector3, size: Vector3, yaw: number
 	local cf = CFrame.new(bottom + Vector3.new(0, size.Y / 2, 0)) * CFrame.Angles(0, yaw or 0, 0)
 	local b = Kit.box(parent, cf, size, { name = "Crate" })
 	-- 가운데 띠
-	Kit.box(parent, cf, Vector3.new(size.X + 0.12, 0.3, size.Z + 0.12), { blocks = false })
+	local band = Kit.box(parent, cf, Vector3.new(size.X + 0.12, 0.3, size.Z + 0.12), { blocks = false })
+	-- 메시: 3×3×3 나무 상자를 크기에 맞춰(바닥 가운데 기준)
+	PM.dress(parent, "Kit.Crate", CFrame.new(bottom) * CFrame.Angles(0, yaw or 0, 0), size / 3, { b, band }, parent)
 	return b
 end
 
 -- 글자(EXIT 표지): 막대 조합. origin = 글자 왼쪽 아래, right/up = 벽면 방향, 글자 높이 h
-function Kit.letter(parent: Instance, ch: string, origin: Vector3, right: Vector3, out: Vector3, h: number)
+function Kit.letter(parent: Instance, ch: string, origin: Vector3, right: Vector3, out: Vector3, h: number, made: { BasePart }?)
 	local w = h * 0.62
 	local t = h * 0.14
 	local depth = 0.35
@@ -265,7 +301,10 @@ function Kit.letter(parent: Instance, ch: string, origin: Vector3, right: Vector
 		local d = b - a
 		local len = d.Magnitude
 		local cf = CFrame.fromMatrix((a + b) / 2, d.Unit, out:Cross(d.Unit).Unit)
-		Kit.box(parent, cf, Vector3.new(len + t, t, depth), { blocks = false, collide = false })
+		local p = Kit.box(parent, cf, Vector3.new(len + t, t, depth), { blocks = false, collide = false })
+		if made then
+			table.insert(made, p)
+		end
 	end
 	local ht = t / 2
 	if ch == "E" then
@@ -290,10 +329,19 @@ function Kit.word(parent: Instance, text: string, center: Vector3, right: Vector
 	local w = h * 0.62
 	local total = #text * w + (#text - 1) * gap
 	local x = -total / 2
+	local made: { BasePart } = {}
 	for i = 1, #text do
 		local ch = text:sub(i, i)
-		Kit.letter(parent, ch, center + right * x - Vector3.new(0, h / 2, 0), right, out, h)
+		Kit.letter(parent, ch, center + right * x - Vector3.new(0, h / 2, 0), right, out, h, made)
 		x += w + gap
+	end
+	-- 메시: EXIT 표지판(글자는 한 획 선). x = 보는 사람의 오른쪽(글자가 바로 읽힌다), +z = 벽 밖
+	if text == "EXIT" then
+		local o = Vector3.new(out.X, 0, out.Z)
+		if o.Magnitude > 0.5 then
+			o = o.Unit
+			PM.dress(parent, "Kit.Exit", CFrame.fromMatrix(center, Vector3.yAxis:Cross(o).Unit, Vector3.yAxis), Vector3.one * (h / 1.4), made, parent)
+		end
 	end
 end
 
