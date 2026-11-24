@@ -1,0 +1,25 @@
+// 9장 비인간형 — 전조등: 나란히 붙은 두 사람이 차 한 대처럼 낮고 넓게 기어 온다. 두 머리는 얼굴이 통째로 뚫려 헤드라이트처럼 빈 원 두 개로 보인다.
+const { V, Frame, Body } = require('./sculpt.js'), A = require('./anat.js');
+module.exports = { id: 'c9n', name: '전조등', kind: '비인간형 · 9장 지하 주차장', H: 3.4, build(p = {}) {
+  const B = new Body(), w = p.walk, S = w == null ? .35 : Math.sin(w * Math.PI * 2), y = 1.75 + Math.abs(S) * .05;
+  // 두 몸통이 옆구리로 붙음
+  for (const m of [-1, 1]) { const x = m * .92; A.torso(B, new Frame([x, y, -.1], [1, 0, 0], V.norm([0, -.06, 1]), V.norm([0, -1, -.06])), { w: .72, d: .42, h: 1.9, n: 9, r: .05, scap: true }); B.group({ k: .18, kg: .25, amp: .006, freq: 4 }); B.tube([[x, y, -.9], [x * .9, y - .05, -1.7], [x * .8, y + .05, -2.4]], [.46, .34, .42]); A.rings(B, [[x, y, -1.0], [x * .85, y, -2.2]], 6, .025, .045, .7, { bow: .2 }); A.spine(B, [[x, y, 1.0], [x, y + .04, 0], [x * .95, y, -1.2], [x * .8, y + .1, -2.3]], .11, { n: 15, back: [0, 1, 0], out: .4, wing: true, k: .03 }); A.pelvis(B, new Frame([x * .78, y + .05, -2.45], [1, 0, 0], V.norm([0, .2, .98]), V.norm([0, -.98, .2])), { w: .46, d: .34 }); }
+  // 붙은 자리: 당겨진 살 + 실밥 대신 엇갈린 갈비
+  B.group({ k: .2, kg: .3, amp: .012, freq: 4 }); B.tube([[0, y + .02, .9], [0, y - .04, 0], [0, y - .06, -1.0], [0, y, -2.2]], [.4, .46, .36, .34]); for (let i = 0; i < 9; i++) B.groove([0, y + .2, .8 - i * .32], [.15 * Math.sin(i * 3), 0, 1], .028, .06, .55, { bow: .6, wob: .2, wf: 4 });
+  B.group({ mat: 1, k: .01 }); B.tube([[0, y + .5, .95], [.03, y + .46, .1], [-.02, y + .36, -.9], [.02, y + .4, -2.0]], [.015, .035, .035, .012]);
+  // 팔 넷: 바깥은 높이 솟아 옆으로, 안쪽은 앞으로 짚음
+  for (const m of [-1, 1]) { const t = m * S;
+    { const s = [m * 1.55, y, .7], e = [m * 3.0, 1.95 + Math.max(0, t) * .25, .1 + t * .4], wr = [m * 3.35, .36 + Math.max(0, t) * .3, 1.25 + t * .8]; A.arm(B, s, e, wr, .27, { m: .9 }); A.hand(B, new Frame(wr, V.norm([-m * .8, 0, .6]), V.norm([m * .5, -.16, .85]), [0, 1, .1]), 1.45, { curl: 10, spread: 14, thin: .85, len: 1.1 }); }
+    { const s = [m * .45, y - .1, .85], e = [m * .72, 1.35 + Math.max(0, -t) * .2, 1.75 - t * .3], wr = [m * .5, .36 + Math.max(0, -t) * .3, 2.3 - t * .6]; A.arm(B, s, e, wr, .24, { m: .9 }); A.hand(B, new Frame(wr, V.norm([-m, 0, .1]), V.norm([m * .1, -.15, .98]), [0, 1, .1]), 1.3, { curl: 10, spread: 12, thin: .85 }); }
+    // 다리 넷: 바깥 무릎이 뒤에서 솟음, 안쪽은 끌림
+    { const h = [m * 1.05, y, -2.5], k = [m * 2.6, 1.9 + Math.max(0, -t) * .2, -1.9 - t * .4], an = [m * 3.0, .34 + Math.max(0, -t) * .25, -3.2 - t * .6]; A.leg(B, h, k, an, .29, { m: .9, front: [m * .7, .6, 0] }); A.foot(B, new Frame(an, [1, 0, 0], [0, 1, 0], V.norm([m * .7, 0, -.5])), 1.1, {}); }
+    { A.leg(B, [m * .45, y - .05, -2.6], [m * .5, .75, -3.6], [m * .42, .35, -5.0], .26, { m: .75, front: [0, -1, 0] }); A.foot(B, new Frame([m * .42, .35, -5.0], [1, 0, 0], V.norm([0, -.2, 1]), V.norm([0, -.35, -1])), 1.0, {}); } }
+  // 머리 둘: 앞을 봄, 얼굴이 원으로 뚫림(깊은 관) + 안쪽에 겹고리
+  for (const m of [-1, 1]) { const hc = [m * 1.0, y + .02, 1.95], n0 = [m * .95, y, 1.05]; A.neck(B, n0, V.lerp(n0, hc, .72), .26, { front: [0, 1, 0] });
+    const F = new Frame(hc, [1, 0, 0], V.norm([0, 1, -.05]), V.norm([m * .06, .05, 1])).rot(0, (p.headYaw || 0), m * 6); B.group({ k: .1, kg: .18, amp: .006, freq: 6 }); B.ell(F.at([0, .1, -.02]), [.5, .52, .5]); B.ell(F.at([0, -.22, .16]), [.36, .42, .34]); for (const q of [-1, 1]) { B.tube([F.p([q * .46, -.02, -.05]), F.p([q * .46, -.05, .28]), F.p([q * .36, -.2, .46])], [.06, .08, .06], { k: .06 }); B.ell(F.at([q * .5, -.05, -.05]).rot(0, q * 25, 0), [.04, .13, .08], { k: .03 }); } B.tube([F.p([-.36, .26, .34]), F.p([0, .36, .44]), F.p([.36, .26, .34])], .07, { k: .07 }); B.tube([F.p([-.2, -.58, .28]), F.p([0, -.62, .34]), F.p([.2, -.58, .28])], .08, { k: .08 });
+    for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2 + Math.sin(i * 5) * .2; B.groove(F.p([Math.cos(a) * .42, -.06 + Math.sin(a) * .42, .4]), F.d([-Math.sin(a), Math.cos(a), 0]), .014, .035, .17 + .06 * Math.sin(i * 3), { wob: .2, wf: 8 }); } B.cone(F.p([0, -.06, 1.0]), F.p([0, -.06, .1]), .4, .33, { op: 1, k: .05 }); B.group({ mat: 2, k: .01 }); B.cone(F.p([0, -.06, .16]), F.p([0, -.06, .05]), .34, .34);
+    B.group({ k: .02, kg: .05 }); for (const [rr, zz, tt] of [[.3, .2, .028]]) { const pts = []; for (let i = 0; i <= 14; i++) { const a = i / 14 * Math.PI * 2; pts.push(F.p([Math.cos(a) * rr, -.06 + Math.sin(a) * rr, zz + .02 * Math.sin(i * 2.7)])); } B.tube(pts, tt, { per: 2 }); }
+    B.group({ mat: 4, k: .003 }); for (let i = 0; i < 9; i++) { const a = Math.PI + (i + .5) / 9 * Math.PI; B.cone(F.p([Math.cos(a) * .38, -.06 + Math.sin(a) * .38, .36]), F.p([Math.cos(a) * .27, -.06 + Math.sin(a) * .27, .35]), .035, .015); }
+    const R = []; for (let i = 0; i < 24; i++) { const u = i / 23 - .5, j = Math.sin(i * 6.3 + m); R.push([F.p([u * .6, .5 - u * u * .5, .05]), F.p([u * .85, .55 - u * u * .6, -.25]), F.p([u * 1.05, .2, -.55]), V.add(F.p([u * 1.1 + j * .05, -.15, -.7]), [0, -.15 * Math.abs(j), 0])]); } A.hair(B, R, { r: [.03, .035, .026, .008] }); }
+  return B;
+} };
