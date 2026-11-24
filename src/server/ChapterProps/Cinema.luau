@@ -5,7 +5,7 @@
 --   로비    C 매점 카운터      M 팝콘 기계     N 음료 기계    Y 메뉴판(벽, 지나감)   t 높은 원탁   w 소파   y 입간판   d 분리수거대
 --   매표소  B 매표 창구        H 상영 시간표(벽, 지나감)      k 무인 발권기          r 줄 기둥(지나감)         g 검표대
 --   복도    F 포스터 액자(지나감)  h 상영관 번호판(지나감)  i 비상구 표지(지나감)
---   영사실  J 영사기·영사창    G 필름 되감기 대   e 앰프·전원 랙   R 필름 깡통 선반
+--   영사실  J 영사기·영사창    P 필름 플래터(원판 셋)   G 필름 되감기 대   e 앰프·전원 랙   R 필름 깡통 선반
 --   그 밖   V 세면대·거울      U 화장실 칸     Q 짐수레(하역장)
 
 local Kit = require(script.Parent.Parent.MapKit)
@@ -441,6 +441,26 @@ function P.Projector(ctx, i: number, j: number)
 	end
 	Kit.box(m, cf * CFrame.new(0, 4.6, -ctx.T / 2 + 0.1), Vector3.new(2.4, 1.6, 0.3), LINE)
 	solid(m, cf, Vector3.new(2.6, 6, 3.8))
+end
+
+-- P 필름 플래터: 멀티플렉스 영사실의 큰 수평 원판 셋(필름을 풀고 감는 탑) + 가운데 기둥 + 받침 + 필름을 영사기로 보내는 팔(롤러)
+function P.FilmPlatter(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "FilmPlatter")
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 0.4, 0)), Vector3.new(3.2, 0.8, 3.2), SOFT)
+	Kit.cylinder(m, p + Vector3.new(0, 0.8, 0), p + Vector3.new(0, 6.6, 0), 0.25, SOFT)
+	for k, y in { 2.0, 3.8, 5.6 } do
+		Kit.cylinder(m, p + Vector3.new(0, y, 0), p + Vector3.new(0, y + 0.15, 0), 3.0, { blocks = false, rings = 1 })
+		if k ~= 2 then -- (가운데 원판은 비었다)
+			Kit.cylinder(m, p + Vector3.new(0, y + 0.15, 0), p + Vector3.new(0, y + 0.55, 0), 2.0, LINE) -- 감긴 필름
+		end
+	end
+	-- 필름 팔: 기둥 꼭대기에서 영사기 쪽(벽 반대)으로 뻗은 막대 + 롤러
+	local side = wallSide(ctx, i, j) or Vector3.new(0, 0, 1)
+	local tip = p + Vector3.new(0, 6.4, 0) - side * 2.6
+	Kit.cylinder(m, p + Vector3.new(0, 6.4, 0), tip, 0.12, LINE)
+	Kit.cylinder(m, tip + Vector3.new(0, -0.3, 0), tip + Vector3.new(0, 0.3, 0), 0.35, LINE)
+	solid(m, CFrame.new(p), Vector3.new(6.2, 6.6, 6.2))
 end
 
 -- G 필름 되감기 대: 작업대 + 양끝에 선 릴 둘 + 사이를 잇는 필름 선

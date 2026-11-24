@@ -615,4 +615,25 @@ function P.FuelTank(ctx: any, i: number, j: number)
 	solid(m, cf, Vector3.new(4.0, 4.4, 6.0))
 end
 
+-- a 세대 창고 철망 칸(아파트 지하 창고): 네 모서리 기둥 + 위 테두리 + 철망 면(가는 살) + 맹꽁이 자물쇠 + 안쪽 짐 하나 = 부품 약 10개.
+-- 칸 하나를 다 채우는 막힘 소품(줄로 세워 창고 통로를 만든다). 철망 살은 음파를 막지 않는다(blocks = false)
+function P.Cage(ctx: any, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "Cage")
+	local cf = CFrame.new(p)
+	local s, h = 3.6, math.min(roomH(ctx, i, j) - 1.0, 8.0)
+	for _, x in { -s, s } do
+		for _, z in { -s, s } do
+			Kit.box(m, cf * CFrame.new(x, h / 2, z), Vector3.new(0.35, h, 0.35), SOFT)
+		end
+	end
+	Kit.box(m, cf * CFrame.new(0, h, 0), Vector3.new(2 * s + 0.35, 0.3, 2 * s + 0.35), SOFT) -- 위 테두리
+	for _, y in { h * 0.33, h * 0.66 } do -- 철망 가로 살(네 면을 한 띠로)
+		Kit.box(m, cf * CFrame.new(0, y, 0), Vector3.new(2 * s + 0.1, 0.12, 2 * s + 0.1), LINE)
+	end
+	Kit.box(m, cf * CFrame.new(0, 3.6, -s - 0.12), Vector3.new(0.5, 0.7, 0.2), LINE) -- 자물쇠
+	Kit.crate(m, p + Vector3.new((ctx.hash(i, j, 7) - 0.5) * 2, 0, (ctx.hash(i, j, 8) - 0.5) * 2), Vector3.new(3.4, 2.6 + ctx.hash(i, j, 9) * 1.6, 3.0), ctx.hash(i, j, 10))
+	solid(m, cf, Vector3.new(2 * s + 0.35, h, 2 * s + 0.35))
+end
+
 return P

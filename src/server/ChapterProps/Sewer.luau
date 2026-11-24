@@ -235,7 +235,8 @@ local function tunnelSpan(ctx, i: number, j: number, across: Vector3): (number?,
 	return reach(-1), reach(1)
 end
 
--- w 수로: 얕은 물 + 터널이면 세 칸마다 벽에서 벽까지 벽돌 아치 갈비(간선 5칸 폭은 넓고 낮은 아치, 지선 3칸 폭은 둥근 아치)
+-- w 수로: 얕은 물 + 터널이면 세 칸마다 벽에서 벽까지 벽돌 아치 갈비(간선 5칸 폭은 넓고 낮은 아치, 지선 3칸 폭은 둥근 아치).
+--   갈비는 충돌·가림이 없고, 벽 쪽 발치도 보행로 머리 위(6.5 스터드)에서 시작한다: 보행로 길찾기를 막지 않는다
 function Sewer.Channel(ctx, i: number, j: number)
 	Props.Water(ctx, i, j)
 	if (i + j) % 3 ~= 0 then
@@ -252,7 +253,8 @@ function Sewer.Channel(ctx, i: number, j: number)
 	local T = ctx.T
 	local c = ctx.center(i, j) + across * ((b - a) * T / 2)
 	local half = (a + b - 1) * T / 2 - 0.3
-	local spring, rise = 5.0, math.min(8.4, ctx.H - 5.6)
+	local spring = 6.5
+	local rise = math.max(1.5, math.min(7.0, ctx.H - spring - 0.6))
 	local m = model(ctx, "ArchRib")
 	local prev: Vector3? = nil
 	local N = 8
@@ -292,22 +294,22 @@ function Sewer.DropInlet(ctx, i: number, j: number)
 	Kit.cylinder(m, water, water + Vector3.new(0, 0.12, 0), 2.6, { blocks = false, collide = false, rings = 2 })
 end
 
--- K 배관 다리(랜드마크): 물 + 수로 위를 벽에서 벽까지 가로지르는 굵은 관(보행로 허리 높이) + 받침 안장 둘 + 플랜지
+-- K 배관 다리(랜드마크): 물 + 수로 위를 벽에서 벽까지 가로지르는 굵은 관(보행로 머리 위 높이 — 밑으로 걸어 지나간다) + 매달이 띠 둘 + 플랜지
 function Sewer.PipeBridge(ctx, i: number, j: number)
 	Props.Water(ctx, i, j)
 	local across = acrossOf(ctx, i, j) or Vector3.new(1, 0, 0)
 	local a, b = tunnelSpan(ctx, i, j, across)
 	local T = ctx.T
 	local aa, bb = a or 3, b or 3
-	local c = ctx.center(i, j) + across * ((bb - aa) * T / 2) + Vector3.new(0, 2.6, 0)
+	local c = ctx.center(i, j) + across * ((bb - aa) * T / 2) + Vector3.new(0, math.min(9.0, ctx.H - 3.0), 0)
 	local half = (aa + bb - 1) * T / 2 - 0.2
 	local m = model(ctx, "PipeBridge")
-	Kit.cylinder(m, c - across * half, c + across * half, 1.5, { rings = 3 })
+	Kit.cylinder(m, c - across * half, c + across * half, 1.5, { rings = 3, collide = false })
 	for _, s in { -1, 1 } do
 		local f = c + across * (s * T * 0.5)
 		Kit.cylinder(m, f - across * 0.2, f + across * 0.2, 1.95, { blocks = false, collide = false })
-		local saddle = c + across * (s * (T / 2 + 2.0)) - Vector3.new(0, 2.0, 0)
-		Kit.box(m, CFrame.lookAt(saddle, saddle + across), Vector3.new(2.6, 1.4, 0.6), { blocks = false })
+		local hanger = c + across * (s * (T / 2 + 2.0)) + Vector3.new(0, 2.4, 0)
+		Kit.box(m, CFrame.new(hanger), Vector3.new(0.3, 3.2, 0.3), { blocks = false, collide = false })
 	end
 end
 

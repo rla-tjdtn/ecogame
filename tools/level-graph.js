@@ -15,6 +15,8 @@
 //              네 판에 한 판은 괴물 하나가 플레이어를 쫓는다(chase). 판 수 --runs.
 //   monster    괴물이 갈 수 없는 바닥(좁은 다리 n 너머)
 //   zones      문(D/A)으로 나뉜 구역 그래프: 구역 수, 고리 수(독립 순환 = E - V + 1), 다리(bridge) 문
+//   bigcut     괴물 둘로 끊기는 자리 중 가장 넓게 끊는 것이 출구 둘레(마지막 방) 크기를 크게 넘으면 실패(맵 한가운데 목)
+//   straight   한 줄을 따라 문·벽·막는 소품 없이 30칸 넘게 곧게 열린 시야가 폭(중앙값) 6칸 이하 복도에 있으면 실패(벽감은 못 끊는다)
 //   many       너무 다중이면 안 된다: 서로 다른 길 4개 이상 + 고리 16개 넘음, 또는 고리 22개 넘음 → 경고
 //   width      시작 → 출구 가장 짧은 길 중 폭 1칸(양옆이 벽) 구간 비율
 const fs = require("fs");
@@ -262,15 +264,29 @@ function analyzeStage(id, opts = {}) {
 			const m1 = new Uint8Array(NC); square(G, c1, CUT_R, m1, prot);
 			if (bfs(G, G.adjP, src, m1)[goal] < 0) return { k: 1, at: [G.label(c1)], raw: [c1] };
 		}
+		// 괴물 둘로 끊기는 자리를 빠짐없이 보고, 그중 가장 많은 칸을 끊는 것(worst)을 고른다(어느 한 마리는 첫 길 둘레에 있어야 한다)
+		const d0 = bfs(G, G.adjP, src, null);
+		let base0 = 0;
+		for (let c = 0; c < NC; c++) if (cellDist(d0, c) >= 0) base0++;
+		let first = null, worst = null;
 		for (const c1 of c1s) {
 			const m1 = new Uint8Array(NC); square(G, c1, CUT_R, m1, prot);
 			const P1 = backtrack(G, G.adjP, bfs(G, G.adjP, src, m1), goal);
 			for (const c2 of around(G, P1)) {
 				if (!standable(c2, prot)) continue;
 				const m2 = m1.slice(); square(G, c2, CUT_R, m2, prot);
-				if (bfs(G, G.adjP, src, m2)[goal] < 0) return { k: 2, at: [G.label(c1), G.label(c2)], raw: [c1, c2] };
+				const d2 = bfs(G, G.adjP, src, m2);
+				if (d2[goal] >= 0) continue;
+				let left = 0;
+				for (let c = 0; c < NC; c++) if (cellDist(d2, c) >= 0) left++;
+				const lost = base0 - left;
+				const hit = { k: 2, at: [G.label(c1), G.label(c2)], raw: [c1, c2], lost, left };
+				if (!first) first = hit;
+				// 가장 "가운데"인 컷: 끊긴 쪽(lost)과 시작 쪽(left) 중 작은 쪽이 가장 큰 것
+				if (!worst || Math.min(lost, left) > Math.min(worst.lost, worst.left)) worst = hit;
 			}
 		}
+		if (first) return { ...first, worst };
 		return { k: 3, at: [] };
 	};
 	const exitRoom = or(startProtect, near(bfs(G, G.adjP, [eNode], null), EXIT_ROOM));
@@ -278,7 +294,17 @@ function analyzeStage(id, opts = {}) {
 	// 괴물 하나로 끊기면 실패(목). 둘로 끊기는 자리는 경고만 — 길을 셋 넘게 늘리면 미로가 된다(사용자: 너무 다중이면 안 된다).
 	// 괴물 여럿에 대한 판정은 pair(끊기는 비율)·dynamic(기다림)이 한다
 	if (R.minCutSE.k < 2) R.fails.push(`mincut: ${R.minCutSE.k} monster(s) at ${R.minCutSE.at.join(" + ")} cut start→exit (need ≥2)`);
-	else if (R.minCutSE.k === 2) R.warn.push(`mincut: two monsters standing exactly at ${R.minCutSE.at.join(" + ")} would cut start→exit`);
+	else if (R.minCutSE.k === 2) {
+		// 괴물 둘로 끊기는 건 출구 앞 마지막 방이면 괜찮다. 그보다 훨씬 넓게(맵 한가운데에서) 끊기면 실패:
+		// 끊긴 칸 수가 출구 둘레(EXIT_ROOM 거리) 칸 수의 2배 + 20 을 넘으면 가운데 목이다
+		// 출구 쪽(lost)과 시작 쪽(left)이 둘 다 넓으면 맵 한가운데 목이다. 한쪽이 마지막 방·시작 방 크기(둘레 6칸 ×2 + 20)면 괜찮다
+		const areaN = (n) => { const m = near(bfs(G, G.adjP, n, null), EXIT_ROOM); let k = 0; for (const v of m) k += v; return k; };
+		const eLim = areaN([eNode]) * 2 + 20, sLim = areaN(sNodes) * 2 + 20;
+		const w = R.minCutSE.worst;
+		R.bigCut = { lost: w.lost, left: w.left, eLim, sLim, at: w.at };
+		if (w.lost > eLim && w.left > sLim) R.fails.push(`bigcut: two monsters at ${w.at.join(" + ")} split the map (${w.left} tiles on the start side, ${w.lost} incl. the exit; allowed only near the exit ≤${eLim} or the start ≤${sLim}) — a mid-map chokepoint`);
+		else R.warn.push(`mincut: two monsters standing exactly at ${w.at.join(" + ")} would cut ${w.lost <= eLim ? "the last " + w.lost + " tiles before the exit" : "the start area (" + w.left + " tiles)"}`);
+	}
 	R.zInfo = zInfo;
 	R.G = G;
 	if (opts.quick) return R;
@@ -330,6 +356,39 @@ function analyzeStage(id, opts = {}) {
 		R.withoutUpper = d[eNode];
 	}
 	R.zones = zoneGraph(G);
+	// 긴 직선 시야(복도): 한 줄(lane)을 따라 문·벽·막는 소품 없이 곧게 열린 칸이 STRAIGHT 칸 넘게 이어지고,
+	// 그 구간의 통로 폭(수직으로 열린 칸 수)의 중앙값이 6칸 이하면(= 큰 홀이 아니라 복도) 실패.
+	// 줄마다 따로 잰다: 벽에 한 칸 판 벽감·옆 문은 시야를 끊지 못하고, 진짜 문·셔터·벽·소품 섬만 끊는다(QA 3차 지적)
+	{
+		const STRAIGHT = 30, MAXW = 6; // (주차장 차로·하수도 본관처럼 실제로 긴 곳도 있어 30칸: QA 가 지적한 34칸 넘는 복도를 잡는다)
+		const openT = (f, i, j) => G.exists(f, i, j) && G.ch(f, i, j) !== "D";
+		let best = { len: 0 };
+		for (const f of G.stacked ? [0, 1] : [0]) for (const ax of [1, 0]) {
+			const nA = ax ? G.H : G.W, nB = ax ? G.W : G.H;
+			for (let a = 0; a < nA; a++) {
+				let widths = [], startB = 0;
+				const flush = (b) => {
+					if (widths.length > STRAIGHT) {
+						const w = [...widths].sort((x, y) => x - y)[Math.floor(widths.length / 2)];
+						if (w <= MAXW && widths.length > best.len) best = { len: widths.length, w, at: `${f ? "2F " : ""}${ax ? `r${a}c${startB}→c${b - 1}` : `c${a}r${startB}→r${b - 1}`}` };
+					}
+					widths = [];
+				};
+				for (let b = 0; b <= nB; b++) {
+					const i = ax ? b : a, j = ax ? a : b;
+					if (b < nB && openT(f, i, j)) {
+						let w = 1;
+						for (let k = 1; k < 9 && openT(f, i + (ax ? 0 : k), j + (ax ? k : 0)); k++) w++;
+						for (let k = 1; k < 9 && openT(f, i - (ax ? 0 : k), j - (ax ? k : 0)); k++) w++;
+						if (widths.length === 0) startB = b;
+						widths.push(w);
+					} else flush(b);
+				}
+			}
+		}
+		R.longest = best;
+		if (best.len > STRAIGHT) R.fails.push(`straight: ${best.len}-tile straight sightline in a ${best.w}-wide corridor at ${best.at} (max ${STRAIGHT}; break it with a real door/shutter, a wall jog or a prop island across the lane)`);
+	}
 	// 너무 다중이면 안 된다: 주·보조·대체 세 갈래가 기준. 갈래가 4개 이상이고 고리가 많으면 미로처럼 흩어진 것
 	if (R.routesSE.routes >= 4 && R.zones.loops > 16) R.warn.push(`too many routes: ${R.routesSE.routes} separate routes and ${R.zones.loops} loops (aim: 3 routes, loops ≤ 16)`);
 	else if (R.zones.loops > 22) R.warn.push(`too many loops: ${R.zones.loops} (aim ≤ 16)`);
@@ -526,7 +585,7 @@ function drawRoutes(R, out) {
 
 function summary(R) {
 	const z = R.zones || {}, d = R.dynamic || {};
-	return `Stage${R.id} ${R.size} 괴물${R.monsters} | 최단 ${R.exitLen}${R.withoutUpper !== undefined ? ` (2층 없이 ${R.withoutUpper < 0 ? "못 감" : R.withoutUpper})` : ""} | 길 ${R.routesSE.routes}갈래(${R.routesSE.lens.join(",")}) | 끊는데 괴물 ${R.minCutSE.k >= 3 ? "3+" : R.minCutSE.k}마리 | Z ${R.searchSpots}곳${R.upperSpots ? `(2층 ${R.upperSpots})` : ""} | 목 ${R.chokes.length} | 괴물둘 S→E ${(R.pairSE.rate * 100).toFixed(1)}% Z최악 ${((R.pairWorstZ.rate || 0) * 100).toFixed(1)}% | 배회 기다림 ${d.forcedWaitRuns}/${d.runs}판(${d.totalWaits}틱) 잡힘 ${d.caught} | 구역 ${z.zones} 문 ${z.doors} 고리 ${z.loops} 다리문 ${z.bridges} | 좁은길 ${(R.narrowRatio * 100) | 0}% | 괴물못감 ${R.monsterUnreach} | ${R.fails.length ? "FAIL " + R.fails.length : "PASS"}`;
+	return `Stage${R.id} ${R.size} 괴물${R.monsters} | 최단 ${R.exitLen}${R.withoutUpper !== undefined ? ` (2층 없이 ${R.withoutUpper < 0 ? "못 감" : R.withoutUpper})` : ""} | 길 ${R.routesSE.routes}갈래(${R.routesSE.lens.join(",")}) | 끊는데 괴물 ${R.minCutSE.k >= 3 ? "3+" : R.minCutSE.k}마리 | Z ${R.searchSpots}곳${R.upperSpots ? `(2층 ${R.upperSpots})` : ""} | 목 ${R.chokes.length} | 괴물둘 S→E ${(R.pairSE.rate * 100).toFixed(1)}% Z최악 ${((R.pairWorstZ.rate || 0) * 100).toFixed(1)}% | 배회 기다림 ${d.forcedWaitRuns}/${d.runs}판(${d.totalWaits}틱) 잡힘 ${d.caught} | 구역 ${z.zones} 문 ${z.doors} 고리 ${z.loops} 다리문 ${z.bridges} | 좁은길 ${(R.narrowRatio * 100) | 0}% | 직선 ${R.longest ? R.longest.len : "?"} | 2마리컷 ${R.bigCut ? Math.min(R.bigCut.lost, R.bigCut.left) + "칸" : "-"} | 괴물못감 ${R.monsterUnreach} | ${R.fails.length ? "FAIL " + R.fails.length : "PASS"}`;
 }
 
 if (require.main === module) {

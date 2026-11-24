@@ -240,6 +240,20 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 			rectSpan(r, H, H + 2, { name = "Ceiling" })
 		end
 		Kit.span(geo, Vector3.new(0, TOP, 0), Vector3.new(nx * T, TOP + 2, nz * T), { name = "Ceiling" })
+	elseif (layout :: any).OpenSky then
+		-- 하늘이 트인 바깥(layout.OpenSky: 타일 직사각형 {i0, j0, i1, j1} 목록, 1부터) 위에는 천장을 두지 않는다
+		local sky = (layout :: any).OpenSky :: { { number } }
+		local function inSky(i: number, j: number): boolean
+			for _, r in sky do
+				if i >= r[1] and i <= r[3] and j >= r[2] and j <= r[4] then
+					return true
+				end
+			end
+			return false
+		end
+		for _, r in merge(function(i, j) return not inSky(i, j) end) do
+			rectSpan(r, H, H + 2, { name = "Ceiling" })
+		end
 	else
 		Kit.span(geo, Vector3.new(0, H, 0), Vector3.new(nx * T, H + 2, nz * T), { name = "Ceiling" })
 	end

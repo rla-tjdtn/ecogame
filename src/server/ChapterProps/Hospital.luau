@@ -8,7 +8,7 @@
 --   M 감시 모니터 벽 / 마취 모니터 대
 --   U CT 촬영기(고리 갠트리 + 환자 테이블)      Q 멈춘 회전문(원통 몸체 + 날개 넷)  g 유리 바람막이·칸막이(틀 + 판)
 --   B 방화 셔터(내려온 철제 셔터, 가로 살)      P 평행봉(재활 보행 훈련)    d 협탁 + 오버베드 테이블
---   a 약품 카트(서랍 + 바퀴)
+--   a 약품 카트(서랍 + 바퀴)                    R 병원 침대(받침 + 매트리스 + 머리판·발판 + 난간, 6부품)
 
 local Kit = require(script.Parent.Parent.MapKit)
 
@@ -97,10 +97,10 @@ function P.Curtain(ctx, i: number, j: number)
 	local m = model(ctx, "Curtain")
 	local top = math.min(9.2, ctx.H - 1)
 	Kit.cylinder(m, (cf * CFrame.new(0, top, 3.8)).Position, (cf * CFrame.new(0, top, -3.2)).Position, 0.1, LINE)
-	local n = 5
+	local n = 3 -- (주름 셋: 부품·음파 선 줄이기)
 	for k = 0, n - 1 do -- 주름(지그재그로 선 판)
-		local z = 3.4 - k * 1.1
-		Kit.box(m, cf * CFrame.new(if k % 2 == 0 then 0.18 else -0.18, (top + 1.2) / 2, z) * CFrame.Angles(0, if k % 2 == 0 then 0.35 else -0.35, 0), Vector3.new(0.1, top - 1.2, 1.1), LINE)
+		local z = 3.0 - k * 2.0
+		Kit.box(m, cf * CFrame.new(if k % 2 == 0 then 0.18 else -0.18, (top + 1.2) / 2, z) * CFrame.Angles(0, if k % 2 == 0 then 0.35 else -0.35, 0), Vector3.new(0.1, top - 1.2, 2.1), LINE)
 	end
 end
 
@@ -348,8 +348,8 @@ function P.FireShutter(ctx, i: number, j: number)
 	local L = ctx.T
 	local h = ctx.H
 	Kit.box(m, cf * CFrame.new(0, h / 2, 0), Vector3.new(0.35, h, L)) -- 철판(음파·소리를 막는다)
-	for k = 1, 7 do -- 가로 살(앞뒤 면에 선이 보이게 살짝 튀어나온 띠)
-		Kit.box(m, cf * CFrame.new(0, k * (h - 1.6) / 8, 0), Vector3.new(0.55, 0.12, L), LINE)
+	for k = 1, 4 do -- 가로 살 넷(앞뒤 면에 선이 보이게 살짝 튀어나온 띠, 부품·음파 선을 줄이려 일곱에서 넷으로)
+		Kit.box(m, cf * CFrame.new(0, k * (h - 1.6) / 5, 0), Vector3.new(0.55, 0.12, L), LINE)
 	end
 	Kit.box(m, cf * CFrame.new(0, h - 0.8, 0), Vector3.new(1.6, 1.6, L), SOFT) -- 셔터 박스
 	Kit.box(m, cf * CFrame.new(0, 0.25, 0), Vector3.new(0.7, 0.5, L), SOFT) -- 아래 막대
@@ -378,21 +378,38 @@ function P.ParallelBars(ctx, i: number, j: number)
 	solid(m, cf, Vector3.new(3.4, 3.2, L))
 end
 
--- d 협탁 + 오버베드 테이블: 벽 쪽 작은 서랍장(서랍 선 둘) + 바퀴 받침의 ㄱ자 식사 테이블
+-- d 협탁 + 오버베드 테이블: 벽 쪽 작은 서랍장(서랍 선 하나) + ㄱ자 식사 테이블(기둥 + 판). 5부품(QA 2차 부품 줄이기)
 function P.Bedside(ctx, i: number, j: number)
 	local cf = againstWall(ctx, i, j)
 	local m = model(ctx, "Bedside")
 	local z = ctx.T / 2 - 1.3
 	Kit.box(m, cf * CFrame.new(0, 1.4, z), Vector3.new(1.9, 2.8, 1.9), SOFT)
-	for k = 1, 2 do
-		Kit.box(m, cf * CFrame.new(0, k * 0.9, z - 0.97), Vector3.new(1.6, 0.08, 0.05), LINE)
-	end
-	Kit.box(m, cf * CFrame.new(0, 3.05, z), Vector3.new(0.5, 0.5, 0.5), LINE) -- 컵·약통
+	Kit.box(m, cf * CFrame.new(0, 1.8, z - 0.97), Vector3.new(1.6, 0.08, 0.05), LINE)
 	local tz = z - 2.4
-	Kit.box(m, cf * CFrame.new(-1.1, 0.12, tz), Vector3.new(0.5, 0.24, 2.2), LINE) -- 바퀴 받침
-	Kit.cylinder(m, (cf * CFrame.new(-1.1, 0.2, tz)).Position, (cf * CFrame.new(-1.1, 3.6, tz)).Position, 0.1, LINE)
+	Kit.cylinder(m, (cf * CFrame.new(-1.1, 0.1, tz)).Position, (cf * CFrame.new(-1.1, 3.6, tz)).Position, 0.12, LINE)
 	Kit.box(m, cf * CFrame.new(0, 3.7, tz), Vector3.new(2.8, 0.15, 1.3), SOFT) -- 식사 판
 	solid(m, cf * CFrame.new(0, 0, z - 1), Vector3.new(3, 3.8, 3.6))
+end
+
+-- R 병원 침대(병원 전용, 공용 Props.Bed 11부품 대신 6부품): 머리를 벽에 붙인 침대 받침 + 매트리스 + 머리판·발판 + 한쪽 난간
+function P.Bed(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j) or Vector3.new(0, 0, -1)
+	local head = p + side * (ctx.T / 2 - 0.4)
+	local foot = head - side * 6.6
+	local across = Vector3.new(side.Z, 0, -side.X)
+	local mid = (head + foot) / 2
+	local m = model(ctx, "Bed")
+	local look = function(at: Vector3): CFrame
+		return CFrame.lookAt(at, at + side)
+	end
+	Kit.box(m, look(mid + Vector3.new(0, 0.85, 0)), Vector3.new(2.8, 1.3, 5.8), SOFT) -- 받침(바퀴 달린 몸체)
+	Kit.box(m, look(mid + Vector3.new(0, 1.85, 0)), Vector3.new(3.0, 0.7, 6.2), SOFT) -- 매트리스
+	Kit.box(m, look(head - side * 0.15 + Vector3.new(0, 2.4, 0)), Vector3.new(3.0, 2.2, 0.15), SOFT) -- 머리판
+	Kit.box(m, look(foot + side * 0.15 + Vector3.new(0, 1.9, 0)), Vector3.new(3.0, 1.2, 0.15), LINE) -- 발판
+	local a = head - side * 1.2 + across * 1.65 + Vector3.new(0, 2.8, 0)
+	Kit.cylinder(m, a, a - side * 3.2, 0.07, LINE) -- 난간
+	Kit.box(m, look(mid + Vector3.new(0, 1.5, 0)), Vector3.new(3.2, 3, 6.4), { invisible = true, tag = false })
 end
 
 -- a 약품 카트: 서랍 몸체(서랍 선 셋) + 위 쟁반 테 + 손잡이 + 바퀴 넷
