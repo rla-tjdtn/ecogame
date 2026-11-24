@@ -46,7 +46,7 @@ Pulses.onReach = MapView.onReach
 -- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 10초 동안 지금 모습 그대로 보이게(굳은 잔상 선은 그리지 않는다)
 -- (사람 모습 도플갱어는 팀원처럼 윤곽선으로 늘 보이므로 음파 선을 그리지 않는다)
 World.skipMonster = function(m: Model): boolean
-	return Reveal.has(m) or Reveal.disguised(m)
+	return Reveal.has(m) or Reveal.disguised(m) or m:GetAttribute("SonarVeil") == true -- (5장 지움: 첫 음파엔 잔상도 남기지 않음)
 end
 Audio.stepAudible = Reveal.active -- (괴물 발소리는 음파에 걸린 동안만)
 Pulses.onStart = function(origin: Vector3)
