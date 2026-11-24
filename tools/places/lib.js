@@ -134,8 +134,9 @@ function writeStage(file, grid, headerLines) {
 		// 맨 위 주석 덩어리(--!strict 다음 줄부터 첫 local/return 전까지)를 바꾼다
 		src = src.replace(/^(--!strict\n)((?:--[^\n]*\n)*)/, (_, a) => a + headerLines.map((l) => `-- ${l}`).join("\n") + "\n");
 	}
-	fs.writeFileSync(f, crlf ? src.replace(/\n/g, "\r\n") : src);
-	return f;
+	const out = process.env.STAGE_OUT_DIR ? path.join(process.env.STAGE_OUT_DIR, file) : f; // (STAGE_OUT_DIR: 다른 폴더에 써서 시험)
+	fs.writeFileSync(out, crlf ? src.replace(/\n/g, "\r\n") : src);
+	return out;
 }
 
 function report(name, grid, opts) {
