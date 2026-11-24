@@ -86,6 +86,7 @@ function M.init(b: A.Body)
 	d.snap = 0
 	d.check = 0
 	d.close = false
+	d.freeze = 0
 	d.c1, d.c1v, d.c2, d.c2v = 0, 0, 0, 0
 end
 
@@ -121,7 +122,10 @@ function M.step(b: A.Body, dt: number)
 	local sway = math.sin(ph * math.pi * 2)
 	local bob = (0.15 * math.abs(math.cos(ph * math.pi * 2)) - 0.08) * amp
 	local rOff = Vector3.new(0.12 * sway * amp, bob, 0)
-	local rRot = CFrame.fromEulerAnglesYXZ(0, 0, math.rad(3) * sway * amp)
+	-- 멈춤: 들고 있던 발을 무릎 높이까지 들고 상체를 앞으로 숙인 채 굳는다(사람이면 넘어질 자세)
+	d.freeze = A.approach(d.freeze, if raw <= 0.4 and d.still < 6 and amp > 0.2 then 1 else 0, if raw <= 0.4 then 4 else 10, dt)
+	local fz: number = d.freeze
+	local rRot = CFrame.fromEulerAnglesYXZ(-math.rad(14) * fz, 0, math.rad(3) * sway * amp)
 	setRot(b, "HipRing", rRot, rOff)
 	local ringCF = CFrame.new(d.abs.HipRing + rOff) * rRot
 	for i, n in { "L", "R" } do
@@ -142,6 +146,10 @@ function M.step(b: A.Body, dt: number)
 			pitch = -0.35 * (1 - k) + 0.25 * k
 		end
 		local ankle = d.abs["Foot" .. n]
+		if (i == 1) == (ph >= 0.5) then -- 이 발이 들리는 쪽
+			h += 1.2 * fz * (1 - h)
+			z -= 1.6 * fz
+		end
 		local target = ankle + Vector3.new(0, h * amp + math.max(0, -pitch) * 0.3 * amp, z)
 		local hip = ringCF:PointToWorldSpace(d.abs["Thigh" .. n] - d.abs.HipRing)
 		local legRot = ik2(b, "Thigh" .. n, "Shin" .. n, hip, target, Vector3.new(0, 0, -1), rRot)
@@ -157,7 +165,7 @@ function M.step(b: A.Body, dt: number)
 	A.pose(b, "Yoke", 0, 0, math.rad(6) * math.sin(ph * math.pi * 2 + 0.6) * amp) -- 버팀대 흔들림
 	-- 살 척추는 틀 사이에서 처졌다 당겨짐
 	A.pose(b, "Lumbar", 0.04 * math.sin(b.t * 1.2), 0, 0)
-	A.pose(b, "Thorax", -0.05 * sway * amp, 0, 0.03 * sway * amp)
+	A.pose(b, "Thorax", -0.05 * sway * amp - math.rad(8) * fz, 0, 0.03 * sway * amp)
 	-- 고리 꺾임(공격): 쐐기 받침째 머리가 앞으로 84°
 	d.check -= dt
 	if d.check <= 0 then
@@ -172,7 +180,7 @@ function M.step(b: A.Body, dt: number)
 	d.c1 += d.c1v * dt
 	d.c2v += (-22 * d.c2 - 3 * d.c2v - d.c1 * 10) * dt
 	d.c2 += d.c2v * dt
-	A.pose(b, "Cable1", 0.05 * d.c1, 0, 0.12 * d.c1)
+	A.pose(b, "Cable1", 0.05 * d.c1 + math.rad(14) * fz, 0, 0.12 * d.c1)
 	A.pose(b, "Cable2", 0.04 * d.c2, 0, 0.15 * d.c2)
 	A.pose(b, "Cable3", 0, 0.1 * d.c2, 0)
 end

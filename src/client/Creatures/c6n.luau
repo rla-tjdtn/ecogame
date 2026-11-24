@@ -25,6 +25,7 @@ function M.init(b: A.Body)
 	d.ripple = 0
 	d.travel = 0
 	d.flip = 0
+	d.lay = 0
 end
 
 function M.step(b: A.Body, dt: number)
@@ -91,17 +92,21 @@ function M.step(b: A.Body, dt: number)
 	local xs = d.dist - W0 - depth
 	A.pose(b, "Sheet", 0, d.flip, 0, Vector3.new(xs * d.side, 0, 0))
 	-- 머리 쪽이 먼저(앞, −Z 쪽) 솟는 물결: 척추를 진행 쪽으로 살짝 끌고 감
-	A.pose(b, "Spine", 0, 0, 0, Vector3.new(-0.1 * math.max(0, math.sin(b.phase * math.pi * 2 + 1)) * moving, 0, -0.25 * moving))
+	-- 움직일 땐 몸을 눕혀 머리가 진행 쪽(−Z, 뒤집힌 벽이면 반대)으로 앞장선다. 멈추면 다시 머리를 아래로
+	d.lay = A.approach(d.lay, moving * (1 - d.emerge), 3, dt)
+	local lay = d.lay * 1.15 * math.cos(d.flip)
+	A.pose(b, "Spine", lay, 0, 0, Vector3.new(-0.1 * math.max(0, math.sin(b.phase * math.pi * 2 + 1)) * moving, -1.2 * d.lay, 0))
 	-- 밀려 나옴(뼈 로컬 −X = 복도 쪽; 뒤집힌 쪽도 Sheet 를 따라 자동으로)
 	local e = d.emerge
-	A.pose(b, "Head", 0, 0, 0, Vector3.new(-1.05 * e, 0, 0))
+	A.pose(b, "Head", 0.06 * math.sin(b.t * 1.3) * (0.3 + e), 0, 0, Vector3.new(-0.95 * e, 0, 0))
 	A.pose(b, "Eye", 0, 0, 0, Vector3.new(-0.15 * e, 0, 0))
 	A.pose(b, "HandB", 0, 0, 0, Vector3.new(-0.7 * e, 0, 0))
-	A.pose(b, "KneeB", 0, 0, 0, Vector3.new(-0.4 * e, 0, 0))
+	A.pose(b, "KneeA", 0, 0, 0, Vector3.new(-0.4 * e, 0, 0))
+	A.pose(b, "KneeB", 0, 0, 0, Vector3.new(-0.35 * e, 0, 0))
 	-- 팔 A: 잠듦엔 납작, 드러나면 손가락이 종이를 찢고 나옴, Burst 땐 팔째 복도 쪽으로 2.6
 	A.pose(b, "UpperArmA", 0, 0, 0, Vector3.new(-0.3 * e - 1.2 * burst, 0.4 * burst, 0))
 	A.pose(b, "ForearmA", 0, 0, 0, Vector3.new(-0.2 * e - 1.0 * burst, 0.3 * burst, 0))
-	A.pose(b, "HandA", 0, 0, 0.25 * math.sin(b.t * 7) * e * (1 - burst), Vector3.new(-0.2 * e - 0.4 * burst, 0, 0))
+	A.pose(b, "HandA", 0, 0, 0.25 * math.sin(b.t * 7) * e * (1 - burst), Vector3.new(-0.45 * e - 0.4 * burst, 0, 0))
 end
 
 return M

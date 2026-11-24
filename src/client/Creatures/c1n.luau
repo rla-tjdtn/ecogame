@@ -85,7 +85,7 @@ function M.step(b: A.Body, dt: number)
 	end
 	if landed and moving > 0.3 then
 		local t = math.rad(LEGS[landed])
-		local at = Vector3.new(math.sin(t) * 2.5, -2.5, -math.cos(t) * 2.5)
+		local at = Vector3.new(math.sin(t) * 2.2, -2.5, -math.cos(t) * 2.2)
 		b.step(b.root.CFrame:PointToWorldSpace(at), math.clamp(b.speed / 8, 0.4, 1.3)) -- 탁
 	end
 	-- 접시 겨눔: 듣는 중이면 AimAt 쪽, 아니면 앞. 몸통 회전(psi)을 목이 상쇄

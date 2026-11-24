@@ -1884,9 +1884,10 @@ return M
           <Properties>
             <string name="Name">c1h</string>
             <string name="Source"><![CDATA[--!strict
--- c1h 발맞춤 (1장 지하 시설 · 사람형) — 사양서: roster/v5/ch1/c1h_spec.md (+ QA1 수정 지시 반영)
+-- c1h 발맞춤 (1장 지하 시설 · 사람형) — 사양서: art/creatures/sheets/ch1/c1h_spec.md (+ QA1 수정 지시 반영)
 -- 보행 동기화 실험의 피험체. 스스로 서지 못하는 몸을 외골격이 세운다: 골반 띠 → 등 뒤 세로 레일(척추를 클립으로 걺) →
 -- 오른 어깨만 받치는 L 자 버팀대, 왼팔은 끈에 매달려 처짐. 두건 씌운 머리는 쐐기 받침·턱 걸쇠에 핀으로 박혀 천장을 본다.
+-- 3차(최신): 공 머리 → 젖혀진 옆얼굴 + 턱 밑, 관절 마커 공·골반 고리 제거, 오른팔은 받침에 묶여 앞으로, 멈추면 무릎 높이로 발을 들고 숙인 채 굳음.
 -- QA1: T 자 멍에(십자·허수아비) 대신 비대칭 L 버팀대 · 머리 고리(후광) 대신 쐐기 받침 — 정면에선 얼굴 없는 턱 밑과 목 앞면 ·
 --      마커 공은 7개(골반·무릎·발목·손목)만 · 무릎은 캡슐이 아니라 슬개골 쐐기 + 버팀대 경첩 · 선 120 이하.
 -- 뼈: HipRing → Pelvis → ThighL/R → ShinL/R → FootL/R,  Pelvis → Lumbar → Thorax → Neck,
@@ -1938,11 +1939,9 @@ function M.build(cf: CFrame): Model
 			S(bone, a + off * (wa * k), b + off * (wb * k))
 		end
 	end
-	local function ring(bone: string, c: Vector3, axis: Vector3, r: number)
-		table.insert(lines, { bone = bone, a = c - axis * 0.03, b = c + axis * 0.03, r = r, disc = true })
-	end
-	-- 골반 띠(지름 2) + 살 골반 쐐기
-	ring("HipRing", P(0, 4.1, 0.1), Vector3.yAxis, 1.0)
+	-- 골반 띠(3차): 뒤쪽 반 고리 + 레일 용접 쐐기(정면에 고리가 안 보임) + 살 골반 쐐기
+	chain("HipRing", { P(1, 4.1, 0.1), P(0.7, 4.1, 0.66), P(0, 4.1, 0.9), P(-0.7, 4.1, 0.66), P(-1, 4.1, 0.1) })
+	chain("HipRing", { P(-0.2, 4.1, 0.9), P(0, 4.5, 0.95), P(0.2, 4.1, 0.9) })
 	chain("Pelvis", { P(-0.55, 4.25, -0.2), P(0, 3.7, -0.35), P(0.55, 4.25, -0.2) })
 	S("Pelvis", P(-0.55, 4.25, -0.2), P(0.55, 4.25, -0.2))
 	-- 다리(안짱 무릎) + 바깥 버팀대(무릎 경첩·발목 고리) + 슬개골 쐐기 + 맨발
@@ -1951,15 +1950,13 @@ function M.build(cf: CFrame): Model
 		local hip, knee, ankle = P(0.45 * s, 3.95, 0), P(0.38 * s, 2.0, -0.15), P(0.45 * s, 0.3, 0.05)
 		cone("Thigh" .. n, hip, knee, 0.24, 0.15, Vector3.new(s, 0, 0))
 		cone("Shin" .. n, knee, ankle, 0.15, 0.09, Vector3.new(s, 0, 0))
-		S("Thigh" .. n, P(1.0 * s, 4.05, 0.05), P(0.75 * s, 2.0, -0.05)) -- 버팀대
-		S("Shin" .. n, P(0.75 * s, 2.0, -0.05), P(0.72 * s, 0.4, 0.05))
+		if s > 0 then -- 버팀대는 오른다리만(비대칭)
+			S("ThighR", P(0.95, 4.05, 0.05), P(0.68, 2.0, -0.1))
+			S("ShinR", P(0.68, 2.0, -0.1), P(0.64, 0.4, 0.05))
+		end
 		S("Shin" .. n, knee + Vector3.new(0, 0.2, -0.2), knee + Vector3.new(0, -0.25, -0.18)) -- 슬개골
-		ring("Shin" .. n, ankle + Vector3.new(0, 0.1, 0), Vector3.yAxis, 0.28)
 		chain("Foot" .. n, { ankle + Vector3.new(0, -0.05, 0.25), ankle + Vector3.new(0, -0.25, 0.1), ankle + Vector3.new(0, -0.25, -0.75) })
-		table.insert(balls, { bone = "Shin" .. n, c = knee + Vector3.new(0.18 * s, 0, -0.1), r = 0.12 })
-		table.insert(balls, { bone = "Foot" .. n, c = ankle + Vector3.new(0.2 * s, 0, 0), r = 0.11 })
 	end
-	table.insert(balls, { bone = "Pelvis", c = P(0, 4.0, -0.5), r = 0.13 })
 	-- 살 척추(앞으로 처짐) + 갈비 우리
 	S("Lumbar", P(0, 4.2, 0.25), P(0, 5.55, 0.3))
 	S("Thorax", P(0, 5.55, 0.3), P(0, 7.0, 0.2))
@@ -1978,20 +1975,24 @@ function M.build(cf: CFrame): Model
 	S("Rail", P(0, 5.0, 0.92), P(0, 5.0, 0.35))
 	S("Rail", P(0, 6.5, 0.88), P(0, 6.5, 0.3))
 	-- 오른 어깨만 받치는 L 버팀대, 왼팔을 매단 끈
-	chain("Yoke", { P(0, 7.15, 0.85), P(1.05, 7.15, 0.75), P(1.1, 6.95, 0.1) })
+	chain("Yoke", { P(0, 7.15, 0.85), P(1.05, 7.15, 0.75), P(1.12, 6.6, 0.1), P(1.15, 6.5, -1.2) })
 	S("Rail", P(0, 7.35, 0.85), P(-0.9, 6.7, 0.15))
 	-- 쐐기 받침(레일 꼭대기 → 이마) + 턱 걸쇠 + 핀 2, 두건 머리(뒤로 72° 젖혀 천장을 봄)
 	local hc = P(0, 8.15, 0.35)
 	chain("Clamp", { P(0, 8.9, 0.85), P(0, 8.75, 0.25), P(0, 8.5, -0.15) })
 	chain("Clamp", { P(-0.32, 7.72, -0.32), P(0, 7.6, -0.45), P(0.32, 7.72, -0.32) })
 	S("Clamp", P(-0.32, 7.72, -0.32), P(-0.42, 8.2, 0.3)) -- 걸쇠 옆 끈
-	table.insert(balls, { bone = "Head", c = hc, r = 0.5 })
-	S("Head", hc + Vector3.new(-0.35, 0.38, -0.05), hc + Vector3.new(-0.5, 0.55, 0.05)) -- 핀
-	S("Head", hc + Vector3.new(0.35, 0.38, -0.05), hc + Vector3.new(0.5, 0.55, 0.05))
-	chain("Head", { hc + Vector3.new(-0.2, -0.28, -0.42), hc + Vector3.new(0, -0.42, -0.5), hc + Vector3.new(0.2, -0.28, -0.42) }) -- 턱 밑
+	-- 젖혀진 옆얼굴(3차): 턱 → 입 → 코(위) → 이마 → 뒤통수. 정면에선 턱 밑 쐐기가 보인다
+	local prof = {}
+	for _, q in { { -0.12, -0.55 }, { 0.3, -0.62 }, { 0.36, -0.42 }, { 0.62, -0.1 }, { 0.46, 0.08 }, { 0.5, 0.45 }, { 0.05, 0.62 }, { -0.42, 0.28 }, { -0.12, -0.55 } } do
+		table.insert(prof, hc + Vector3.new(0, q[1], q[2]))
+	end
+	chain("Head", prof)
+	chain("Head", { hc + Vector3.new(-0.38, 0.1, 0.1), hc + Vector3.new(-0.22, -0.08, -0.45), hc + Vector3.new(0, -0.14, -0.58), hc + Vector3.new(0.22, -0.08, -0.45), hc + Vector3.new(0.38, 0.1, 0.1) }) -- 턱뼈(말굽)
+	chain("Head", { hc + Vector3.new(-0.38, 0.1, 0.1), hc + Vector3.new(0, 0.5, 0.35), hc + Vector3.new(0.38, 0.1, 0.1) }) -- 두개 폭
 	-- 팔: 오른팔은 버팀대에 묶여 늘어짐, 왼팔은 끈에 매달려 더 처짐. 손가락 쐐기 2
 	local arms = {
-		R = { P(1.1, 6.95, 0.05), P(1.25, 5.5, 0.0), P(1.2, 4.1, -0.15) },
+		R = { P(1.1, 6.95, 0.05), P(1.15, 6.75, -1.25), P(1.1, 5.25, -1.35) }, -- (받침에 묶여 앞으로 뻗고 아래팔은 늘어짐)
 		L = { P(-0.9, 6.6, 0.1), P(-1.0, 5.1, 0.05), P(-0.95, 3.6, -0.1) },
 	}
 	for n, a in arms do
@@ -2000,10 +2001,10 @@ function M.build(cf: CFrame): Model
 		cone("Forearm" .. n, a[2], a[3], 0.11, 0.07, Vector3.new(s, 0, 0))
 		S("Hand" .. n, a[3], a[3] + Vector3.new(0.05 * s, -0.7, -0.12))
 		S("Hand" .. n, a[3], a[3] + Vector3.new(-0.08 * s, -0.55, 0.1))
-		table.insert(balls, { bone = "Forearm" .. n, c = a[3] + Vector3.new(0, 0.12, 0), r = 0.1 })
 	end
 	-- 붉은 동기 케이블: 레일 뒤 → 바닥으로 끌림
-	local cab = { P(0, 7.6, 1.0), P(0.1, 5.8, 1.4), P(0.15, 3.8, 1.75), P(0.1, 1.8, 2.1), P(0, 0.1, 2.8), P(0, 0.05, 3.8) }
+	local cab = { P(0, 7.6, 1.45), P(0.1, 5.8, 1.6), P(0.15, 3.8, 1.75), P(0.1, 1.8, 2.1), P(0, 0.1, 2.8), P(0, 0.05, 3.8) }
+	S("Rail", P(0, 7.5, 0.88), cab[1]) -- 케이블 받침대(레일 뒤로 0.6)
 	chain("Cable1", { cab[1], cab[2], cab[3] }, true)
 	chain("Cable2", { cab[3], cab[4], cab[5] }, true)
 	chain("Cable3", { cab[5], cab[6] }, true)
@@ -2095,14 +2096,15 @@ return M
           <Properties>
             <string name="Name">c1n</string>
             <string name="Source"><![CDATA[--!strict
--- c1n 청음체 (1장 지하 시설 · 비인간형) — 사양서: roster/v5/ch1/c1n_spec.md (+ QA1 수정 지시 반영)
--- "소리를 더 잘 듣는 몸": 사람 가슴을 갈라 척추만 세우고 갈비를 젖혀 귀바퀴 접시로, 심장 자리에 고막.
+-- c1n 청음체 (1장 지하 시설 · 비인간형) — 사양서: art/creatures/sheets/ch1/c1n_spec.md (+ QA1 수정 지시 반영)
+-- "소리를 더 잘 듣는 몸": 낮게 웅크린 등, S자로 앞으로 내민 목 끝에 한쪽이 찢겨 열린 갈비 깔때기(귀), 그 안에 고막.
+-- 3차(최신): 장대 위 새장·세 다리 의자 구성 폐기 — c1n3.js 의 목·깔때기 점을 그대로 옮김. 갈비는 뾰족한 갈고리.
 -- 다리는 사람 팔 셋(손바닥으로 딛음) — 하나를 들어 바깥으로 크게 돌려 딛으며 몸통이 도는 회전 삼각 보행.
 -- QA1: 우산·파라솔 금지 → 갈비 끝이 앞·아래로 말린 깔때기(조개) — 정면에서 벌어진 구멍 · 갈비 14 → 9, 길이·곡률 제각각,
 --      비대칭(왼쪽 2개 결손, 오른쪽 R5 크게 부러져 처짐) · 채운 막 대신 막 테두리 한 줄 + 붉은 세로 틈 고막 ·
 --      다리는 '팔'로: 팔꿈치가 바깥으로 꺾이고 손목을 젖혀 손바닥 전체로 딛음 · 퇴화한 팔은 하나만(목뼈를 감아쥠).
 -- 뼈: Hub → HipA/B/C → ArmA/B/C → ForeA/B/C → HandA/B/C,  Hub → Neck1 → Neck2 → Neck3 → Dish → Ear(고막), Dish → RibL / RibR,
---      Hub → Vest → VestFore(목뼈를 쥔 퇴화한 팔)
+--      Neck1 → Vest → VestFore(목뼈를 쥔 퇴화한 팔)
 -- 붉은 선: 고막(세로로 찢어진 틈 모양 고리 하나).
 -- 공포 장치 「겨누는 접시」: 발소리는 못 듣는다(걸음 소리 무시). 40 안의 음파 → 0.8초에 접시를 그쪽으로 겨누고 4초 동안 '듣는 중'
 --   (제자리, Listening 속성 + AimAt). 이때 접시 정면 ±35° 안에서 또 쏘면 위치 확정 → 추격, 3 안에서 돌진(22).
@@ -2115,7 +2117,7 @@ M.cfg = {
 	InvestigateSpeed = 8,
 	ChaseSpeed = 12,
 	AgentRadius = 1.6,
-	AgentHeight = 8,
+	AgentHeight = 4,
 	CatchDistance = 2.8,
 }
 M.spawnLift = 2.8
@@ -2123,7 +2125,7 @@ M.voice = "3" -- (소리: 전용 소리 전까지 — 손바닥 짚는 톡톡 �
 
 local HIP = 1.6
 local FLOOR = -(HIP + 1)
-local HUB = 2.5
+local HUB = 2.1
 local LISTEN = 4.8 -- 겨눔 0.8 + 듣기 4
 local CONE = math.cos(math.rad(35))
 M.legs = { A = 60, B = -60, C = 180 } -- 다리 방향(도, 0 = 앞 −Z, + = 오른쪽)
@@ -2156,9 +2158,13 @@ function M.build(cf: CFrame): Model
 		end
 	end
 	local hub = P(0, HUB, 0)
-	-- 매듭(골반+흉골)
-	table.insert(balls, { bone = "Hub", c = hub, r = 0.45 })
-	chain("Hub", { hub + Vector3.new(-0.5, -0.2, 0.2), hub + Vector3.new(0, -0.55, 0.05), hub + Vector3.new(0.5, -0.2, 0.2) })
+	-- 낮게 웅크린 등(3차: 장대·의자 구성 폐기): 등 가시 능선 + 양옆 윤곽 + 엉치 쐐기 + 장골 날개
+	chain("Hub", { P(0, 2.2, 1.2), P(0, 2.72, 0.65), P(0, 2.82, 0.1), P(0, 2.5, -0.35) })
+	for _, s in { -1, 1 } do
+		chain("Hub", { P(0.4 * s, 1.8, 1.15), P(0.5 * s, 2.25, 0.6), P(0.55 * s, 2.3, 0), P(0.4 * s, 2.1, -0.4) })
+		chain("Hub", { P(0.25 * s, 2.0, 0.9), P(0.62 * s, 1.95, 1.2), P(0.5 * s, 1.65, 1.5) })
+	end
+	chain("Hub", { P(0, 2.0, 1.25), P(0, 2.05, 1.65), P(0, 1.65, 1.6) })
 	local bones: { Rig.Bone } = {
 		{ name = "Hub", joint = hub, tip = hub + Vector3.new(0, 0.8, 0) },
 	}
@@ -2166,9 +2172,9 @@ function M.build(cf: CFrame): Model
 	for name, deg in M.legs do
 		local u = dir(deg)
 		local side = Vector3.yAxis:Cross(u)
-		local sh = hub + u * 0.4
-		local el = P(0, 3.0, 0) + u * 1.55
-		local wr = P(0, 0.35, 0) + u * 2.05
+		local sh = hub + u * 0.45
+		local el = P(0, 2.75, 0) + u * 1.35 + side * 0.2 -- 팔꿈치가 무릎처럼 솟고 옆으로 비틀림
+		local wr = P(0, 0.35, 0) + u * 1.95
 		cone("Arm" .. name, sh, el, 0.2, 0.14, side)
 		cone("Fore" .. name, el, wr, 0.14, 0.09, side)
 		-- 손바닥 판(바깥으로 젖힘) + 손가락 3(마디가 솟음)
@@ -2184,55 +2190,47 @@ function M.build(cf: CFrame): Model
 		table.insert(bones, { name = "Fore" .. name, parent = "Arm" .. name, joint = el, tip = wr })
 		table.insert(bones, { name = "Hand" .. name, parent = "Fore" .. name, joint = wr, tip = palm })
 	end
-	-- 목뼈 3마디 + 접시 척추
-	local n1, n2, n3, dtop = P(0, 3.25, 0.05), P(0, 3.7, 0.05), P(0, 4.15, 0.0), P(0, 7.6, 0.15)
-	S("Neck1", hub + Vector3.new(0, 0.45, 0), n1)
-	S("Neck2", n1, n2)
-	S("Neck3", n2, n3)
-	chain("Dish", { n3, P(0, 5.0, 0.1), P(0, 5.9, 0.18), P(0, 6.8, 0.2), dtop })
-	-- 갈비 9개: 등(척추)에서 옆으로 → 앞·아래로 말려 깔때기(정면에 구멍). 왼쪽은 2개 결손, 오른쪽 R5 는 부러져 처짐
-	local ribs = {
-		{ -1, 7.2, 1.3 }, { -1, 6.55, 2.1 }, { -1, 5.4, 2.4 }, { -1, 4.75, 1.6 },
-		{ 1, 7.3, 1.2 }, { 1, 6.75, 1.9 }, { 1, 6.15, 2.5 }, { 1, 5.55, 2.2 }, { 1, 4.9, 1.7 },
-	}
-	for i, r in ribs do
-		local s, y, w = r[1], r[2], r[3]
-		local bone = if s < 0 then "RibL" else "RibR"
-		local a = P(0.12 * s, y, 0.2)
-		local b = P(w * s, y + 0.35, 0.35)
-		local c = P(w * 0.95 * s, y - 0.15, -1.0 - w * 0.15)
-		local tip = P(w * 0.55 * s, y - 0.75, -1.45 - w * 0.2)
-		if i == 9 then
-			c = P(w * 1.05 * s, y - 0.6, -0.2)
-			tip = P(w * 1.1 * s, y - 1.6, -0.55) -- R5: 부러져 아래로 처짐
-		end
-		chain(bone, { a, b, c, tip })
-	end
-	-- 막 테두리(흉골 잔해에서 갈비 안쪽으로 당겨진 얇은 막) + 붉은 고막(세로로 찢어진 틈)
-	local rim, ear = {}, {}
-	for k = 0, 6 do
-		local t = k / 6 * math.pi * 2
-		table.insert(rim, P(math.sin(t) * 0.75, 5.95 + math.cos(t) * 1.35, -0.35))
-		table.insert(ear, P(math.sin(t) * 0.16, 5.95 + math.cos(t) * 0.65, -0.42))
-	end
-	chain("Dish", rim)
-	chain("Ear", ear, true)
+	-- S자 목(앞으로 내밀어 숙임): 마디마다 양옆 윤곽 + 가시돌기
+	S("Neck1", P(-0.23, 2.15, -0.3), P(-0.21, 2.62, -0.72))
+	S("Neck1", P(0.23, 2.15, -0.3), P(0.21, 2.62, -0.72))
+	S("Neck2", P(-0.21, 2.62, -0.72), P(-0.19, 2.62, -1.22))
+	S("Neck2", P(0.21, 2.62, -0.72), P(0.19, 2.62, -1.22))
+	S("Neck3", P(-0.19, 2.62, -1.22), P(-0.17, 2.22, -1.58))
+	S("Neck3", P(0.19, 2.62, -1.22), P(0.17, 2.22, -1.58))
+	S("Neck3", P(-0.17, 2.22, -1.58), P(-0.16, 1.72, -1.72))
+	S("Neck3", P(0.17, 2.22, -1.58), P(0.16, 1.72, -1.72))
+	S("Neck2", P(0, 2.8, -0.72), P(0, 3.04, -0.62))
+	S("Neck3", P(0, 2.8, -1.22), P(0, 3.04, -1.12))
+	-- 깔때기(귀): 한쪽이 찢겨 열린 C자 테두리 → 찢긴 쪽은 꼭지까지 파임
+	chain("Dish", { P(0, 1.72, -1.72), P(-0.61, 0.9, -3.04), P(-0.9, 1.41, -3.15), P(-0.69, 2.23, -3.33), P(0.03, 2.57, -3.41), P(0.93, 2.11, -3.31), P(1.06, 1.36, -3.14), P(0.67, 0.8, -3.02), P(0, 1.72, -1.72) })
+	-- 갈비 9: 끝은 뾰족한 갈고리, 안쪽 골은 하나 걸러. 왼·오른 묶음(RibL/RibR)이 벌어지고 오므림
+	chain("RibR", { P(0.02, 2.05, -2.26), P(0.24, 2.56, -3.4), P(0.48, 2.59, -3.58), P(0.64, 2.36, -3.62) })
+	chain("RibR", { P(0.87, 2.2, -3.32), P(1.07, 2.1, -3.45), P(1.08, 1.86, -3.47) })
+	chain("RibR", { P(0.4, 1.74, -2.19), P(1.09, 1.57, -3.19), P(1.19, 1.4, -3.27), P(1.09, 1.24, -3.3) })
+	chain("RibR", { P(0.86, 0.97, -3.05), P(0.86, 0.81, -3.12), P(0.73, 0.75, -3.15) })
+	chain("RibR", { P(0.12, 1.42, -2.25), P(0.13, 1.25, -2.7) })
+	chain("RibL", { P(-0.44, 2.43, -3.38), P(-0.29, 2.57, -3.57), P(-0.05, 2.48, -3.63) })
+	chain("RibL", { P(-0.34, 1.75, -2.19), P(-0.88, 1.9, -3.26), P(-0.87, 2.06, -3.43), P(-0.67, 2.12, -3.52) })
+	chain("RibL", { P(-0.87, 1.29, -3.13), P(-0.96, 1.39, -3.25), P(-0.87, 1.51, -3.33) })
+	chain("RibL", { P(-0.18, 1.41, -2.12), P(-0.59, 0.89, -3.04), P(-0.71, 0.91, -3.13), P(-0.71, 1.03, -3.2) })
+	-- 붉은 고막: 세로로 찢긴 틈
+	chain("Ear", { P(0, 1.92, -2.19), P(0.05, 1.76, -2.16), P(-0.03, 1.64, -2.13), P(0.04, 1.5, -2.1), P(0, 1.34, -2.07), P(-0.05, 1.56, -2.12), P(0, 1.92, -2.19) }, true)
 	-- 퇴화한 팔 하나: 매듭 옆에서 올라와 손가락이 목뼈를 감아쥠
-	local ve0, ve1, ve2 = hub + Vector3.new(-0.45, 0.15, 0.15), P(-0.85, 3.4, 0.3), P(-0.15, 3.55, 0.05)
+	local ve0, ve1, ve2 = P(-0.35, 2.0, -0.4), P(-0.55, 2.3, -0.75), P(-0.2, 2.62, -0.95)
 	S("Vest", ve0, ve1)
 	S("VestFore", ve1, ve2)
 	for _, k in { -1, 0, 1 } do
 		S("VestFore", ve2 + Vector3.new(0, 0.12 * k, 0), ve2 + Vector3.new(0.3, 0.12 * k - 0.05, -0.2))
 	end
 	for _, bdef in {
-		{ name = "Neck1", parent = "Hub", joint = hub + Vector3.new(0, 0.45, 0), tip = n1 },
-		{ name = "Neck2", parent = "Neck1", joint = n1, tip = n2 },
-		{ name = "Neck3", parent = "Neck2", joint = n2, tip = n3 },
-		{ name = "Dish", parent = "Neck3", joint = n3, tip = dtop },
-		{ name = "Ear", parent = "Dish", joint = P(0, 5.95, -0.38), tip = P(0, 6.25, -0.42) },
-		{ name = "RibL", parent = "Dish", joint = P(-0.12, 6.0, 0.2), tip = P(-2.0, 6.0, -1.0) },
-		{ name = "RibR", parent = "Dish", joint = P(0.12, 6.0, 0.2), tip = P(2.0, 6.0, -1.0) },
-		{ name = "Vest", parent = "Hub", joint = ve0, tip = ve1 },
+		{ name = "Neck1", parent = "Hub", joint = P(0, 2.1, 0), tip = P(0, 2.62, -0.72) }, -- (몸통 회전축에서 되돌려야 목이 늘 앞을 봄)
+		{ name = "Neck2", parent = "Neck1", joint = P(0, 2.62, -0.72), tip = P(0, 2.62, -1.22) },
+		{ name = "Neck3", parent = "Neck2", joint = P(0, 2.62, -1.22), tip = P(0, 1.72, -1.72) },
+		{ name = "Dish", parent = "Neck3", joint = P(0, 1.72, -1.72), tip = P(0, 1.44, -2.99) },
+		{ name = "Ear", parent = "Dish", joint = P(-0.03, 1.64, -2.13), tip = P(0, 1.92, -2.19) },
+		{ name = "RibL", parent = "Dish", joint = P(0, 1.72, -1.72), tip = P(-0.93, 1.56, -3.18) },
+		{ name = "RibR", parent = "Dish", joint = P(0, 1.72, -1.72), tip = P(0.93, 1.56, -3.18) },
+		{ name = "Vest", parent = "Neck1", joint = ve0, tip = ve1 },
 		{ name = "VestFore", parent = "Vest", joint = ve1, tip = ve2 },
 	} :: { Rig.Bone } do
 		table.insert(bones, bdef)
@@ -4238,7 +4236,7 @@ return M
           <Properties>
             <string name="Name">c6h</string>
             <string name="Source"><![CDATA[--!strict
--- c6h 등맞댄 손님 (6장 호텔 · 사람형) — 사양서: roster/v5/ch6/c6h_spec.md (QA1 반영 절이 최신)
+-- c6h 등맞댄 손님 (6장 호텔 · 사람형) — 사양서: art/creatures/sheets/ch6/c6h_spec.md (QA1 반영 절이 최신)
 -- 등이 붙은 두 투숙객이 골반 하나와 다리 둘을 나눠 쓴다. A 다리는 무릎이 앞(−Z), B 다리는 무릎이 뒤(+Z).
 -- 두 척추는 골반에서 갈라져 V(A 는 앞으로, B 는 뒤로 기욺) + 서로 반대로 11° 비틀려 정면에서도 어깨선 4개가 엇갈린다.
 -- QA1: 치마 금지 — 가운은 B 몸통·소매만 덮고 골반 위에서 찢긴 단으로 끝남(허벅지·골반이 드러남) · 허리띠 위 두 척추 사이를
@@ -4294,9 +4292,11 @@ function M.build(cf: CFrame): Model
 	end
 	local pelvis = P(0, 3.5, 0)
 	table.insert(bones, { name = "Pelvis", joint = pelvis, tip = P(0, 3.95, 0) })
-	-- 공유 골반: 두개 공 대신 엉덩뼈 능선 V + 치골
-	chain("Pelvis", { P(-0.6, 3.85, 0), P(0, 3.3, -0.15), P(0.6, 3.85, 0) })
-	table.insert(balls, { bone = "Pelvis", c = P(0, 3.45, 0), r = 0.32 })
+	-- 공유 골반(3차): 앞뒤로 튀어나온 엉덩뼈 쐐기 둘 + 가운데 꿰맨 판(둥근 덩어리 아님)
+	for _, k in { -1, 1 } do
+		chain("Pelvis", { P(-0.42, 3.78, 0.62 * k), P(0.42, 3.78, 0.62 * k), P(0, 3.18, 0.12 * k), P(-0.42, 3.78, 0.62 * k) })
+	end
+	S("Pelvis", P(0, 3.7, 0), P(0, 3.16, 0))
 	-- 다리 둘: A(왼쪽, 무릎 −Z) · B(오른쪽, 무릎 +Z). A 발 = 슬리퍼, B 발 = 맨발
 	for _, L in { { "A", -0.32, -1 }, { "B", 0.32, 1 } } do
 		local n, x, kz = L[1] :: string, L[2] :: number, L[3] :: number
@@ -4331,18 +4331,23 @@ function M.build(cf: CFrame): Model
 		-- 목 + 두개골 + 턱(옆얼굴 윤곽)
 		S("Neck" .. n, Q(-0.16, 6.15, 0.82), Q(-0.14, 6.65, 0.88))
 		S("Neck" .. n, Q(0.16, 6.15, 0.82), Q(0.14, 6.65, 0.88))
-		table.insert(balls, { bone = "Head" .. n, c = Q(0, 7.25, 0.95), r = 0.42 })
-		chain("Head" .. n, { Q(-0.3, 7.15, 1.2), Q(0, 6.75, 1.32), Q(0.3, 7.15, 1.2) })
+		local side, front = {}, {}
+		for _, q in { { 0.34, -0.42 }, { 0.56, -0.04 }, { 0.4, 0.32 }, { 0.02, 0.54 }, { -0.24, 0.36 }, { -0.52, 0.34 }, { -0.34, -0.02 }, { -0.12, -0.32 }, { 0.34, -0.42 } } do
+			table.insert(side, Q(0, 7.22 + q[1], 0.95 + q[2]))
+		end
+		for _, q in { { 0, 0.56 }, { 0.33, 0.26 }, { 0.27, -0.12 }, { 0, -0.54 }, { -0.27, -0.12 }, { -0.33, 0.26 }, { 0, 0.56 } } do
+			table.insert(front, Q(q[1], 7.22 + q[2], 1.07))
+		end
+		chain("Head" .. n, side)
+		chain("Head" .. n, front)
 		if n == "A" then
 			-- 젖어 두피에 들러붙은 머리카락(이마·뺨으로)
-			for _, x in { -0.25, 0.0, 0.22 } do
+			for _, x in { -0.25, 0.22 } do
 				S("HeadA", Q(x, 7.65, 1.15), Q(x * 1.2, 6.95, 1.36))
 			end
 		else
-			-- 수건 터번(고리 + 감긴 주름)
-			local tc = Q(0, 7.62, 0.85)
-			table.insert(lines, { bone = "HeadB", a = tc, b = tc + Vector3.new(0, 0.08, 0), r = 0.5, disc = true })
-			S("HeadB", Q(-0.4, 7.75, 0.95), Q(0.3, 7.95, 0.8))
+			-- 수건 터번 자락
+			chain("HeadB", { Q(-0.34, 7.52, 1.25), Q(0, 7.34, 1.45), Q(0.34, 7.2, 1.29) }) -- 흘러내려 눈을 덮음
 		end
 		-- 팔: A 는 허리 높이로 더듬는 맨팔, B 는 가운 소매에 덮여 늘어짐(해진 지그재그 단)
 		for _, s in { -1, 1 } do
@@ -4429,15 +4434,14 @@ return M
           <Properties>
             <string name="Name">c6n</string>
             <string name="Source"><![CDATA[--!strict
--- c6n 도배된 것 (6장 호텔 · 비인간형) — 사양서: roster/v5/ch6/c6n_spec.md (QA1 반영 절이 최신)
--- 벽지 아래에 납작하게 눌려 갇힌 몸. 몸의 선은 곧 벽지 세로 줄 — 줄 10개(각 7마디)가 사람 모양으로 부풀고 휘어 있다.
--- QA1: 팔 벌린 정면 구도 폐기 → 몸 전체가 거꾸로(머리가 아래) 눌림, 얼굴이 플레이어 가슴~눈 높이(4.5~5.5), 다리는 천장 쪽 ·
---      얼굴 = 종이가 입 안으로 빨려 든 구멍 + 팽팽한 콧대 + 꺼진 오른눈 + 왼눈 위 찢긴 틈(붉은 선) 속 눈동자 ·
---      찢고 나온 손가락 4개가 모두 같은 방향으로 갈고리(벽에서 나와 → 아래로 → 끝은 다시 벽 쪽), 손목에 찢긴 종이 테 한 줄.
+-- c6n 도배된 것 (6장 호텔 · 비인간형) — 사양서: art/creatures/sheets/ch6/c6n_spec.md (QA1 반영 절이 최신)
+-- 벽지 아래에 납작하게 눌린 앙상한 몸이 머리를 아래로 벽을 기어 내려온다(3차 디자인: c6n_r3.js 의 점을 그대로 옮김, 깊이 ×0.4).
+-- 종이는 뼈가 솟은 곳(어깨·팔꿈치·갈비·골반·무릎)에서만 능선이 되고, 벽지 줄 10개는 몸에 닿는 구간에서 끊긴다.
+-- 얼굴 = 종이가 입 안으로 빨려 든 구멍 + 콧대 + 꺼진 오른눈 + 왼눈 위 찢긴 틈(붉은 선) 속 눈동자, 손가락은 마디 3 갈고리 4개.
 -- 몸은 '오른쪽 벽'(루트 기준 x = +4, 깊이 = −X 쪽으로 튀어나옴)에 만들어 두고, 클라이언트가 레이캐스트로 가까운 벽을 찾아
 --   Sheet 뼈를 그 벽 면으로 옮긴다(왼쪽 벽이면 Y 축 180° 뒤집기). 루트(길찾기)는 복도 가운데를 간다.
--- 뼈: Sheet(벽 면 전체·줄무늬) → Spine → Neck → Head → Eye(붉은 틈 + 눈동자),  Spine → UpperArmA → ForearmA → HandA(찢고 나온 손),
---      Spine → UpperArmB → ForearmB → HandB(종이 아래에서 미는 손),  Spine → ThighB → KneeB(무릎 밀기점)
+-- 뼈: Sheet(벽 면 전체·줄무늬) → Spine → Neck → Head → Eye(붉은 틈 + 눈동자), Spine → UpperArmA/B → ForearmA/B → HandA/B(A = 찢고 나온 손),
+--      Spine → ThighA/B → KneeA/B(무릎 밀기점)
 -- 붉은 선: 왼눈 위의 찢어진 종이 틈.
 -- 공포 장치 「벽에 기대지 마라」: 플레이어가 이 괴물이 붙은 벽에서 2.5 안(벽을 따라 ±5 안)에 3초 머물면 Emerge(얼굴·손이 밀려
 --   나옴, 클라이언트), 6초면 Burst — 팔이 벽 밖으로 튀어나와 붙잡음(아직 2.8 안이면 잡힘). 복도 가운데(벽에서 3 이상)는 안 닿음 —
@@ -4471,34 +4475,6 @@ local function W(z: number, y: number, dep: number): Vector3
 	return P(W0 - dep, y, z)
 end
 
--- 몸 높이장(벽 면 (z, y) → 깊이): 캡슐 가우시안의 최대값 + 입 구멍(음수)
-local CAPS = {
-	{ 0, 5.0, 0, 5.0, 0.8, 0.45 }, -- 머리(거꾸로: 아래)
-	{ 0, 5.7, 0, 6.2, 0.5, 0.3 }, -- 목
-	{ 0, 6.3, 0, 8.6, 1.1, 0.4 }, -- 몸통
-	{ 0, 8.8, 0, 9.3, 1.0, 0.32 }, -- 골반
-	{ -0.5, 9.3, -0.7, 11.6, 0.5, 0.28 }, -- 다리 A(천장 쪽으로 사라짐)
-	{ 0.6, 9.3, 0.8, 10.5, 0.5, 0.3 }, -- 다리 B 허벅지
-	{ 0.8, 10.5, 0.6, 11.7, 0.45, 0.3 }, -- 다리 B 무릎 위
-	{ -0.9, 6.4, -2.0, 5.4, 0.4, 0.25 }, -- 팔 A
-	{ -2.0, 5.4, -2.6, 4.4, 0.35, 0.28 },
-	{ 0.9, 6.4, 1.9, 5.8, 0.4, 0.25 }, -- 팔 B
-	{ 1.9, 5.8, 2.4, 5.0, 0.35, 0.3 },
-}
-local function depth(z: number, y: number): number
-	local best = 0.03
-	local p = Vector2.new(z, y)
-	for _, c in CAPS do
-		local a, b = Vector2.new(c[1], c[2]), Vector2.new(c[3], c[4])
-		local ab = b - a
-		local t = if ab.Magnitude > 0 then math.clamp((p - a):Dot(ab) / ab:Dot(ab), 0, 1) else 0
-		local dist = (p - (a + ab * t)).Magnitude
-		best = math.max(best, c[6] * math.exp(-(dist / c[5]) ^ 2))
-	end
-	local m = (p - Vector2.new(0, 5.28)).Magnitude
-	return best - 0.35 * math.exp(-(m / 0.22) ^ 2) -- 입 안으로 빨려 든 종이
-end
-
 function M.build(cf: CFrame): Model
 	local model, root = Rig.shell("Papered", cf, Vector3.new(1.2, 2, 1.2))
 	local lines: { Rig.Line } = {}
@@ -4511,53 +4487,82 @@ function M.build(cf: CFrame): Model
 			S(bone, pts[i], pts[i + 1], red)
 		end
 	end
-	-- 빌린 벽지 줄 10개 × 7마디: 사람 모양으로 부풂(줄 간격 1)
-	for i = 0, 9 do
-		local z = -4.5 + i
-		local pts = {}
-		for k = 0, 7 do
-			local y = 3.0 + k * (8.85 / 7)
-			table.insert(pts, W(z, y, depth(z, y)))
-		end
-		chain("Sheet", pts)
-	end
-	-- 얼굴(거꾸로: 이마가 아래, 턱이 위): 눈썹뼈 꺾은선 · 팽팽한 콧대 · 입 고리 · 꺼진 오른눈
-	chain("Head", { W(-0.4, 4.62, 0.42), W(0, 4.7, 0.5), W(0.4, 4.62, 0.42) })
-	chain("Head", { W(0, 4.82, 0.55), W(0, 5.0, 0.66), W(0, 5.12, 0.52) })
-	table.insert(lines, { bone = "Head", a = W(0, 5.28, 0.22), b = W(0, 5.28, 0.28), r = 0.2, disc = true })
-	chain("Head", { W(0.12, 4.82, 0.38), W(0.25, 4.72, 0.3), W(0.4, 4.82, 0.36), W(0.25, 4.88, 0.32) })
-	-- 붉은 틈(왼눈 위, 닫힌 곡선 3마디) + 눈동자
-	chain("Eye", { W(-0.42, 4.84, 0.44), W(-0.25, 4.7, 0.46), W(-0.08, 4.84, 0.44), W(-0.42, 4.84, 0.44) }, true)
-	table.insert(balls, { bone = "Eye", c = W(-0.25, 4.8, 0.48), r = 0.07 })
-	-- 팔 A: 벽 면에 눌린 위팔·아래팔(터져 나올 팔) + 찢고 나온 손(손목 테 + 갈고리 손가락 4)
-	S("UpperArmA", W(-0.9, 6.4, 0.3), W(-2.0, 5.4, 0.3))
-	S("ForearmA", W(-2.0, 5.4, 0.3), W(-2.6, 4.45, 0.32))
-	local wr = W(-2.65, 4.35, 0.35)
-	table.insert(lines, { bone = "HandA", a = wr + Vector3.new(0.03, 0, 0), b = wr - Vector3.new(0.03, 0, 0), r = 0.3, disc = true })
-	for i = 0, 3 do
-		local z = -2.95 + i * 0.2
-		chain("HandA", { W(z, 4.25, 0.45), W(z - 0.05, 4.1, 0.95), W(z - 0.05, 3.65, 1.0), W(z, 3.45, 0.7) })
-	end
-	-- 손 B: 종이 아래 손가락 능선 4 / 무릎 B 능선
-	for i = 0, 3 do
-		local z = 2.25 + i * 0.16
-		S("HandB", W(z, 4.95, 0.38), W(z + 0.05, 4.45, 0.3))
-	end
-	S("KneeB", W(0.55, 10.6, 0.36), W(0.95, 10.4, 0.36))
+	-- 빌린 벽지 줄 10(간격 1): 몸에 닿는 구간은 끊긴다 — 줄이 빈 자리가 곧 몸
+	S("Sheet", W(-4.5, 3, 0.02), W(-4.5, 12, 0.02))
+	S("Sheet", W(-3.5, 3, 0.02), W(-3.5, 12, 0.02))
+	S("Sheet", W(-2.5, 3, 0.02), W(-2.56, 5.13, 0.02))
+	S("Sheet", W(-2.5, 8.88, 0.02), W(-2.5, 12, 0.02))
+	S("Sheet", W(-1.51, 3, 0.02), W(-1.58, 6.75, 0.02))
+	S("Sheet", W(-1.45, 8.25, 0.02), W(-1.58, 9.5, 0.02))
+	S("Sheet", W(-0.57, 10.25, 0.02), W(-0.47, 12, 0.02))
+	S("Sheet", W(0.4, 10.88, 0.02), W(0.39, 12, 0.02))
+	S("Sheet", W(1.51, 3, 0.02), W(1.52, 6.5, 0.02))
+	S("Sheet", W(1.48, 7.75, 0.02), W(1.61, 10.25, 0.02))
+	S("Sheet", W(2.5, 3, 0.02), W(2.51, 4.13, 0.02))
+	S("Sheet", W(2.49, 7.88, 0.02), W(2.5, 12, 0.02))
+	S("Sheet", W(3.5, 3, 0.02), W(3.5, 12, 0.02))
+	S("Sheet", W(4.5, 3, 0.02), W(4.5, 12, 0.02))
+	-- 머리(거꾸로, 턱이 좁은 해골형): 두개 · 입 · 눈썹뼈 · 콧대 · 꺼진 눈
+	chain("Head", { W(0.03, 6.2, 0.28), W(-0.49, 5.46, 0.4), W(-0.9, 5.14, 0.48), W(-0.95, 4.03, 0.34), W(-0.57, 3.63, 0.3), W(-0.03, 3.63, 0.32), W(0.4, 4, 0.4), W(0.68, 4.76, 0.48), W(0.32, 6.13, 0.28) })
+	chain("Head", { W(-0.09, 5.86, 0.38), W(-0.25, 5.63, 0.36), W(-0.22, 5.4, 0.4), W(0.21, 5.3, 0.4), W(0.33, 5.49, 0.36), W(0.3, 5.79, 0.38), W(0.13, 5.93, 0.4), W(-0.09, 5.86, 0.38) })
+	chain("Head", { W(-0.83, 4.55, 0.48), W(-0.21, 4.45, 0.55), W(0.35, 4.24, 0.48) })
+	chain("Head", { W(-0.19, 4.45, 0.54), W(-0.1, 5.12, 0.58) })
+	chain("Head", { W(0, 4.67, 0.48), W(0.28, 4.36, 0.4), W(0.47, 4.5, 0.42), W(0.43, 4.73, 0.42), W(0, 4.67, 0.48) })
+	-- 붉은 틈(왼눈 위) + 눈동자
+	chain("Eye", { W(-0.79, 4.81, 0.46), W(-0.65, 4.61, 0.5), W(-0.29, 4.76, 0.52), W(-0.64, 4.9, 0.49), W(-0.79, 4.81, 0.46) }, true)
+	table.insert(balls, { bone = "Eye", c = W(-0.52, 4.75, 0.54), r = 0.07 })
+	-- 목 · 몸통 옆 능선 · 갈비 · 골반 V
+	chain("Neck", { W(-0.3, 6.4, 0.24), W(-0.4, 5.85, 0.32) })
+	chain("Neck", { W(0.3, 6.4, 0.24), W(0.06, 5.85, 0.32) })
+	chain("Spine", { W(-0.5, 6.72, 0.24), W(-1.12, 6.82, 0.29), W(-0.86, 8.35, 0.24), W(-0.5, 8.85, 0.16), W(-0.92, 9.4, 0.24) })
+	chain("Spine", { W(0.55, 6.7, 0.24), W(1.16, 6.76, 0.29), W(0.9, 8.4, 0.24), W(0.52, 8.85, 0.16), W(0.95, 9.42, 0.24) })
+	chain("Spine", { W(-0.88, 7.47, 0.24), W(-0.08, 7.56, 0.25) })
+	chain("Spine", { W(0.88, 7.47, 0.24), W(0.12, 7.56, 0.25) })
+	chain("Spine", { W(-0.86, 7.99, 0.24), W(-0.08, 8.1, 0.25) })
+	chain("Spine", { W(0.86, 7.99, 0.24), W(0.12, 8.1, 0.25) })
+	chain("Spine", { W(-0.92, 9.4, 0.24), W(0, 9.95, 0.16), W(0.95, 9.42, 0.24) })
+	-- 팔(팔꿈치가 위로 꺾임) · 다리(천장 쪽으로 사라짐)
+	chain("UpperArmA", { W(-1.18, 6.8, 0.19), W(-2.45, 8.08, 0.3) })
+	chain("ForearmA", { W(-2.45, 8.08, 0.3), W(-2.07, 5.48, 0.27) })
+	chain("UpperArmA", { W(-0.72, 7.3, 0.19), W(-2.65, 8.42, 0.3) })
+	chain("ForearmA", { W(-2.65, 8.42, 0.3), W(-2.33, 5.42, 0.27) })
+	chain("UpperArmB", { W(0.92, 7.33, 0.19), W(2.87, 7.51, 0.3) })
+	chain("ForearmB", { W(2.87, 7.51, 0.3), W(2.57, 4.47, 0.24) })
+	chain("UpperArmB", { W(1.08, 6.67, 0.19), W(2.63, 7.19, 0.3) })
+	chain("ForearmB", { W(2.63, 7.19, 0.3), W(2.33, 4.53, 0.24) })
+	chain("ThighA", { W(-0.81, 9.07, 0.16), W(-1.98, 10.67, 0.26) })
+	chain("KneeA", { W(-1.98, 10.67, 0.26), W(-1.38, 12.04, 0.06) })
+	chain("ThighA", { W(-0.19, 9.63, 0.16), W(-1.52, 10.83, 0.26) })
+	chain("KneeA", { W(-1.52, 10.83, 0.26), W(-1.02, 11.86, 0.06) })
+	chain("ThighB", { W(0.13, 9.56, 0.16), W(1.01, 11.14, 0.24) })
+	chain("KneeB", { W(1.01, 11.14, 0.24), W(0.76, 11.88, 0.06) })
+	chain("ThighB", { W(0.91, 9.24, 0.16), W(1.49, 11.06, 0.24) })
+	chain("KneeB", { W(1.49, 11.06, 0.24), W(1.14, 12.02, 0.06) })
+	-- 손 A(마디 3 갈고리, 종이를 찢고 나옴) · 손 B(종이 아래 능선)
+	chain("HandA", { W(-2.42, 5.03, 0.22), W(-2.49, 4.84, 0.54), W(-2.59, 4.5, 0.52), W(-2.67, 4.25, 0.32) })
+	chain("HandA", { W(-2.25, 4.98, 0.22), W(-2.27, 4.74, 0.54), W(-2.29, 4.31, 0.52), W(-2.35, 4, 0.32) })
+	chain("HandA", { W(-2.08, 4.98, 0.22), W(-2.04, 4.74, 0.54), W(-1.99, 4.3, 0.52), W(-2.04, 3.98, 0.32) })
+	chain("HandA", { W(-1.91, 5.03, 0.22), W(-1.82, 4.85, 0.54), W(-1.69, 4.52, 0.52), W(-1.73, 4.28, 0.32) })
+	chain("HandB", { W(2.45, 4.5, 0.3), W(2.15, 4.08, 0.32), W(1.87, 3.36, 0.22) })
+	chain("HandB", { W(2.32, 4.03, 0.32), W(2.18, 3.13, 0.22) })
+	chain("HandB", { W(2.49, 4.03, 0.32), W(2.49, 3.11, 0.22) })
+	chain("HandB", { W(2.45, 4.5, 0.3), W(2.66, 4.08, 0.32), W(2.8, 3.39, 0.22) })
 	local bones: { Rig.Bone } = {
 		{ name = "Sheet", joint = P(0, 7.4, 0), tip = P(W0, 7.4, 0) },
-		{ name = "Spine", parent = "Sheet", joint = W(0, 8.6, 0.1), tip = W(0, 6.3, 0.1) },
-		{ name = "Neck", parent = "Spine", joint = W(0, 6.3, 0.1), tip = W(0, 5.6, 0.1) },
-		{ name = "Head", parent = "Neck", joint = W(0, 5.6, 0.1), tip = W(0, 4.4, 0.1) },
-		{ name = "Eye", parent = "Head", joint = W(-0.25, 4.8, 0.4), tip = W(-0.25, 4.8, 0.6) },
-		{ name = "UpperArmA", parent = "Spine", joint = W(-0.9, 6.4, 0.1), tip = W(-2.0, 5.4, 0.1) },
-		{ name = "ForearmA", parent = "UpperArmA", joint = W(-2.0, 5.4, 0.1), tip = W(-2.6, 4.45, 0.1) },
-		{ name = "HandA", parent = "ForearmA", joint = W(-2.6, 4.45, 0.1), tip = W(-2.9, 3.6, 0.1) },
-		{ name = "UpperArmB", parent = "Spine", joint = W(0.9, 6.4, 0.1), tip = W(1.9, 5.8, 0.1) },
-		{ name = "ForearmB", parent = "UpperArmB", joint = W(1.9, 5.8, 0.1), tip = W(2.4, 5.0, 0.1) },
-		{ name = "HandB", parent = "ForearmB", joint = W(2.4, 5.0, 0.1), tip = W(2.5, 4.4, 0.1) },
-		{ name = "ThighB", parent = "Spine", joint = W(0.6, 9.3, 0.1), tip = W(0.8, 10.5, 0.1) },
-		{ name = "KneeB", parent = "ThighB", joint = W(0.8, 10.5, 0.1), tip = W(0.6, 11.7, 0.1) },
+		{ name = "Spine", parent = "Sheet", joint = W(0, 8.6, 0.1), tip = W(0, 6.5, 0.1) },
+		{ name = "Neck", parent = "Spine", joint = W(0, 6.5, 0.1), tip = W(-0.1, 5.9, 0.1) },
+		{ name = "Head", parent = "Neck", joint = W(-0.1, 5.9, 0.1), tip = W(-0.3, 3.7, 0.1) },
+		{ name = "Eye", parent = "Head", joint = W(-0.45, 4.6, 0.1), tip = W(-0.45, 4.5, 0.1) },
+		{ name = "UpperArmA", parent = "Spine", joint = W(-0.95, 7.05, 0.1), tip = W(-2.55, 8.25, 0.1) },
+		{ name = "ForearmA", parent = "UpperArmA", joint = W(-2.55, 8.25, 0.1), tip = W(-2.2, 5.45, 0.1) },
+		{ name = "HandA", parent = "ForearmA", joint = W(-2.2, 5.45, 0.1), tip = W(-2.2, 4.25, 0.1) },
+		{ name = "ThighA", parent = "Spine", joint = W(-0.5, 9.35, 0.1), tip = W(-1.75, 10.75, 0.1) },
+		{ name = "KneeA", parent = "ThighA", joint = W(-1.75, 10.75, 0.1), tip = W(-1.2, 11.95, 0.1) },
+		{ name = "UpperArmB", parent = "Spine", joint = W(1, 7, 0.1), tip = W(2.75, 7.35, 0.1) },
+		{ name = "ForearmB", parent = "UpperArmB", joint = W(2.75, 7.35, 0.1), tip = W(2.45, 4.5, 0.1) },
+		{ name = "HandB", parent = "ForearmB", joint = W(2.45, 4.5, 0.1), tip = W(2.45, 3.3, 0.1) },
+		{ name = "ThighB", parent = "Spine", joint = W(0.52, 9.4, 0.1), tip = W(1.25, 11.1, 0.1) },
+		{ name = "KneeB", parent = "ThighB", joint = W(1.25, 11.1, 0.1), tip = W(0.95, 11.95, 0.1) },
 	}
 	Rig.build(model, root, cf, {
 		id = "c6n",
@@ -16749,6 +16754,7 @@ function M.init(b: A.Body)
 	d.snap = 0
 	d.check = 0
 	d.close = false
+	d.freeze = 0
 	d.c1, d.c1v, d.c2, d.c2v = 0, 0, 0, 0
 end
 
@@ -16784,7 +16790,10 @@ function M.step(b: A.Body, dt: number)
 	local sway = math.sin(ph * math.pi * 2)
 	local bob = (0.15 * math.abs(math.cos(ph * math.pi * 2)) - 0.08) * amp
 	local rOff = Vector3.new(0.12 * sway * amp, bob, 0)
-	local rRot = CFrame.fromEulerAnglesYXZ(0, 0, math.rad(3) * sway * amp)
+	-- 멈춤: 들고 있던 발을 무릎 높이까지 들고 상체를 앞으로 숙인 채 굳는다(사람이면 넘어질 자세)
+	d.freeze = A.approach(d.freeze, if raw <= 0.4 and d.still < 6 and amp > 0.2 then 1 else 0, if raw <= 0.4 then 4 else 10, dt)
+	local fz: number = d.freeze
+	local rRot = CFrame.fromEulerAnglesYXZ(-math.rad(14) * fz, 0, math.rad(3) * sway * amp)
 	setRot(b, "HipRing", rRot, rOff)
 	local ringCF = CFrame.new(d.abs.HipRing + rOff) * rRot
 	for i, n in { "L", "R" } do
@@ -16805,6 +16814,10 @@ function M.step(b: A.Body, dt: number)
 			pitch = -0.35 * (1 - k) + 0.25 * k
 		end
 		local ankle = d.abs["Foot" .. n]
+		if (i == 1) == (ph >= 0.5) then -- 이 발이 들리는 쪽
+			h += 1.2 * fz * (1 - h)
+			z -= 1.6 * fz
+		end
 		local target = ankle + Vector3.new(0, h * amp + math.max(0, -pitch) * 0.3 * amp, z)
 		local hip = ringCF:PointToWorldSpace(d.abs["Thigh" .. n] - d.abs.HipRing)
 		local legRot = ik2(b, "Thigh" .. n, "Shin" .. n, hip, target, Vector3.new(0, 0, -1), rRot)
@@ -16820,7 +16833,7 @@ function M.step(b: A.Body, dt: number)
 	A.pose(b, "Yoke", 0, 0, math.rad(6) * math.sin(ph * math.pi * 2 + 0.6) * amp) -- 버팀대 흔들림
 	-- 살 척추는 틀 사이에서 처졌다 당겨짐
 	A.pose(b, "Lumbar", 0.04 * math.sin(b.t * 1.2), 0, 0)
-	A.pose(b, "Thorax", -0.05 * sway * amp, 0, 0.03 * sway * amp)
+	A.pose(b, "Thorax", -0.05 * sway * amp - math.rad(8) * fz, 0, 0.03 * sway * amp)
 	-- 고리 꺾임(공격): 쐐기 받침째 머리가 앞으로 84°
 	d.check -= dt
 	if d.check <= 0 then
@@ -16835,7 +16848,7 @@ function M.step(b: A.Body, dt: number)
 	d.c1 += d.c1v * dt
 	d.c2v += (-22 * d.c2 - 3 * d.c2v - d.c1 * 10) * dt
 	d.c2 += d.c2v * dt
-	A.pose(b, "Cable1", 0.05 * d.c1, 0, 0.12 * d.c1)
+	A.pose(b, "Cable1", 0.05 * d.c1 + math.rad(14) * fz, 0, 0.12 * d.c1)
 	A.pose(b, "Cable2", 0.04 * d.c2, 0, 0.15 * d.c2)
 	A.pose(b, "Cable3", 0, 0.1 * d.c2, 0)
 end
@@ -16934,7 +16947,7 @@ function M.step(b: A.Body, dt: number)
 	end
 	if landed and moving > 0.3 then
 		local t = math.rad(LEGS[landed])
-		local at = Vector3.new(math.sin(t) * 2.5, -2.5, -math.cos(t) * 2.5)
+		local at = Vector3.new(math.sin(t) * 2.2, -2.5, -math.cos(t) * 2.2)
 		b.step(b.root.CFrame:PointToWorldSpace(at), math.clamp(b.speed / 8, 0.4, 1.3)) -- 탁
 	end
 	-- 접시 겨눔: 듣는 중이면 AimAt 쪽, 아니면 앞. 몸통 회전(psi)을 목이 상쇄
@@ -18228,7 +18241,7 @@ local function foot(ph: number, prev: number, s0: number, half: number, drag: bo
 		local k = (q - DUTY) / (1 - DUTY)
 		u = -half + 2 * half * (0.5 - 0.5 * math.cos(k * math.pi))
 		if drag then
-			h = 0.03
+			h = 0.03 + 0.3 * math.sin(k * math.pi) -- (발끝이 바닥 아래로 파고들지 않게 발목을 같이 든다)
 			pitch = 0.5 * math.sin(k * math.pi) -- 발끝을 바닥에 끌며
 		else
 			h = 0.4 * math.sin(k * math.pi)
@@ -18365,6 +18378,7 @@ function M.init(b: A.Body)
 	d.ripple = 0
 	d.travel = 0
 	d.flip = 0
+	d.lay = 0
 end
 
 function M.step(b: A.Body, dt: number)
@@ -18431,17 +18445,21 @@ function M.step(b: A.Body, dt: number)
 	local xs = d.dist - W0 - depth
 	A.pose(b, "Sheet", 0, d.flip, 0, Vector3.new(xs * d.side, 0, 0))
 	-- 머리 쪽이 먼저(앞, −Z 쪽) 솟는 물결: 척추를 진행 쪽으로 살짝 끌고 감
-	A.pose(b, "Spine", 0, 0, 0, Vector3.new(-0.1 * math.max(0, math.sin(b.phase * math.pi * 2 + 1)) * moving, 0, -0.25 * moving))
+	-- 움직일 땐 몸을 눕혀 머리가 진행 쪽(−Z, 뒤집힌 벽이면 반대)으로 앞장선다. 멈추면 다시 머리를 아래로
+	d.lay = A.approach(d.lay, moving * (1 - d.emerge), 3, dt)
+	local lay = d.lay * 1.15 * math.cos(d.flip)
+	A.pose(b, "Spine", lay, 0, 0, Vector3.new(-0.1 * math.max(0, math.sin(b.phase * math.pi * 2 + 1)) * moving, -1.2 * d.lay, 0))
 	-- 밀려 나옴(뼈 로컬 −X = 복도 쪽; 뒤집힌 쪽도 Sheet 를 따라 자동으로)
 	local e = d.emerge
-	A.pose(b, "Head", 0, 0, 0, Vector3.new(-1.05 * e, 0, 0))
+	A.pose(b, "Head", 0.06 * math.sin(b.t * 1.3) * (0.3 + e), 0, 0, Vector3.new(-0.95 * e, 0, 0))
 	A.pose(b, "Eye", 0, 0, 0, Vector3.new(-0.15 * e, 0, 0))
 	A.pose(b, "HandB", 0, 0, 0, Vector3.new(-0.7 * e, 0, 0))
-	A.pose(b, "KneeB", 0, 0, 0, Vector3.new(-0.4 * e, 0, 0))
+	A.pose(b, "KneeA", 0, 0, 0, Vector3.new(-0.4 * e, 0, 0))
+	A.pose(b, "KneeB", 0, 0, 0, Vector3.new(-0.35 * e, 0, 0))
 	-- 팔 A: 잠듦엔 납작, 드러나면 손가락이 종이를 찢고 나옴, Burst 땐 팔째 복도 쪽으로 2.6
 	A.pose(b, "UpperArmA", 0, 0, 0, Vector3.new(-0.3 * e - 1.2 * burst, 0.4 * burst, 0))
 	A.pose(b, "ForearmA", 0, 0, 0, Vector3.new(-0.2 * e - 1.0 * burst, 0.3 * burst, 0))
-	A.pose(b, "HandA", 0, 0, 0.25 * math.sin(b.t * 7) * e * (1 - burst), Vector3.new(-0.2 * e - 0.4 * burst, 0, 0))
+	A.pose(b, "HandA", 0, 0, 0.25 * math.sin(b.t * 7) * e * (1 - burst), Vector3.new(-0.45 * e - 0.4 * burst, 0, 0))
 end
 
 return M

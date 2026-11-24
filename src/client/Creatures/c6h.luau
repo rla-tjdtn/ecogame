@@ -91,7 +91,7 @@ local function foot(ph: number, prev: number, s0: number, half: number, drag: bo
 		local k = (q - DUTY) / (1 - DUTY)
 		u = -half + 2 * half * (0.5 - 0.5 * math.cos(k * math.pi))
 		if drag then
-			h = 0.03
+			h = 0.03 + 0.3 * math.sin(k * math.pi) -- (발끝이 바닥 아래로 파고들지 않게 발목을 같이 든다)
 			pitch = 0.5 * math.sin(k * math.pi) -- 발끝을 바닥에 끌며
 		else
 			h = 0.4 * math.sin(k * math.pi)

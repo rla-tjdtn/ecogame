@@ -21,20 +21,20 @@
 | spine2 | spine1 | 1.60 |
 | spine3 | spine2 | 1.35 |
 | skull | spine3 | 0.27 |
-| finL1 | spine2 | 0.93 |
-| finL2 | finL1 | 0.52 |
-| finL3 | finL2 | 0.44 |
-| finR1 | spine2 | 0.93 |
-| finR2 | finR1 | 0.52 |
-| finR3 | finR2 | 0.44 |
-| armL | spine3 | 1.23 |
+| finL1 | spine2 | 0.96 |
+| finL2 | finL1 | 0.55 |
+| finL3 | finL2 | 0.46 |
+| finR1 | spine2 | 0.90 |
+| finR2 | finR1 | 0.49 |
+| finR3 | finR2 | 0.42 |
+| armL | spine3 | 1.30 |
 | handL | armL | 2.41 |
-| armR | spine3 | 1.23 |
+| armR | spine3 | 1.16 |
 | handR | armR | 2.25 |
 | lip | skull | 0.96 |
-| legL | spine0 | 0.61 |
+| legL | spine0 | 0.63 |
 | footL | legL | 1.76 |
-| legR | spine0 | 0.61 |
+| legR | spine0 | 0.59 |
 | footR | legR | 1.71 |
 
 등뼈 4마디가 바닥과 평행. finL/R1~3 은 spine2 에서 옆으로 뻗은 '지느러미 사슬'(갈비가 펴진 판) — 각 마디가 위아래로 회전해 물결을 만든다. lip(앞 가장자리)은 skull 자식, 위로 0~60° 들림. 팔·다리는 납작한 2마디.
@@ -57,7 +57,7 @@
 - 납작해질 때: 공기 빠지는 "푸쉬" + 갈비 뚝뚝. 검색어: `air release flatten`, `bone crack small`.
 
 ## 8. 선분 예산 (게임 음파)
-- 게임 LOD 합계 ≈ **39개**. 외곽 12각 12, 등 타원 1, 두개골 1, 입술 3(붉은), 팔 4 + 손가락 6, 다리 4, 트레드 2.
+- 게임 LOD 합계 ≈ **60개**. 외곽 12각 12, 등 타원 1, 두개골 1, 입술 3(붉은), 팔 4 + 손가락 6, 다리 4, 트레드 2.
 - 바닥에 붙어 있어 선이 맵 바닥선과 겹치기 쉬움 → 트레드 사선(바닥선과 각이 다름)과 붉은 호로 구별.
 
 ## 9. 붉은 선 위치
@@ -67,3 +67,7 @@
 - fin 사슬 3마디 × 좌우: 각 마디 x축 회전 = A·sin(ωt − k·i) (뒤로 흐르는 파동). 메쉬는 판 하나를 뼈 가중치로 휘게.
 - 납작: 몸 전체 y 스케일 1 → 0.33 (0.2초), 팔다리 펼침.
 - 잡기: lip 60° 들림 + 손 IK 를 발목 위치로, 손가락 감기(curl 55°).
+
+## 11. 3차 재작업 메모
+- hero·turn·motion 은 3D 렌더가 아니라 kit3 화풍 손그림 2D 베지어(어두운 살 + 흰 윤곽 + 붉은 한 곳)로 새로 그림(make2d_*.js). 3D 모델은 sonar·mock 게임 LOD 와 anatomy 뼈대 도식에만 사용.
+- 게임 LOD 선분 수는 sonar 시트 오른쪽 위에 표기.

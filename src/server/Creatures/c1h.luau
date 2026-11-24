@@ -1,7 +1,8 @@
 --!strict
--- c1h 발맞춤 (1장 지하 시설 · 사람형) — 사양서: roster/v5/ch1/c1h_spec.md (+ QA1 수정 지시 반영)
+-- c1h 발맞춤 (1장 지하 시설 · 사람형) — 사양서: art/creatures/sheets/ch1/c1h_spec.md (+ QA1 수정 지시 반영)
 -- 보행 동기화 실험의 피험체. 스스로 서지 못하는 몸을 외골격이 세운다: 골반 띠 → 등 뒤 세로 레일(척추를 클립으로 걺) →
 -- 오른 어깨만 받치는 L 자 버팀대, 왼팔은 끈에 매달려 처짐. 두건 씌운 머리는 쐐기 받침·턱 걸쇠에 핀으로 박혀 천장을 본다.
+-- 3차(최신): 공 머리 → 젖혀진 옆얼굴 + 턱 밑, 관절 마커 공·골반 고리 제거, 오른팔은 받침에 묶여 앞으로, 멈추면 무릎 높이로 발을 들고 숙인 채 굳음.
 -- QA1: T 자 멍에(십자·허수아비) 대신 비대칭 L 버팀대 · 머리 고리(후광) 대신 쐐기 받침 — 정면에선 얼굴 없는 턱 밑과 목 앞면 ·
 --      마커 공은 7개(골반·무릎·발목·손목)만 · 무릎은 캡슐이 아니라 슬개골 쐐기 + 버팀대 경첩 · 선 120 이하.
 -- 뼈: HipRing → Pelvis → ThighL/R → ShinL/R → FootL/R,  Pelvis → Lumbar → Thorax → Neck,
@@ -53,11 +54,9 @@ function M.build(cf: CFrame): Model
 			S(bone, a + off * (wa * k), b + off * (wb * k))
 		end
 	end
-	local function ring(bone: string, c: Vector3, axis: Vector3, r: number)
-		table.insert(lines, { bone = bone, a = c - axis * 0.03, b = c + axis * 0.03, r = r, disc = true })
-	end
-	-- 골반 띠(지름 2) + 살 골반 쐐기
-	ring("HipRing", P(0, 4.1, 0.1), Vector3.yAxis, 1.0)
+	-- 골반 띠(3차): 뒤쪽 반 고리 + 레일 용접 쐐기(정면에 고리가 안 보임) + 살 골반 쐐기
+	chain("HipRing", { P(1, 4.1, 0.1), P(0.7, 4.1, 0.66), P(0, 4.1, 0.9), P(-0.7, 4.1, 0.66), P(-1, 4.1, 0.1) })
+	chain("HipRing", { P(-0.2, 4.1, 0.9), P(0, 4.5, 0.95), P(0.2, 4.1, 0.9) })
 	chain("Pelvis", { P(-0.55, 4.25, -0.2), P(0, 3.7, -0.35), P(0.55, 4.25, -0.2) })
 	S("Pelvis", P(-0.55, 4.25, -0.2), P(0.55, 4.25, -0.2))
 	-- 다리(안짱 무릎) + 바깥 버팀대(무릎 경첩·발목 고리) + 슬개골 쐐기 + 맨발
@@ -66,15 +65,13 @@ function M.build(cf: CFrame): Model
 		local hip, knee, ankle = P(0.45 * s, 3.95, 0), P(0.38 * s, 2.0, -0.15), P(0.45 * s, 0.3, 0.05)
 		cone("Thigh" .. n, hip, knee, 0.24, 0.15, Vector3.new(s, 0, 0))
 		cone("Shin" .. n, knee, ankle, 0.15, 0.09, Vector3.new(s, 0, 0))
-		S("Thigh" .. n, P(1.0 * s, 4.05, 0.05), P(0.75 * s, 2.0, -0.05)) -- 버팀대
-		S("Shin" .. n, P(0.75 * s, 2.0, -0.05), P(0.72 * s, 0.4, 0.05))
+		if s > 0 then -- 버팀대는 오른다리만(비대칭)
+			S("ThighR", P(0.95, 4.05, 0.05), P(0.68, 2.0, -0.1))
+			S("ShinR", P(0.68, 2.0, -0.1), P(0.64, 0.4, 0.05))
+		end
 		S("Shin" .. n, knee + Vector3.new(0, 0.2, -0.2), knee + Vector3.new(0, -0.25, -0.18)) -- 슬개골
-		ring("Shin" .. n, ankle + Vector3.new(0, 0.1, 0), Vector3.yAxis, 0.28)
 		chain("Foot" .. n, { ankle + Vector3.new(0, -0.05, 0.25), ankle + Vector3.new(0, -0.25, 0.1), ankle + Vector3.new(0, -0.25, -0.75) })
-		table.insert(balls, { bone = "Shin" .. n, c = knee + Vector3.new(0.18 * s, 0, -0.1), r = 0.12 })
-		table.insert(balls, { bone = "Foot" .. n, c = ankle + Vector3.new(0.2 * s, 0, 0), r = 0.11 })
 	end
-	table.insert(balls, { bone = "Pelvis", c = P(0, 4.0, -0.5), r = 0.13 })
 	-- 살 척추(앞으로 처짐) + 갈비 우리
 	S("Lumbar", P(0, 4.2, 0.25), P(0, 5.55, 0.3))
 	S("Thorax", P(0, 5.55, 0.3), P(0, 7.0, 0.2))
@@ -93,20 +90,24 @@ function M.build(cf: CFrame): Model
 	S("Rail", P(0, 5.0, 0.92), P(0, 5.0, 0.35))
 	S("Rail", P(0, 6.5, 0.88), P(0, 6.5, 0.3))
 	-- 오른 어깨만 받치는 L 버팀대, 왼팔을 매단 끈
-	chain("Yoke", { P(0, 7.15, 0.85), P(1.05, 7.15, 0.75), P(1.1, 6.95, 0.1) })
+	chain("Yoke", { P(0, 7.15, 0.85), P(1.05, 7.15, 0.75), P(1.12, 6.6, 0.1), P(1.15, 6.5, -1.2) })
 	S("Rail", P(0, 7.35, 0.85), P(-0.9, 6.7, 0.15))
 	-- 쐐기 받침(레일 꼭대기 → 이마) + 턱 걸쇠 + 핀 2, 두건 머리(뒤로 72° 젖혀 천장을 봄)
 	local hc = P(0, 8.15, 0.35)
 	chain("Clamp", { P(0, 8.9, 0.85), P(0, 8.75, 0.25), P(0, 8.5, -0.15) })
 	chain("Clamp", { P(-0.32, 7.72, -0.32), P(0, 7.6, -0.45), P(0.32, 7.72, -0.32) })
 	S("Clamp", P(-0.32, 7.72, -0.32), P(-0.42, 8.2, 0.3)) -- 걸쇠 옆 끈
-	table.insert(balls, { bone = "Head", c = hc, r = 0.5 })
-	S("Head", hc + Vector3.new(-0.35, 0.38, -0.05), hc + Vector3.new(-0.5, 0.55, 0.05)) -- 핀
-	S("Head", hc + Vector3.new(0.35, 0.38, -0.05), hc + Vector3.new(0.5, 0.55, 0.05))
-	chain("Head", { hc + Vector3.new(-0.2, -0.28, -0.42), hc + Vector3.new(0, -0.42, -0.5), hc + Vector3.new(0.2, -0.28, -0.42) }) -- 턱 밑
+	-- 젖혀진 옆얼굴(3차): 턱 → 입 → 코(위) → 이마 → 뒤통수. 정면에선 턱 밑 쐐기가 보인다
+	local prof = {}
+	for _, q in { { -0.12, -0.55 }, { 0.3, -0.62 }, { 0.36, -0.42 }, { 0.62, -0.1 }, { 0.46, 0.08 }, { 0.5, 0.45 }, { 0.05, 0.62 }, { -0.42, 0.28 }, { -0.12, -0.55 } } do
+		table.insert(prof, hc + Vector3.new(0, q[1], q[2]))
+	end
+	chain("Head", prof)
+	chain("Head", { hc + Vector3.new(-0.38, 0.1, 0.1), hc + Vector3.new(-0.22, -0.08, -0.45), hc + Vector3.new(0, -0.14, -0.58), hc + Vector3.new(0.22, -0.08, -0.45), hc + Vector3.new(0.38, 0.1, 0.1) }) -- 턱뼈(말굽)
+	chain("Head", { hc + Vector3.new(-0.38, 0.1, 0.1), hc + Vector3.new(0, 0.5, 0.35), hc + Vector3.new(0.38, 0.1, 0.1) }) -- 두개 폭
 	-- 팔: 오른팔은 버팀대에 묶여 늘어짐, 왼팔은 끈에 매달려 더 처짐. 손가락 쐐기 2
 	local arms = {
-		R = { P(1.1, 6.95, 0.05), P(1.25, 5.5, 0.0), P(1.2, 4.1, -0.15) },
+		R = { P(1.1, 6.95, 0.05), P(1.15, 6.75, -1.25), P(1.1, 5.25, -1.35) }, -- (받침에 묶여 앞으로 뻗고 아래팔은 늘어짐)
 		L = { P(-0.9, 6.6, 0.1), P(-1.0, 5.1, 0.05), P(-0.95, 3.6, -0.1) },
 	}
 	for n, a in arms do
@@ -115,10 +116,10 @@ function M.build(cf: CFrame): Model
 		cone("Forearm" .. n, a[2], a[3], 0.11, 0.07, Vector3.new(s, 0, 0))
 		S("Hand" .. n, a[3], a[3] + Vector3.new(0.05 * s, -0.7, -0.12))
 		S("Hand" .. n, a[3], a[3] + Vector3.new(-0.08 * s, -0.55, 0.1))
-		table.insert(balls, { bone = "Forearm" .. n, c = a[3] + Vector3.new(0, 0.12, 0), r = 0.1 })
 	end
 	-- 붉은 동기 케이블: 레일 뒤 → 바닥으로 끌림
-	local cab = { P(0, 7.6, 1.0), P(0.1, 5.8, 1.4), P(0.15, 3.8, 1.75), P(0.1, 1.8, 2.1), P(0, 0.1, 2.8), P(0, 0.05, 3.8) }
+	local cab = { P(0, 7.6, 1.45), P(0.1, 5.8, 1.6), P(0.15, 3.8, 1.75), P(0.1, 1.8, 2.1), P(0, 0.1, 2.8), P(0, 0.05, 3.8) }
+	S("Rail", P(0, 7.5, 0.88), cab[1]) -- 케이블 받침대(레일 뒤로 0.6)
 	chain("Cable1", { cab[1], cab[2], cab[3] }, true)
 	chain("Cable2", { cab[3], cab[4], cab[5] }, true)
 	chain("Cable3", { cab[5], cab[6] }, true)
