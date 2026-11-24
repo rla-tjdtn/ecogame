@@ -1,0 +1,21 @@
+// 시안3 4장 비인간형 — 폐: 갈비 열두 개로 걷는 한 쌍의 폐. 숨을 들이쉴 때마다 부풀어 복도를 메우고, 기관지 끝의 얼굴이 쉰 소리로 운다.
+const { V, Frame, Body } = require('./sculpt.js'), A = require('./anat.js');
+module.exports = { id: 'e4n', name: '폐', kind: '비인간형 · 4장 폐병원', H: 6.4, build(p = {}) {
+  const B = new Body(), w = p.walk ?? .1, br = p.breath ?? .6, k = .82 + br * .32, cy = 4.0;
+  // 폐 두 덩이: 엽으로 나뉘고 거품 같은 폐포 표면
+  for (const m of [-1, 1]) { B.group({ k: .16, kg: .05, amp: .02, freq: 3, rid: .014, rf: 1.9 }); const C = [m * 1.15 * k, cy, -.2]; B.ell(new Frame([C[0], cy + .75 * k, -.1], [1, 0, 0], V.norm([-m * .25, 1, 0]), [0, 0, 1]), [.78 * k, .95 * k, .95 * k]); B.ell(new Frame([C[0] + m * .18, cy - .25 * k, .15], [1, 0, 0], [0, 1, 0], [0, 0, 1]), [.95 * k, .75 * k, 1.1 * k]); B.ell(new Frame([C[0] + m * .1, cy - .75 * k, -.7], [1, 0, 0], [0, 1, 0], [0, 0, 1]), [.9 * k, .65 * k, .95 * k]); B.groove([C[0], cy + .15 * k, .3], V.norm([m * .3, 1, -.5]), .05, .13, 1.6, { wob: .15, wf: 2 }); B.groove([C[0], cy - .5 * k, -.1], V.norm([m * -.2, 1, .6]), .05, .12, 1.6, { wob: .15, wf: 2 });
+    for (let i = 0; i < 40; i++) { const a = i * 2.4, y = 1 - i / 20, r = Math.sqrt(Math.max(0, 1 - y * y)); const d = [Math.cos(a) * r, y, Math.sin(a) * r]; if (d[0] * m < -.2) continue; B.ball([C[0] + m * .1 + d[0] * .95 * k, cy + .0 + d[1] * 1.35 * k, -.15 + d[2] * 1.2 * k], .16 + .06 * Math.sin(i * 3.1), { k: .3 }); }
+    // 핏줄 나무
+    for (let i = 0; i < 6; i++) { const a = i * 1.05 - .6; A.veins(B, [[m * .45, cy + .3, .3], [C[0] - m * .2, cy + .3 + Math.sin(a) * .5, .75 * k], [C[0] + m * .25, cy + Math.sin(a) * .95 * k, .9 * k - .2 * Math.abs(Math.sin(a))], [C[0] + m * .65 * k, cy + Math.sin(a) * 1.2 * k, .5 * k]], .035); } }
+  // 척추와 흉골
+  const sp = [[0, cy + 1.5, -1.1], [0, cy + .5, -1.35], [0, cy - .6, -1.3], [0, cy - 1.5, -1.0], [0, cy - 1.9, -.4]]; A.spine(B, sp, .17, { n: 13, back: [0, 0, -1], out: .05, wing: true, k: .04, kg: .02 }); B.group({ k: .06, kg: .06 }); B.tube(sp, .1);
+  // 다리 = 길게 자란 갈비 열둘(관절 있음)
+  for (const m of [-1, 1]) for (let i = 0; i < 6; i++) { const t = i / 5, q = Math.sin((w + i * .29 + (m > 0 ? .5 : 0)) * 6.283), lf = Math.max(0, q) * .55; const a = [m * .2, cy + 1.1 - t * 2.2, -1.25 + Math.abs(t - .5) * .3], b = [m * (2.35 + .25 * Math.sin(i * 2)) * k, cy + 1.25 - t * 1.2 + lf * .4, -1.1 + t * .9], c = [m * (3.0 + .2 * Math.cos(i * 3)) * (.9 + k * .1), cy - 1.0 - t * .4 + lf * .6, -1.6 + t * 2.9 + q * .25], e = [m * (2.75 + .5 * Math.sin(i * 1.7)), .04 + lf, -2.4 + t * 4.2 + q * .5]; B.group({ k: .05, kg: .08, amp: .004, freq: 7 }); B.tube([a, V.add(V.lerp(a, b, .5), [0, .25, -.35]), b, c, V.lerp(c, e, .6), e], [.15, .14, .13, .12, .08, .012]); B.ball(b, .165, { k: .06 }); B.ball(c, .15, { k: .06 }); for (let j = 0; j < 3; j++) B.groove(V.lerp(b, c, .25 + j * .25), V.sub(c, b), .015, .02, .25, { wob: .2, wf: 6 }); }
+  // 기관: 위로 올라가 앞으로 휘어 얼굴로
+  const tr = [[0, cy + .2, .1], [0, cy + 1.1, .25], [0, cy + 1.75, .75], [0, cy + 1.7, 1.45], [0, cy + 1.25, 1.95]]; B.group({ k: .05, kg: .12 }); B.tube(tr, [.3, .3, .29, .28, .27]); A.rings(B, tr, 17, .04, .05, .5, { tilt: .04, bow: 0, wob: .04 }); for (const m of [-1, 1]) { B.tube([[0, cy + .25, .1], [m * .4, cy + .05, .12], [m * .8, cy + .1, .05]], [.24, .2, .16]); }
+  const HF = new Frame([0, cy + 1.0, 2.3], [1, 0, 0], V.norm([0, .97, .2]), V.norm([0, -.2, .97])).rot(0, p.headYaw || 0, 8); A.face(B, HF, 1.5, { jaw: p.jaw ?? 40, eyes: 'real', gaunt: 1.3, teeth: 10, w: .95, ears: true, iris: .013, tongue: 'red', tongueLen: .06 });
+  const R = []; for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 1.5 + .75 * Math.PI, x = Math.cos(a) * .33, z = Math.sin(a) * .4 - .06, j = Math.sin(i * 5.1); R.push([HF.p([x * .4, .46, z * .5]), HF.p([x * 1.05, .28, z * 1.05]), V.add(HF.p([x * 1.2, -.15, z * 1.2]), [0, -.25, 0]), V.add(HF.p([x * 1.2 + j * .08, -.35, z * 1.2]), [0, -.9 - .5 * Math.abs(j), 0])]); } A.hair(B, R, { r: [.04, .032, .024, .006] });
+  // 아래로 늘어진 횡격막 자락과 튜브
+  B.group({ k: .14, kg: .12, amp: .015, freq: 3 }); for (let i = 0; i < 11; i++) { const u = i / 10 - .5; B.tube([[u * 2.6, cy - 1.35 * k, -.2], [u * 2.3, cy - 1.9 - .3 * Math.sin(i * 2.3), .05], [u * 2.1, cy - 2.3 - .45 * Math.abs(Math.sin(i * 1.7)), .1]], [.16, .12, .03]); }
+  return B;
+} };

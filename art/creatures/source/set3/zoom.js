@@ -1,0 +1,1 @@
+const {render}=require('./sculpt.js');const [id,yaw,pitch,x,y,z,sc,po]=process.argv.slice(2);const b=require('./'+id+'.js').build(po?JSON.parse(po):{}).data();render({W:1000,H:800,bodies:[b],panels:[{x:0,y:0,w:1000,h:800,yaw:+yaw,pitch:+pitch,scale:+sc,target:[+x,+y,+z],bg:'hero',lw:2,ss:3}]},'out/zoom.png')

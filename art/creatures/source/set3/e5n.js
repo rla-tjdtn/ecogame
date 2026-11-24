@@ -1,0 +1,25 @@
+// 시안3 5장 비인간형 — 층계: 등을 직각으로 꺾어 계단이 된 사람 다섯. 발판마다 아래에서 얼굴이 올려다보고, 밟으면 통째로 접혀 삼킨다.
+const { V, Frame, Body } = require('./sculpt.js'), A = require('./anat.js');
+module.exports = { id: 'e5n', name: '층계', kind: '비인간형 · 5장 심층 미로', H: 7.4, build(p = {}) {
+  const B = new Body(), w = p.walk ?? .1, N = 5, fold = p.fold ?? 0;
+  for (let i = 0; i < N; i++) {
+    const y = .95 + i * (1.22 - fold * .25), z = 2.9 - i * (1.35 - fold * .45), q = Math.sin((w + i * .21) * 6.283), x0 = .05 * Math.sin(i * 3);
+    // 발판 = 판판한 등(수평, 위를 봄)
+    B.group({ k: .16, kg: .12, amp: .008, freq: 3 }); B.box(new Frame([x0, y, z - .1], [1, 0, 0], [0, 1, 0], [0, 0, 1]), [1.4, .24, .55], .2); for (const m of [-1, 1]) { B.ell(new Frame([x0 + m * 1.15, y - .02, z - .12], [1, 0, 0], [0, 1, 0], [0, 0, 1]), [.5, .36, .6]); B.ell(new Frame([x0 + m * .3, y + .05, z - .15], [1, 0, 0], [0, 1, 0], [0, 0, 1]), [.6, .3, .6]); }; for (const m of [-1, 1]) { B.tube([[x0 + m * .25, y + .3, z - .55], [x0 + m * .75, y + .33, z - .2], [x0 + m * .6, y + .3, z + .3]], [.07, .09, .06], { k: .06 }); for (let j = 0; j < 4; j++) B.tube([[x0 + m * (.28 + j * .25), y + .24, z - .5], [x0 + m * (.32 + j * .27), y + .31, z + .02], [x0 + m * (.3 + j * .28), y + .16, z + .42]], [.03, .05, .02], { k: .07 }); }
+    B.group({ k: .05, kg: .1 }); for (let j = 0; j < 11; j++) B.ell(new Frame([x0 - 1.15 + j * .23, y + .3, z - .12 + .04 * Math.sin(j)], [1, 0, 0], [0, 1, 0], [0, 0, 1]), [.085, .075, .11]);
+    // 챌면(수직): 가슴과 갈비가 앞을 봄
+    B.group({ k: .12, kg: .2, amp: .008, freq: 3 }); B.box(new Frame([x0, y - .62, z - .55], [1, 0, 0], [0, 1, 0], [0, 0, 1]), [1.3, .55, .22], .2); for (const m of [-1, 1]) for (let j = 0; j < 4; j++) B.tube([[x0 + m * .12, y - .35 - j * .16, z - .32], [x0 + m * .6, y - .32 - j * .16, z - .28], [x0 + m * 1.2, y - .38 - j * .15, z - .42]], [.04, .05, .035], { k: .04 });
+    // 얼굴: 발판 앞 모서리 밑에서 올려다봄(뒤집혀 있거나 옆으로)
+    const fx = x0 + [-.45, .5, -.1, .55, -.4][i], HF = new Frame([fx, y - .48, z + .22], V.norm([1, .1 * Math.sin(i * 2), 0]), V.norm([.1, .92, -.35]), V.norm([0, .35, .94])).rot(0, p.headYaw || 0, [12, -24, 178, 20, -160][i]); A.face(B, HF, 1.28 + .06 * (i % 2), { jaw: [30, 4, 38, 14, 24][i], eyes: ['real', 'real', 'real', 'empty', ['shut', 'real']][i], gaunt: 1.1, teeth: 9, kg: .16 });
+    // 손: 발판 양옆을 짚고, 다음 단의 발목을 쥠
+    for (const m of [-1, 1]) { const s = [x0 + m * 1.35, y - .1, z - .1], e = [x0 + m * (1.95 + .1 * q * m), y - .75, z + .15 + .2 * q * m]; const gy = i === 0 ? .34 + Math.max(0, q * m) * .3 : y - 1.28; const wr = [x0 + m * (1.6 + .1 * Math.sin(i)), Math.max(.34, gy), z + .55 + .3 * q * m]; A.arm(B, s, e, wr, .2, { m: .9 }); if (wr[1] < .7) A.hand(B, new Frame(wr, V.norm([-m, 0, 0]), V.norm([m * .15, -.15, .97]), [0, 1, 0]), 1.15, { curl: 10, spread: 14, thin: .9 }); else A.hand(B, new Frame(wr, V.norm([0, .2, 1]), V.norm([-m * .85, -.4, .2]), V.norm([m * .4, .85, .2])), 1.05, { curl: [40, 44, 48, 52], spread: 7, thin: .9 }); }
+    // 무릎 꿇은 다리: 각 단을 받치는 기둥
+    if (i > 0) for (const m of [-1, 1]) { const h = [x0 + m * .75, y - .9, z - .6], k2 = [x0 + m * .95, Math.max(.6, y - 2.1), z - .15], an = [x0 + m * .85, Math.max(.34, y - 2.6 - i * .35), z - .95]; A.leg(B, h, k2, an, .24, { m: .9, front: [m * .2, 0, 1] }); if (an[1] < .6) A.foot(B, new Frame(an, [1, 0, 0], [0, 1, 0], V.norm([m * .2, 0, 1])), .9, {}); else A.foot(B, new Frame(an, [1, 0, 0], V.norm([0, .4, 1]), V.norm([0, -1, .4])), .85, {}); }
+  }
+  // 발판 앞 모서리를 안쪽에서 움켜쥔 손가락들
+  for (let i = 0; i < N; i++) { const y = .95 + i * (1.22 - fold * .25), z = 2.9 - i * (1.35 - fold * .45), x0 = .05 * Math.sin(i * 3); for (const m of [-1, 1]) { const x = x0 + m * (.72 + .16 * Math.sin(i * 2.1 + m)) ; if (Math.abs(x - (x0 + [-.45, .5, -.1, .55, -.4][i])) < .5) continue; const wr = [x, y - .62, z + .3]; B.group({ k: .06, kg: .1 }); B.tube([[x, y - .75, z - .4], [x, y - .75, z + .05], wr], [.12, .11, .1]); A.hand(B, new Frame(wr, V.norm([-m, 0, 0]), V.norm([0, .93, .3]), V.norm([0, -.3, .93])), 1.15, { curl: [34, 40, 38, 44], spread: 14, thin: .9, len: 1.1 }); } }
+  // 맨 위: 문처럼 벌어진 큰 입(붉은 혀가 카펫처럼 한 단 내려옴)
+  const ty = .95 + N * (1.22 - fold * .25) - .2, tz = 2.9 - N * (1.35 - fold * .45) + .35; const TF = new Frame([0, ty + .75, tz], [1, 0, 0], V.norm([0, 1, .12]), V.norm([0, -.12, 1])); A.face(B, TF, 2.7, { jaw: p.jaw ?? 44, eyes: 'real', gaunt: 1, teeth: 13, w: 1.2, mouthW: 1.2, kg: .35, iris: .012 }); B.group({ mat: 1, k: .06 }); B.tube([TF.p([0, -.9, .5]), TF.p([.02, -1.05, 1.05]), [.05, ty - .72, tz + 1.35], [.0, ty - 1.2, tz + 1.75], [-.05, ty - 1.55, tz + 2.0]], [.26, .3, .3, .24, .06]);
+  const R = []; for (let i = 0; i < 60; i++) { const u = i / 59 - .5, m = Math.sign(u), j = Math.sin(i * 5.3); R.push([TF.p([u * .5, 1.12, -.15]), TF.p([m * (.45 + Math.abs(u) * .9), .75, -.25 + Math.abs(u) * .3]), TF.p([m * (.85 + Math.abs(u) * .5), -.1, -.25]), [m * (1.2 + Math.abs(u) * .6 + j * .06), ty - 1.0, tz - .1 + j * .2], [m * (1.35 + Math.abs(u) * .5 + j * .1), ty - 2.2 - Math.abs(j) * .7, tz + .2 + j * .2]]); } A.hair(B, R, { r: [.04, .05, .045, .03, .006] });
+  return B;
+} };

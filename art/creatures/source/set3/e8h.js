@@ -1,0 +1,33 @@
+// 시안3 8장 인간형 — 누더기: 서로 다른 아이들의 몸을 꿰매 어른 크기로 만든 것. 얼굴 세 조각의 나이가 다르고, 팔다리 길이가 모두 다르다. 꿰맨 실을 질질 끈다.
+const { V, Frame, Body } = require('./sculpt.js'), A = require('./anat.js');
+module.exports = { id: 'e8h', name: '누더기', kind: '인간형 · 8장 놀이터', H: 8.8, build(p = {}) {
+  const B = new Body(), w = p.walk, S = w == null ? .4 : Math.sin(w * Math.PI * 2), I = o => new Frame(o, [1, 0, 0], [0, 1, 0], [0, 0, 1]);
+  // 꿰맨 고리: 원통 단면을 두르는 실밥
+  const seam = (c, d, r, n, o = {}) => { const F = Frame.along(c, d, [0, 0, 1]); B.group({ k: .03, kg: .05 }); const pts = []; for (let i = 0; i <= 18; i++) { const a = i / 18 * 6.283, q = r * (1 + .05 * Math.sin(i * 2.3)); pts.push(F.p([Math.cos(a) * q, .04 * Math.sin(i * 1.7), Math.sin(a) * q * (o.fz ?? 1)])); } B.tube(pts, .03, { per: 1 }); B.group({ mat: o.mat ?? 4, k: .008 }); for (let i = 0; i < n; i++) { const a = i / n * 6.283 + .2, x = Math.cos(a) * r * 1.06, z = Math.sin(a) * r * 1.06 * (o.fz ?? 1), j = .1 * Math.sin(i * 3.7); B.tube([F.p([x * .98, -.13, z * .98]), F.p([x * 1.05 + j * .2, 0, z * 1.05]), F.p([x * .98, .13, z * .98])], [.009, .012, .009], { per: 2 }); } };
+  const sew = (pts, n = 9, w = .12) => { B.group({ k: .02, kg: .03 }); B.tube(pts, .025); B.group({ mat: 4, k: .008 }); const N = pts.length - 1; for (let i = 0; i < n; i++) { const u = (i + .5) / n * N, j = Math.min(N - 1, Math.floor(u)), c = V.lerp(pts[j], pts[j + 1], u - j), d = V.norm(V.sub(pts[j + 1], pts[j])), up = V.norm([c[0] * .4, .1, 1]), s = V.norm(V.cross(d, up)), t = w * (.8 + .4 * Math.abs(Math.sin(i * 2.9))); B.tube([V.add(c, V.add(V.mul(s, -t), V.mul(up, .0))), V.add(c, V.mul(up, .045)), V.add(c, V.add(V.mul(s, t), V.mul(d, .04)))], [.009, .012, .009], { per: 2 }); } };
+  // 다리: 왼쪽 길고 앙상, 오른쪽 짧고 통통(무릎 위에서 이어 붙임, 발 크기 다름)
+  { const h = [.5, 4.0, 0], k = [.62, 2.1, .3 + S * .5], an = [.55, .36 + Math.max(0, -S) * .2, -.1 + S * .85]; A.leg(B, h, k, an, .34, { m: .85, front: [.15, 0, 1] }); A.foot(B, new Frame(an, [1, 0, 0], [0, 1, 0], V.norm([.3, 0, 1])), 1.35, {}); seam(V.lerp(h, k, .45), V.sub(k, h), .31, 14); seam(V.lerp(k, an, .5), V.sub(an, k), .22, 11); }
+  { const h = [-.5, 4.0, 0], k = [-.72, 2.55, .2 - S * .4], an = [-.66, .9 + Math.max(0, S) * .15, -.1 - S * .6]; A.leg(B, h, k, an, .44, { m: 1.15, front: [-.2, 0, 1] }); seam(V.lerp(h, k, .6), V.sub(k, h), .4, 16); B.group({ k: .06, kg: .12 }); B.tube([an, V.add(an, [0, -.5, .05])], [.2, .17]); seam(V.add(an, [0, -.1, 0]), [0, 1, 0], .21, 11); A.foot(B, new Frame(V.add(an, [0, -.55, .05]), [1, 0, 0], [0, 1, 0], V.norm([-.35, 0, 1])), .95, {}); }
+  // 몸통: 세 조각 — 부푼 배(갓난), 갈비 앙상한 가슴, 기울어진 어깨
+  A.pelvis(B, I([0, 4.1, 0]).rot(0, 0, 6), { w: .66, d: .44 }); B.group({ k: .2, kg: .22, amp: .008, freq: 4 }); B.ell(I([-.05, 4.85, .12]), [.82, .72, .68]); B.ball([-.02, 4.62, .78], .07, { op: 1, k: .05 }); B.groove([0, 4.55, .7], [0, 1, .1], .02, .04, .6, { wob: .1, bow: .3 });
+  const TF = I([.12, 6.15, -.02]).rot(4, 0, -9); A.torso(B, TF, { w: .78, d: .5, h: 1.6, n: 7, r: .05, scap: true }); seam([.02, 5.4, .05], V.norm([.16, 1, .05]), .66, 22, { fz: .85 });
+  sew([[.2, 6.95, .42], [.12, 6.4, .62], [.02, 5.9, .62], [-.1, 5.45, .66]], 12, .13); sew([[-.5, 5.3, .5], [-.35, 4.9, .74], [-.45, 4.4, .6]], 8, .12); sew([[.75, 6.8, .25], [.55, 6.5, .48], [.2, 6.4, .6]], 7, .11);
+  // 배에 꿰매진 작은 잠든 얼굴
+  A.face(B, I([.22, 4.95, .58]).rot(6, 14, -18), .68, { jaw: 4, eyes: 'sewn', gaunt: .2, age: .15, ears: false, teeth: 0, kg: .18, rid: 0, vein: false });
+  // 목(어긋남)과 머리: 큰 아이 두상, 얼굴을 세 조각으로
+  A.neck(B, [.2, 6.95, .0], [.1, 7.4, .1], .24, {}); seam([.14, 7.22, .05], V.norm([-.2, 1, .1]), .27, 13);
+  const s = 1.75, HF = I([.05, 8.05, .22]).rot(p.nod ?? 8, p.headYaw || 0, p.tilt ?? 14), hp = v => HF.p(V.mul(v, s)); A.face(B, HF, s, { jaw: p.jaw ?? 34, eyes: ['real', 'sewn'], gaunt: .7, age: .4, teeth: 9, w: 1.12, elong: 1.02, iris: .02, eyeSize: 1.3 });
+  // 벌어진 이마 조각과 봉합(얼굴을 가로지름)
+  sew([[-.3, .28, .2], [-.12, .2, .33], [.08, .16, .35], [.3, .2, .2]].map(hp), 13, .1); sew([[.02, .14, .37], [.1, .0, .37], [.16, -.12, .34], [.24, -.26, .2]].map(hp), 9, .09); sew([[-.22, -.1, .31], [-.18, -.2, .3], [-.14, -.3, .28]].map(hp), 5, .08); sew([[0, .46, -.05], [.03, .38, .22], [.02, .26, .31]].map(hp), 8, .09);
+  // 다른 아이의 얼굴 조각: 왼쪽 뺨에 덧댄 귀·입, 뒤통수 작은 얼굴
+  A.face(B, HF.at([.42 * 1.1, .05, -.12].map(v => v * 1)).rot(0, 62, -20), .95, { jaw: 22, eyes: 'real', gaunt: .4, age: .25, teeth: 6, ears: false, kg: .2, rid: 0, vein: false }); seam(hp([.2, .02, .0]), HF.d([1, 0, .25]), .42, 18);
+  B.group({ mat: 1, k: .02 }); B.tube([hp([.14, -.08, .36]), hp([.15, -.17, .37]), hp([.16, -.3, .33]), V.add(hp([.16, -.36, .31]), [0, -.25, .02])], [.04, .04, .035, .01]);
+  // 듬성한 머리카락 + 리본처럼 묶인 실
+  const R = []; for (let i = 0; i < 30; i++) { const m = i % 2 ? 1 : -1, u = i / 30, j = Math.sin(i * 5.3); R.push([hp([m * .1, .44, -.1 + u * .1]), hp([m * (.28 + j * .02), .34, -.12]), hp([m * (.42 + .04 * j), .05, -.16 + u * .12]), V.add(hp([m * .42, -.1, -.16 + u * .12]), [j * .08, -.5 - .5 * Math.abs(j), 0])]); } A.hair(B, R, { r: [.05, .05, .04, .008] }); 
+  // 팔: 왼쪽은 아주 긴 어른 팔, 오른쪽은 아이 팔 두 개를 이어 붙임(손 셋)
+  { const a = [.98, 6.75, -.05], e = [1.75, 4.95, .25 - S * .2], wr = [1.55, 2.65, 1.0 - S * .4]; A.arm(B, a, e, wr, .27, { m: .95 }); A.hand(B, new Frame(wr, [0, 0, 1], V.norm([.05, -1, .2]), [1, 0, 0]), 1.75, { curl: [14, 22, 18, 28], spread: 13, thin: .88, len: 1.15 }); seam(V.lerp(a, e, .4), V.sub(e, a), .24, 12); seam(V.lerp(e, wr, .45), V.sub(wr, e), .19, 10); seam(wr, V.sub(wr, e), .15, 9); }
+  { const a = [-.72, 7.0, 0], e = [-1.5, 6.3, .25 + S * .2], wr = [-1.35, 5.45, 1.1 + S * .2]; A.arm(B, a, e, wr, .24, { m: 1.1 }); seam(V.lerp(a, e, .5), V.sub(e, a), .23, 12); const e2 = [-1.75, 5.0, 1.65], w2 = [-1.2, 4.65, 2.35]; A.arm(B, wr, e2, w2, .17, { m: 1.0 }); seam(wr, V.sub(e2, wr), .17, 10); A.hand(B, new Frame(w2, V.norm([-.3, .9, .2]), V.norm([.55, .0, .85]), V.norm([.8, .3, -.4])), 1.0, { curl: [18, 26, 22, 34], spread: 16, thin: 1.05 }); const w3 = V.add(e, [-.3, -.75, .1]); B.group({ k: .06, kg: .1 }); B.tube([e, w3], [.15, .11]); seam(V.lerp(e, w3, .2), V.sub(w3, e), .15, 8); A.hand(B, new Frame(w3, [0, 0, 1], V.norm([-.15, -1, .1]), [-1, 0, 0]), .8, { curl: 24, spread: 12, thin: 1.05, vein: 0 }); }
+  // 끌리는 실과 바늘
+  B.group({ mat: 4, k: .006 }); B.tube([[-.45, 4.4, .62], [-.6, 3.8, .95], [-.35, 3.0, .9], [-.7, 2.0, 1.1], [-.5, 1.0, 1.0], [-.9, .15, 1.3], [-1.6, .06, 1.6]], .02); B.tube([[.55, 6.5, .5], [.75, 5.8, .8], [.6, 5.0, .75], [.85, 4.4, .95]], .02); B.group({ k: .006 }); B.cone([.85, 4.42, .95], [.95, 3.75, 1.0], .04, .006);
+  return B;
+} };
