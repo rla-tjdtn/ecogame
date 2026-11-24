@@ -69,8 +69,28 @@ function Baked.build(spec: Spec, cf: CFrame): Model
 		holder.Name = "Mesh"
 		local bb = R.bounds
 		local center = Vector3.new((bb[1] + bb[4]) / 2, (bb[2] + bb[5]) / 2 - (spec.hip + 1), (bb[3] + bb[6]) / 2)
-		for _, d in tpl:Clone():GetDescendants() do
-			if d:IsA("MeshPart") then
+		-- 모델 안의 모든 부품(몸 Body · 흰 선 Lines · 뼈대를 담은 부품)을 원래 서로의 자리 그대로 옮긴다.
+		-- 기준 = 몸 메시(가져온 메시의 가운데 = 메시 경계 가운데) → 루트 아래 바닥(hip + 1)에 맞춘다
+		local clone = tpl:Clone()
+		local parts = {}
+		local ref: BasePart? = nil
+		for _, d in clone:GetDescendants() do
+			if d:IsA("BasePart") then
+				table.insert(parts, d)
+				-- 기준 = 몸 전체를 덮는 메시: Body(예전 메시) 또는 Outline(시안 그림 텍스처 메시: 몸이 Tex 조각들로 나뉘어 있어 껍질이 몸 전체)
+				if d:IsA("MeshPart") and (ref == nil or d.Name == "Body" or (d.Name == "Outline" and (ref :: BasePart).Name ~= "Body")) then
+					ref = d
+				end
+			end
+		end
+		if ref then
+			local refCF = (ref :: BasePart).CFrame
+			local place = _root.CFrame * CFrame.new(center)
+			local rels = {}
+			for i, d in parts do
+				rels[i] = refCF:ToObjectSpace(d.CFrame)
+			end
+			for i, d in parts do
 				d.Parent = holder
 				d.Anchored = false
 				d.CanCollide = false
@@ -79,11 +99,30 @@ function Baked.build(spec: Spec, cf: CFrame): Model
 				d.Massless = true
 				d.CastShadow = false
 				d.Transparency = 1
-				d.CFrame = _root.CFrame * CFrame.new(center)
+				d.CFrame = place * rels[i]
 				local w = Instance.new("WeldConstraint")
 				w.Part0 = _root
 				w.Part1 = d
 				w.Parent = d
+			end
+		end
+		-- 시안 그림 텍스처: Tex 부품마다 미리 만든 SurfaceAppearance(색 = 발광 마스크 = 시안 그림, Shared/CreatureTex/<id>)를 붙인다
+		-- (텍스처 번호는 스크립트로 못 넣으므로 Rojo 가 플레이스에 만들어 둔 것을 복제)
+		local texRoot = ReplicatedStorage.Shared:FindFirstChild("CreatureTex")
+		local tex = texRoot and texRoot:FindFirstChild(sid)
+		if tex then
+			for _, d in holder:GetChildren() do
+				if d:IsA("MeshPart") and string.sub(d.Name, 1, 3) == "Tex" then
+					local sa = tex:FindFirstChild(d.Name)
+					if sa then
+						for _, old in d:GetChildren() do
+							if old:IsA("SurfaceAppearance") then
+								old:Destroy()
+							end
+						end
+						sa:Clone().Parent = d
+					end
+				end
 			end
 		end
 		holder.Parent = model

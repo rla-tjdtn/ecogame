@@ -9,6 +9,7 @@ local Faces = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Mon
 
 local JumpScare = {}
 JumpScare.count = 0
+JumpScare.lastCreature = nil :: any -- (테스트) 마지막 점프스케어에 띄운 3D 시안 괴물
 JumpScare.Duration = 0.9
 JumpScare.lastKind = "monster"
 
@@ -286,7 +287,97 @@ end
 -- 얼굴을 띄운다(이미 떠 있으면 무시). kind = "doppel" 이면 도플갱어 얼굴, "flower" 면 꽃괴물
 local busy = false
 export type Sprite = { url: string, offset: Vector2, size: Vector2 }
-function JumpScare.play(scream: (() -> ())?, kind: string?, sprite: Sprite?)
+
+-- ── 3D 시안 괴물 점프스케어: 잡은 괴물의 몸(검정) + 흰 선 메시를 덮침 자세로 화면 가득. 빛 없음 ──
+-- ViewportFrame 은 조명이 Ambient/LightColor 로만 정해진다: Ambient 흰색 + LightColor 검정 → 각 부품이 제 색 그대로(몸 검정, 선 흰색).
+-- 바깥 테두리: 같은 몸을 흰색으로 그린 창을 몇 픽셀씩 어긋나게 뒤에 깔아 흰 외곽선(뷰포트에는 Highlight 가 안 그려진다)
+local creatureView: Frame? = nil
+local function clearCreatureView()
+	if creatureView then
+		creatureView:Destroy()
+		creatureView = nil
+	end
+end
+local function makeViewport(meshFolder: Instance, pose: { CFrame }?, mode: string, cam: CFrame): ViewportFrame
+	local vp = Instance.new("ViewportFrame")
+	vp.BackgroundTransparency = 1
+	vp.Size = UDim2.fromScale(1, 1)
+	vp.Ambient = Color3.new(1, 1, 1)
+	vp.LightColor = Color3.new(0, 0, 0)
+	local wm = Instance.new("WorldModel")
+	wm.Parent = vp
+	local copy = meshFolder:Clone()
+	for _, d in copy:GetDescendants() do
+		if d:IsA("WeldConstraint") then
+			d:Destroy()
+		elseif d:IsA("BasePart") then
+			d.Anchored = true
+			if d:IsA("MeshPart") then
+				local isLine = string.find(d.Name, "Lines", 1, true) ~= nil or string.find(d.Name, "Outline", 1, true) ~= nil
+				d.Transparency = if mode == "outline" and isLine then 1 else 0
+				d.Material = Enum.Material.SmoothPlastic
+				d.Color = if mode == "outline" then Color3.new(1, 1, 1) elseif isLine then Color3.fromRGB(245, 243, 236) else Color3.new(0, 0, 0)
+			else
+				d.Transparency = 1
+			end
+		elseif d:IsA("Bone") and pose then
+			local k = tonumber(string.match(d.Name, "^B(%d+)$"))
+			if k and pose[k] then
+				d.Transform = pose[k]
+			end
+		end
+	end
+	copy.Parent = wm
+	local camera = Instance.new("Camera")
+	camera.FieldOfView = 50
+	camera.CFrame = cam
+	camera.Parent = vp
+	vp.CurrentCamera = camera
+	return vp
+end
+function JumpScare.buildCreature(model: Model, pose: { CFrame }?): boolean
+	clearCreatureView()
+	local mesh = model:FindFirstChild("Mesh")
+	local body: BasePart? = nil
+	if mesh then
+		for _, d in mesh:GetDescendants() do
+			if d:IsA("MeshPart") and (body == nil or string.find(d.Name, "Body", 1, true)) then
+				body = d
+			end
+		end
+	end
+	if not mesh or not body then
+		return false
+	end
+	-- 얼굴·상체를 가까이: 몸 높이의 위쪽 3분의 1을 앞(-Z 쪽)에서
+	local bcf, size = (body :: BasePart).CFrame, (body :: BasePart).Size
+	local target = bcf * Vector3.new(0, size.Y * 0.22, 0)
+	local dist = math.max(size.Y * 0.55, math.max(size.X, size.Z) * 0.9)
+	local cam = CFrame.lookAt(target + bcf.LookVector * dist + bcf.UpVector * size.Y * 0.04, target)
+	local holder = Instance.new("Frame")
+	holder.Name = "CreatureView"
+	holder.BackgroundTransparency = 1
+	holder.AnchorPoint = Vector2.new(0.5, 0.5)
+	holder.Position = UDim2.fromScale(0.5, 0.5)
+	holder.Size = UDim2.fromScale(1.5, 1.5)
+	holder.ZIndex = 5
+	-- (흰 껍질 외곽선(Outline)이 있는 메시는 그것이 테두리를 그린다. 없는 예전 메시만 흰 실루엣을 어긋나게 깔아 테두리)
+	local hasShell = mesh:FindFirstChild("Outline", true) ~= nil
+	for _, o in (if hasShell then {} else { { -3, 0 }, { 3, 0 }, { 0, -3 }, { 0, 3 }, { -2, -2 }, { 2, 2 }, { -2, 2 }, { 2, -2 } }) do
+		local vp = makeViewport(mesh, pose, "outline", cam)
+		vp.Position = UDim2.fromOffset(o[1], o[2])
+		vp.ZIndex = 5
+		vp.Parent = holder
+	end
+	local main = makeViewport(mesh, pose, "art", cam)
+	main.ZIndex = 6
+	main.Parent = holder
+	holder.Parent = face
+	creatureView = holder
+	return true
+end
+
+function JumpScare.play(scream: (() -> ())?, kind: string?, sprite: Sprite?, creatureModel: Model?, creaturePose: { CFrame }?)
 	if busy then
 		return
 	end
@@ -294,8 +385,17 @@ function JumpScare.play(scream: (() -> ())?, kind: string?, sprite: Sprite?)
 	JumpScare.count += 1
 
 	gui.Enabled = true
-	creatureImg.Visible = sprite ~= nil
-	if sprite then
+	clearCreatureView()
+	local has3D = creatureModel ~= nil and JumpScare.buildCreature(creatureModel :: Model, creaturePose)
+	creatureImg.Visible = sprite ~= nil and not has3D
+	if has3D then
+		for _, c in face:GetChildren() do
+			if c:IsA("Frame") and c.Name ~= "CreatureView" then
+				c:Destroy()
+			end
+		end
+		JumpScare.lastCreature = (creatureModel :: Model):GetAttribute("Creature")
+	elseif sprite then
 		for _, c in face:GetChildren() do
 			if c:IsA("Frame") then
 				c:Destroy()
@@ -328,6 +428,7 @@ function JumpScare.play(scream: (() -> ())?, kind: string?, sprite: Sprite?)
 		if t >= JumpScare.Duration then
 			conn:Disconnect()
 			gui.Enabled = false
+			clearCreatureView()
 			face.Position = UDim2.fromScale(0.5, 0.5)
 			busy = false
 		end
@@ -335,7 +436,7 @@ function JumpScare.play(scream: (() -> ())?, kind: string?, sprite: Sprite?)
 end
 
 function JumpScare.state()
-	return { count = JumpScare.count, showing = gui.Enabled, kind = JumpScare.lastKind }
+	return { count = JumpScare.count, showing = gui.Enabled, kind = JumpScare.lastKind, creature = JumpScare.lastCreature, view3d = creatureView ~= nil }
 end
 
 return JumpScare

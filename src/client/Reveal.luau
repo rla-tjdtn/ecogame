@@ -99,9 +99,15 @@ local function show(e: Entry, on: boolean)
 	for _, p in e.parts do
 		if p.Parent and p.Name ~= "Eye" then -- (도플갱어 눈은 DoppelFx 가 따로 빛나게 한다)
 			if on and e.dark then
-				-- 3D 시안 괴물: 메시 정점 색(검은 몸 + 시안 흰 선)을 괴물 몸에 붙은 빛으로 비추고 + 흰 윤곽선(Highlight)
-				p.Material = Enum.Material.SmoothPlastic
-				p.Color = Color3.new(1, 1, 1)
+				-- 3D 시안 괴물(빛 없음): 시안 흰 선 메시(Lines)는 흰 네온이라 캄캄해도 스스로 보이고,
+				-- 몸(Body)은 검게 두어 뒤쪽 선을 가린다. 바깥 테두리는 흰 윤곽선(Highlight)
+				if string.find(p.Name, "Lines", 1, true) or string.find(p.Name, "Outline", 1, true) then
+					p.Material = Enum.Material.Neon
+					p.Color = LINE
+				else
+					p.Material = Enum.Material.SmoothPlastic
+					p.Color = Color3.new(0, 0, 0)
+				end
 				p.Transparency = 0
 			elseif on then
 				p.Material = Enum.Material.Neon
@@ -117,12 +123,6 @@ local function show(e: Entry, on: boolean)
 	end
 	if e.hl then
 		e.hl.Enabled = on
-		local adorn = e.hl.Adornee
-		local root = if adorn and adorn:IsA("Model") then adorn.PrimaryPart else nil
-		local light = root and root:FindFirstChild("RevealLight") :: PointLight?
-		if light then
-			light.Enabled = on
-		end
 	end
 end
 
@@ -173,27 +173,19 @@ local function collect(m: Model, e: Entry)
 				table.insert(e.parts, d)
 			end
 		end
-		local hl = Instance.new("Highlight")
-		hl.Name = "RevealOutline"
-		hl.Adornee = m
-		hl.FillTransparency = 1
-		hl.OutlineColor = Color3.new(1, 1, 1)
-		hl.OutlineTransparency = 0.05
-		hl.DepthMode = Enum.HighlightDepthMode.Occluded
-		hl.Enabled = false
-		hl.Parent = m
-		e.hl = hl
-		-- 맵은 캄캄하다(Lighting 0): 괴물 몸만 비추는 빛(맵 벽은 투명이라 비춰지지 않는다)
-		local root = m.PrimaryPart
-		if root and not root:FindFirstChild("RevealLight") then
-			local size = m:GetExtentsSize()
-			local light = Instance.new("PointLight")
-			light.Name = "RevealLight"
-			light.Range = math.clamp(math.max(size.X, size.Y, size.Z) * 1.2, 8, 30)
-			light.Brightness = 3
-			light.Shadows = false
-			light.Enabled = false
-			light.Parent = root
+		-- 외곽선: 메시에 흰 껍질(Outline: 부풀려 뒤집은 몸)이 있으면 그것이 바깥 테두리와 부위가 겹치는 테두리를 그린다(시안처럼, 가늘게).
+		-- 껍질이 없는 예전 메시만 로블록스 윤곽선(Highlight)으로 대신
+		if not (m:FindFirstChild("Mesh") :: Instance):FindFirstChild("Outline", true) then
+			local hl = Instance.new("Highlight")
+			hl.Name = "RevealOutline"
+			hl.Adornee = m
+			hl.FillTransparency = 1
+			hl.OutlineColor = Color3.new(1, 1, 1)
+			hl.OutlineTransparency = 0.4
+			hl.DepthMode = Enum.HighlightDepthMode.Occluded
+			hl.Enabled = false
+			hl.Parent = m
+			e.hl = hl
 		end
 	else
 		for _, d in m:GetDescendants() do

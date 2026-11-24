@@ -32,7 +32,7 @@ async function upload(id) {
     if (ids[id] && !process.env.FORCE) { console.log(id, 'already', ids[id]); continue; }
     try {
       const a = await upload(id);
-      ids[id] = Number(a); fs.writeFileSync(IDS_FILE, JSON.stringify(ids, null, 1));
+      ids[id] = Number(a); const cur = JSON.parse(fs.existsSync(IDS_FILE) ? fs.readFileSync(IDS_FILE, 'utf8') : '{}'); cur[id] = Number(a); fs.writeFileSync(IDS_FILE, JSON.stringify(cur, null, 1)); // (여러 업로드가 동시에 돌아도 서로 덮지 않게 다시 읽어 합친다)
       const lf = path.join(LUAD, id + '.luau');
       if (fs.existsSync(lf)) fs.writeFileSync(lf, fs.readFileSync(lf, 'utf8').replace(/meshId = \d+,/, `meshId = ${a},`));
       console.log(id, 'asset', a);

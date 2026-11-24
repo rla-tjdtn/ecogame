@@ -2511,27 +2511,51 @@ local function creatureTest()
 		mm.startAt = os.clock() + 1e6 -- (테스트 동안 스스로 생각하지 않게: 아래에서 직접 걷게 한다)
 		local at = mm.root.Position
 		-- 플레이어 자리: 괴물에서 6~16 스터드, 벽에 가리지 않는 이동 지점(벽 속·벽 너머에 세우지 않는다)
-		local spot, walkTo = nil, nil
+		local spots, walkTo = {}, nil
 		local info = Round.info :: any
 		for _, n in info.nodes do
 			local d = (n - at).Magnitude
 			if d >= 6 and d <= 16 and math.abs(n.Y - at.Y) < 6 and mm:lineOfSight(n + Vector3.new(0, 1, 0)) then
-				if not spot then
-					spot = n
-				elseif not walkTo and (n - spot).Magnitude > 8 then
+				table.insert(spots, n)
+				if not walkTo and #spots > 1 and (n - spots[1]).Magnitude > 8 then
 					walkTo = n
 				end
 			end
 		end
-		place(p, (spot or (at + mm.root.CFrame.LookVector * 8)) + Vector3.new(0, 3, 0))
-		task.wait(0.6)
-		ask(p, "pulseAt", root(p).Position + Vector3.new(0, 1.5, 0))
+		local spot = spots[1]
+		-- 음파를 쏴서 이 괴물이 드러나는지: 한 자리에서 안 되면(큰 몸·기둥에 가림) 다른 자리에서 다시(최대 3곳)
+		for try = 1, math.max(1, math.min(3, #spots)) do
+			local sp = spots[try] or (at + mm.root.CFrame.LookVector * 8)
+			place(p, sp + Vector3.new(0, 3, 0))
+			task.wait(0.6)
+			ask(p, "resetCooldown")
+			ask(p, "pulseAt", root(p).Position + Vector3.new(0, 1.5, 0))
+			local got = waitFor(function()
+				local r = ask(p, "revealedModel", mm.model)
+				return r ~= nil and r.active and r.visible > 0
+			end, 2.5)
+			if got then
+				spot = sp
+				break
+			end
+		end
 		-- 괴물을 길찾기로 근처 다른 지점까지 걷게 한다
 		mm.hum.WalkSpeed = 8
-		local goal = walkTo or spot or (at - mm.root.CFrame.LookVector * 8)
-		local okPath = mm:pathTo(goal)
+		-- 걸어갈 곳: 자기 영역 안에서 8 스터드 넘게 떨어진 이동 지점(좁은 자리의 서브 괴물도 실제로 걷게)
+		local goal = walkTo
+		if not goal then
+			for _ = 1, 20 do
+				local n = mm:randomNode()
+				if (n - at).Magnitude > 8 then
+					goal = n
+					break
+				end
+			end
+		end
+		goal = goal or spot or (at - mm.root.CFrame.LookVector * 8)
+		local okPath = mm:pathTo(goal :: Vector3)
 		local t1 = os.clock()
-		while os.clock() - t1 < 3.5 do
+		while os.clock() - t1 < 5 do
 			if okPath then
 				mm:follow()
 			else
@@ -3329,6 +3353,121 @@ task.spawn(function()
 				check("has mesh part", meshes > 0, meshes .. " " .. verts)
 				check("has bones", bones > 10, tostring(bones))
 				check("skinned", skinned > 0, tostring(skinned))
+				-- 시안 흰 선 메시(Lines)가 몸(Body)과 따로 들어와 둘 다 스킨인가
+				local names = {}
+				for _, d in asset:GetDescendants() do
+					if d:IsA("MeshPart") then
+						table.insert(names, d.Name .. (if d.HasSkinnedMesh then "(skinned)" else "(rigid)"))
+					end
+				end
+				check("body + white line meshes both skinned", meshes >= 2 and skinned >= 2, table.concat(names, ", "))
+				-- 시안 그림 텍스처(Tex* 부품): 같은 이름의 SurfaceAppearance 가 Shared/CreatureTex/<id> 에 미리 있나(Baked 가 복제해 붙인다)
+				local tex, found, info = 0, 0, ""
+				local texRoot = ReplicatedStorage.Shared:FindFirstChild("CreatureTex")
+				for _, d in asset:GetDescendants() do
+					if d:IsA("MeshPart") and string.sub(d.Name, 1, 3) == "Tex" then
+						tex += 1
+						local hit = nil
+						if texRoot then
+							for _, fo in texRoot:GetChildren() do
+								local sa = fo:FindFirstChild(d.Name)
+								if sa and sa:IsA("SurfaceAppearance") then
+									hit = sa
+								end
+							end
+						end
+						if hit then
+							found += 1
+							if found <= 2 then
+								info ..= string.format("%s mask=%s es=%s | ", d.Name, tostring((hit :: any).EmissiveMaskContent and (hit :: any).EmissiveMaskContent.Uri), tostring((hit :: any).EmissiveStrength))
+							end
+						end
+					end
+				end
+				if tex > 0 then
+					check("texture parts have prebuilt SurfaceAppearance", found == tex, string.format("%d/%d %s", found, tex, info))
+				end
+			end
+		elseif args.Test == "scarelook" then
+			-- (화면 확인용) CREATURE=챕터: 그 챕터 시안 괴물 둘의 3D 점프스케어를 차례로 15초씩(소리 없음)
+			local ps = readyPlayers(1)
+			local p = ps and ps[1]
+			local ch = tonumber(args.Creature) or 4
+			local idx = 1
+			for i, st in Config.Stages do
+				if st.Id == ch then
+					idx = i
+				end
+			end
+			Round.startStage(idx)
+			readyPlayers(1)
+			task.wait(3)
+			local seen, n = {}, 0
+			for _, mm in Round.monsters do
+				local cid = mm.model:GetAttribute("Creature")
+				if p and typeof(cid) == "string" and not seen[cid] and n < 2 then
+					seen[cid] = true
+					n += 1
+					mm.startAt = os.clock() + 1e6
+					local st = ask(p, "scareLook", cid)
+					check(cid .. " jumpscare shows its own 3D body + white lines", typeof(st) == "table" and st.view3d == true and st.creature == cid, if typeof(st) == "table" then string.format("view3d %s creature %s", tostring(st.view3d), tostring(st.creature)) else tostring(st))
+					task.wait(16)
+				end
+			end
+		elseif args.Test == "creaturelook" then
+			-- (화면 확인용) CREATURE=챕터: 그 챕터 첫 시안 괴물을 플레이어 정면 9 스터드에 세우고 음파로 드러낸 채 20초(걷기 제자리)
+			local ps = readyPlayers(1)
+			local p = ps and ps[1]
+			local ch = tonumber(args.Creature) or 4
+			local idx = 1
+			for i, st in Config.Stages do
+				if st.Id == ch then
+					idx = i
+				end
+			end
+			Round.startStage(idx)
+			readyPlayers(1)
+			task.wait(2)
+			local m = Round.monsters[1]
+			check("creature present", m ~= nil and m.model:GetAttribute("Rig") == 4, m and m.model.Name)
+			if p and m then
+				m.startAt = os.clock() + 1e6
+				-- (괴물 크기에 맞춰 거리: 큰 괴물은 더 뒤에서 전신이 들어오게)
+				local ext = m.model:GetExtentsSize()
+				local dMin = math.max(8, math.max(ext.X, ext.Y, ext.Z) * 1.1)
+				local spot = nil
+				for _, n in (Round.info :: any).nodes do
+					local d = (n - m.root.Position).Magnitude
+					if d >= dMin and d <= dMin + 6 and math.abs(n.Y - m.root.Position.Y) < 4 and m:lineOfSight(n + Vector3.new(0, 1, 0)) then
+						spot = n
+						break
+					end
+				end
+				if spot then
+					place(p, spot + Vector3.new(0, 3, 0), m.root.Position)
+					m.model:PivotTo(CFrame.lookAt(m.root.Position, Vector3.new(spot.X, m.root.Position.Y, spot.Z)))
+				end
+				-- 카메라를 괴물 쪽으로 고정(머리 높이에서 괴물 가슴께를 본다), 25초 동안 4초마다 음파 → 계속 드러나 있게
+				local mp = m.root.Position
+				local eye = root(p).Position + Vector3.new(0, 1.6, 0)
+				ask(p, "lookAt", { eye, Vector3.new(mp.X, mp.Y + 1.5, mp.Z) })
+				for _ = 1, 7 do
+					ask(p, "resetCooldown")
+					ask(p, "pulseAt", root(p).Position + Vector3.new(0, 1.5, 0))
+					task.wait(4)
+				end
+				-- 가까이(약 5 스터드)에서 한 번 더: 얼굴 디테일 확인
+				local dir = (eye - Vector3.new(mp.X, eye.Y, mp.Z))
+				local close = Vector3.new(mp.X, eye.Y, mp.Z) + (if dir.Magnitude > 0.1 then dir.Unit else Vector3.zAxis) * 5
+				ask(p, "lookAt", { close + Vector3.new(0, 1.5, 0), Vector3.new(mp.X, mp.Y + 2.2, mp.Z) })
+				for _ = 1, 4 do
+					ask(p, "resetCooldown")
+					ask(p, "pulseAt", root(p).Position + Vector3.new(0, 1.5, 0))
+					task.wait(4)
+				end
+				local rv = ask(p, "revealedModel", m.model)
+				ask(p, "lookAt", nil)
+				check("creature revealed for the screenshot", rv ~= nil and rv.active and rv.visible > 0, rv and rv.visible)
 			end
 		elseif args.Test == "revealall" then
 			revealAll()

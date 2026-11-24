@@ -1,7 +1,7 @@
 --!strict
 -- 3D 챕터 괴물(Rig = 4, 메시 있음): 시안 조각 몸을 그대로 옮긴 뼈 메시의 뼈(B1..Bn)를 디자인 자세 프레임으로 움직인다.
 --  · 걷기 8장 / 추격 8장(실제 이동 거리로 위상 → 미끄러지지 않음), 서 있으면 걷기 0, 쫓다가 바로 앞이면 덮침
---  · 프레임 사이·자세 사이는 부드럽게 섞는다(사원수 nlerp + 이동 lerp). 반 주기마다 걸음 소리(onStep)
+--  · 프레임 사이·자세 사이는 부드럽게 섞는다(미리 만든 CFrame 을 엔진 Lerp 로). 반 주기마다 걸음 소리(onStep)
 -- 데이터: Shared/CreatureRigs/<id> (art/creatures/source/game/rig.js 가 만든다)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,6 +17,7 @@ type Body = {
 	model: Model,
 	root: BasePart,
 	R: any,
+	C: Compiled,
 	bones: { Bone },
 	hip: number,
 	phase: number,
@@ -34,6 +35,64 @@ local function rigData(id: string): any
 	return if ms and ms:IsA("ModuleScript") then require(ms) :: any else nil
 end
 
+-- 디자인별 자세를 한 번만 CFrame 으로 바꿔 둔다(괴물 여러 마리가 같이 쓴다). 모든 자세에서 거의 안 움직이는 뼈는 static
+type Compiled = { walk: { { CFrame } }, chase: { { CFrame } }, attack: { CFrame }, live: { number }, static: { number } }
+local compiled: { [string]: Compiled } = {}
+local function toCF(f: { number }?): CFrame
+	if not f then
+		return CFrame.identity
+	end
+	local l = math.sqrt(f[1] * f[1] + f[2] * f[2] + f[3] * f[3] + f[4] * f[4])
+	if l < 1e-6 then
+		l = 1
+	end
+	return CFrame.new(f[5], f[6], f[7], f[1] / l, f[2] / l, f[3] / l, f[4] / l)
+end
+local function compile(id: string, R: any): Compiled
+	local c = compiled[id]
+	if c then
+		return c
+	end
+	local nb = #R.bones
+	local function conv(frames: { any }): { { CFrame } }
+		local out = {}
+		for i, fr in frames do
+			local row = table.create(nb)
+			for k = 1, nb do
+				row[k] = toCF(fr[k])
+			end
+			out[i] = row
+		end
+		return out
+	end
+	local walk, chase = conv(R.walk), conv(R.chase)
+	local attack = conv({ R.attack })[1]
+	local live, static = {}, {}
+	for k = 1, nb do
+		local base = walk[1][k]
+		local moves = false
+		local function far(cf: CFrame): boolean
+			local d = base:ToObjectSpace(cf)
+			local _, ang = d:ToAxisAngle()
+			return d.Position.Magnitude > 0.004 or math.abs(ang) > 0.01
+		end
+		for i = 1, #walk do
+			if far(walk[i][k]) or far(chase[i][k]) then
+				moves = true
+				break
+			end
+		end
+		if not moves and far(attack[k]) then
+			moves = true
+		end
+		table.insert(if moves then live else static, k)
+	end
+	c = { walk = walk, chase = chase, attack = attack, live = live, static = static }
+	compiled[id] = c
+	return c
+end
+
+RigAnim.why = {} :: { [string]: string } -- (테스트) 몸 만들기 실패 이유
 local function build(model: Model): Body?
 	local root = model.PrimaryPart
 	local id = model:GetAttribute("Creature")
@@ -42,6 +101,7 @@ local function build(model: Model): Body?
 	end
 	local R = rigData(id)
 	if not R then
+		RigAnim.why[id] = "no rig data"
 		return nil
 	end
 	local bones: { Bone } = {}
@@ -59,10 +119,26 @@ local function build(model: Model): Body?
 		n += 1
 	end
 	if n == 0 then
+		local names = {}
+		for _, d in model:GetDescendants() do
+			if d:IsA("Bone") and #names < 5 then
+				table.insert(names, d.Name)
+			end
+		end
+		RigAnim.why[id] = "no B<n> bones (" .. table.concat(names, ",") .. ")"
 		return nil -- (아직 복제되지 않음)
 	end
 	RigAnim.stats[id] = RigAnim.stats[id] or { frames = 0, steps = 0, bones = n }
+	local C = compile(id, R)
+	-- 움직이지 않는 뼈는 처음 한 번만 자리 잡는다
+	for _, k in C.static do
+		local bone = bones[k]
+		if bone then
+			bone.Transform = C.walk[1][k]
+		end
+	end
 	return {
+		C = C,
 		model = model,
 		root = root,
 		R = R,
@@ -80,19 +156,6 @@ local function approach(cur: number, target: number, rate: number, dt: number): 
 	return cur + (target - cur) * (1 - math.exp(-rate * dt))
 end
 
--- 두 프레임(뼈 하나: qx,qy,qz,qw,tx,ty,tz)을 t 로 섞는다
-local function mix(a: { number }, b: { number }, t: number, out: { number })
-	local d = a[1] * b[1] + a[2] * b[2] + a[3] * b[3] + a[4] * b[4]
-	local s = if d < 0 then -1 else 1
-	for k = 1, 4 do
-		out[k] = a[k] + (b[k] * s - a[k]) * t
-	end
-	for k = 5, 7 do
-		out[k] = a[k] + (b[k] - a[k]) * t
-	end
-end
-local REST = { 0, 0, 0, 1, 0, 0, 0 }
-local A, B, C, D = table.create(7, 0), table.create(7, 0), table.create(7, 0), table.create(7, 0)
 
 local function update(b: Body, dt: number)
 	local R = b.R
@@ -125,10 +188,10 @@ local function update(b: Body, dt: number)
 	if vis and not vis(b.model) then
 		return -- (몸이 투명하다: 걸음 소리 박자와 섞기 비율만 이어 간다 → 드러나는 순간 자세가 튀지 않는다)
 	end
-	-- 거리별 갱신 간격(멀면 뼈를 덜 자주): 가까이 매 프레임, 35 스터드 밖 2프레임, 70 밖 3프레임, 140 밖 멈춤
+	-- 거리별 갱신 간격(멀면 뼈를 덜 자주): 15 스터드 안 매 프레임, 15 밖 2프레임, 70 밖 3프레임, 140 밖 멈춤
 	local cam = workspace.CurrentCamera
 	local dist = if cam then (cam.CFrame.Position - b.root.Position).Magnitude else 0
-	local every = if dist > 140 then 0 elseif dist > 70 then 3 elseif dist > 35 then 2 else 1
+	local every = if dist > 140 then 0 elseif dist > 70 then 3 elseif dist > 15 then 2 else 1
 	if every == 0 then
 		return
 	end
@@ -146,41 +209,43 @@ local function update(b: Body, dt: number)
 	local E = 0.01
 	local useW, useC = cw < 1 - E, cw > E
 	local still = mw < 1 - E
-	local WC, CC, WS, CS = R.walk, R.chase, R.walk[1], R.chase[1]
-	for k, bone in pairs(b.bones) do
-		local P: { number }
-		if useW and useC then
-			mix(WC[i0][k], WC[i1][k], t, A)
-			mix(CC[i0][k], CC[i1][k], t, B)
-			mix(A, B, cw, C)
-			P = C
-		elseif useC then
-			mix(CC[i0][k], CC[i1][k], t, C)
-			P = C
-		else
-			mix(WC[i0][k], WC[i1][k], t, C)
-			P = C
-		end
-		if still then
+	-- 엔진의 CFrame:Lerp 로 섞는다(Lua 숫자 섞기보다 훨씬 싸다). 움직이는 뼈(live)만
+	local Cc = b.C
+	local WC, CC, WS, CS, AT = Cc.walk, Cc.chase, Cc.walk[1], Cc.chase[1], Cc.attack
+	local W0, W1, C0, C1 = WC[i0], WC[i1], CC[i0], CC[i1]
+	local bones = b.bones
+	local useA = aw > E
+	for _, k in Cc.live do
+		local bone = bones[k]
+		if bone then
+			local m: CFrame
 			if useW and useC then
-				mix(WS[k], CS[k], cw, D)
-				mix(D, P, mw, A)
+				m = W0[k]:Lerp(W1[k], t):Lerp(C0[k]:Lerp(C1[k], t), cw)
+			elseif useC then
+				m = C0[k]:Lerp(C1[k], t)
 			else
-				mix(if useC then CS[k] else WS[k], P, mw, A)
+				m = W0[k]:Lerp(W1[k], t)
 			end
-			P = A
+			if still then
+				local s0 = if useW and useC then WS[k]:Lerp(CS[k], cw) elseif useC then CS[k] else WS[k]
+				m = s0:Lerp(m, mw)
+			end
+			if useA then
+				m = m:Lerp(AT[k], aw)
+			end
+			bone.Transform = m
 		end
-		if aw > E then
-			mix(P, R.attack[k] or REST, aw, B)
-			P = B
-		end
-		local l = math.sqrt(P[1] * P[1] + P[2] * P[2] + P[3] * P[3] + P[4] * P[4])
-		if l < 1e-6 then
-			l = 1
-		end
-		bone.Transform = CFrame.new(P[5], P[6], P[7], P[1] / l, P[2] / l, P[3] / l, P[4] / l)
 	end
 	b.stat.frames += 1
+end
+
+-- (점프스케어) 이 디자인의 덮침 자세: 뼈 번호 → Transform
+function RigAnim.attackPose(id: string): { CFrame }?
+	local R = rigData(id)
+	if not R then
+		return nil
+	end
+	return compile(id, R).attack
 end
 
 local hasCache: { [Model]: { t: number, v: boolean } } = {}
@@ -208,7 +273,11 @@ function RigAnim.step(model: Model, dt: number)
 		if f and os.clock() - f < 1 then
 			return
 		end
-		local nb = build(model)
+		local okB, nbOrErr = pcall(build, model)
+		local nb = if okB then nbOrErr else nil
+		if not okB then
+			RigAnim.why[tostring(model:GetAttribute("Creature"))] = "build error: " .. tostring(nbOrErr)
+		end
 		if not nb then
 			failedAt[model] = os.clock()
 			return

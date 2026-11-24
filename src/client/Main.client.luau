@@ -5,6 +5,7 @@
 
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -64,7 +65,21 @@ end
 -- 점프스케어: 잡은 괴물의 자기 괴성 + (시안 그림 괴물이면) 그 괴물의 덮침 그림
 local function playScare(data: any)
 	local sprite = nil
+	-- 잡은 3D 시안 괴물(이 클라이언트의 그 괴물 모델): 몸 + 흰 선 메시를 덮침 자세로
+	local cModel: Model? = nil
+	local cPose = nil
 	if typeof(data.creature) == "string" then
+		for _, inst in CollectionService:GetTagged(Config.Tags.Monster) do
+			if inst:IsA("Model") and inst:GetAttribute("Creature") == data.creature and inst:FindFirstChild("Mesh") then
+				cModel = inst
+				break
+			end
+		end
+		if cModel then
+			cPose = RigAnim.attackPose(data.creature)
+		end
+	end
+	if not cModel and typeof(data.creature) == "string" then
 		local url, off, size = SpriteAnim.attackFrame(data.creature)
 		if url and off and size then
 			sprite = { url = url, offset = off, size = size }
@@ -77,7 +92,7 @@ local function playScare(data: any)
 			elseif data.why == "flower" then "Flower"
 			else tostring((math.max(1, si) - 1) % 5 + 1)
 		Audio.play(Audio.voiceName(voice, "Scream") or "MonsterAlert", nil, 0.03, 0.8)
-	end, data.why, sprite)
+	end, data.why, sprite, cModel, cPose)
 end
 Pulses.onStart = Perf.wrap("pulse.onStart", function(origin: Vector3)
 	local t0 = os.clock()
@@ -913,6 +928,34 @@ task.spawn(function()
 			return MobileUI.state()
 		elseif cmd == "reveal" then
 			return Reveal.count()
+		elseif cmd == "scareLook" then
+			-- (화면 확인) arg = 괴물 id: 그 3D 시안 괴물 점프스케어를 소리 없이 15초 동안 띄운다
+			local model: Model? = nil
+			for _, inst in CollectionService:GetTagged(Config.Tags.Monster) do
+				if inst:IsA("Model") and inst:GetAttribute("Creature") == arg and inst:FindFirstChild("Mesh") then
+					model = inst
+				end
+			end
+			if not model then
+				return false
+			end
+			local d0 = JumpScare.Duration
+			JumpScare.Duration = 15
+			JumpScare.play(nil, "monster", nil, model, RigAnim.attackPose(arg :: string))
+			task.delay(16, function()
+				JumpScare.Duration = d0
+			end)
+			return JumpScare.state()
+		elseif cmd == "lookAt" then
+			-- (테스트·화면 확인) 카메라를 from 에서 to 쪽으로 고정. arg = { from, to } 또는 nil(원래대로)
+			local cam = workspace.CurrentCamera
+			if typeof(arg) == "table" then
+				cam.CameraType = Enum.CameraType.Scriptable
+				cam.CFrame = CFrame.lookAt(arg[1], arg[2])
+			else
+				cam.CameraType = Enum.CameraType.Custom
+			end
+			return true
 		elseif cmd == "revealedModel" then
 			-- (테스트) 이 괴물이 지금 음파에 드러나 보이는가 + 보이는 부품 수
 			local mdl = arg :: Model
@@ -931,7 +974,7 @@ task.spawn(function()
 				RigAnim.reset()
 				return true
 			end
-			return CreatureAnim.stats[arg] or RigAnim.stats[arg] or require(script.Parent:WaitForChild("SpriteAnim")).stats[arg]
+			return CreatureAnim.stats[arg] or RigAnim.stats[arg] or require(script.Parent:WaitForChild("SpriteAnim")).stats[arg] or { frames = 0, steps = 0, err = "no stats: " .. tostring(RigAnim.why[arg]) }
 		elseif cmd == "anim" then
 			-- (테스트) 괴물 몸 움직임 측정: 디딘 발 미끄러짐, 걸음 수, 골반 오르내림, 척추 비틀림, 머리 지연, 실제 발소리 수
 			local s = MonsterAnim.summary()
