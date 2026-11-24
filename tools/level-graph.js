@@ -481,7 +481,7 @@ function drawRoutes(R, out) {
 	const ox = (f) => (G.stacked ? f * (PW + GAP) : 0);
 	const W = floors.length * PW + (floors.length - 1) * GAP;
 	let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${PH + 70}" style="background:#000"><rect width="100%" height="100%" fill="#000"/>`;
-	const wallAt = (f, i, j) => { const c = G.ch(G.stacked ? f : 0, i, j); return c === "#" || c === "o"; };
+	const wallAt = (f, i, j) => { const c = G.ch(G.stacked ? f : 0, i, j); return c === "#" || c === "o" || c === "_"; };
 	for (const f of floors) {
 		if (G.stacked) svg += `<text x="${ox(f) + 6}" y="${PH + 22}" fill="#9cf" font-size="18" font-family="sans-serif" font-weight="bold">${f + 1}층</text>`;
 		for (let j = 0; j < G.H; j++) for (let i = 0; i < G.W; i++) {

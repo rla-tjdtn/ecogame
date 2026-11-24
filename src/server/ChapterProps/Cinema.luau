@@ -121,7 +121,7 @@ function P.Screen(ctx, i: number, j: number)
 	local cf = againstWall(ctx, i, j, Vector3.new(0, 0, -1))
 	local m = model(ctx, "Screen")
 	local z = T / 2 - 0.3
-	local sh = ctx.H - 4.5
+	local sh = (if ctx.ceilAt then ctx.ceilAt(i, j) else ctx.H) - 4.5 -- (상영관은 두 층 높이: 지붕 아래까지 큰 스크린)
 	local cy = 2.5 + sh / 2
 	if ctx.hash(i, j, 101) < 0.25 then
 		-- 찢어져 늘어진 막: 위쪽 반만 + 아래로 기울어진 조각
@@ -426,7 +426,11 @@ end
 function P.Projector(ctx, i: number, j: number)
 	local p = base(ctx, i, j)
 	-- 로컬 -Z = 영사창(상영관 쪽 벽): 북쪽 벽이 있으면 북쪽, 아니면 남쪽(1관·5관 영사실은 남쪽 상영관을 본다)
-	local dz = if ctx.isWall(i, j - 1) or not ctx.isWall(i, j + 1) then -1 else 1
+	-- (2층 영사실 앞은 상영관 위 두 층 높이 빈 곳 _ 일 수 있다: 벽처럼 그쪽을 본다)
+	local function front(dj: number): boolean
+		return ctx.isWall(i, j + dj) or ctx.at(i, j + dj) == "_"
+	end
+	local dz = if front(-1) or not front(1) then -1 else 1
 	local cf = CFrame.lookAt(p, p + Vector3.new(0, 0, dz))
 	local m = model(ctx, "Projector")
 	Kit.box(m, cf * CFrame.new(0, 1.6, 0), Vector3.new(2.4, 3.2, 3.0), { name = "ProjectorStand" })

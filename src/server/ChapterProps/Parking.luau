@@ -1,8 +1,10 @@
 --!nonstrict
 -- 챕터 9 지하 주차장 전용 소품(타일 문자 → 함수). Stage9.luau 의 Props 줄에서 쓴다. MapKit 부품만(검은 무광, 음파 윤곽선).
---   Q/K 주차된 차  l/y 빈 주차 칸  B/X 굵은 기둥(번호판)  s 차량 램프(옆으로 이어진 계단을 경사판으로)  e 엘리베이터 문  J 정산기  g 차단기
---   h 소화전  u 카트  x 셔터  C CCTV 콘솔(방재실)  t 전기차 충전기  N/q 천장 안내 표지  j/a 제트 팬  d 환기 덕트  i 라바콘  w 과속 방지턱
---   G 비상 발전기  R 배전반  P 소화 펌프  H 저수조  V 급배기 팬  U 탑차(세로 두 칸)  z 파레트 잭  Y 재활용 수거함
+--   Q 주차된 차(두 칸: 머리 + 꼬리 q)  W 덮개 씌운 차  I 사고 차량  l 빈 주차 칸(머리 + 꼬리 y)  q·y·X 빈 막힘/꼬리 칸(Blank)
+--   B 굵은 기둥(맞댄 줄 이음선, 번호판)  r 램프 앞 바닥 화살표  e 엘리베이터 문  J 정산기  g 차단기  h 소화전  u 카트  x 셔터
+--   C CCTV 콘솔  N 천장 안내 표지  j 제트 팬  d 환기 덕트  i 라바콘  w 과속 방지턱  G 비상 발전기  F 연료 탱크  R 배전반
+--   P 소화 펌프  K 압력 탱크  H 저수조  M 집수정  V 급배기 팬  U 탑차(세로 두 칸)  z 파레트 잭  Y 재활용 수거함
+-- 부품 수(성능): 차 5개 + 바닥선 2~3, 덮개 차 5개, 기둥 약 13개(번호판 한 면), 빈 칸 2~3개.
 
 local Kit = require(script.Parent.Parent.MapKit)
 
@@ -21,61 +23,103 @@ local function wallDir(ctx: any, i: number, j: number): Vector3?
 	return nil
 end
 
-local STALL = { Q = true, K = true, l = true, y = true }
 
--- 주차 칸 바닥선: 칸 양옆(x 방향 경계) 흰 선 + 앞쪽 끝선 대신 바퀴 멈춤턱
-local function stallLines(ctx: any, i: number, j: number, p: Vector3)
-	local Kit = ctx.Kit
-	local T = ctx.T
-	for _, s in { -1, 1 } do
-		-- 오른쪽 경계는 옆 칸이 주차 칸이 아닐 때만(겹치지 않게)
-		if s == -1 or not STALL[ctx.at(i + 1, j)] then
-			Kit.box(ctx.props, CFrame.new(p + Vector3.new(s * (T / 2 - 0.15), 0.04, 0)), Vector3.new(0.25, 0.08, T - 1), { blocks = false, collide = false })
-		end
-	end
-	local back = if ctx.isWall(i, j - 1) then -1 elseif ctx.isWall(i, j + 1) then 1 else 0
-	if back ~= 0 then
-		local st = p + Vector3.new(0, 0.25, back * (T / 2 - 1.2))
-		for _, s in { -1, 1 } do
-			Kit.box(ctx.props, CFrame.new(st + Vector3.new(s * 1.5, 0, 0)), Vector3.new(1.8, 0.5, 0.6), { blocks = false, collide = false })
-		end
-	end
-end
+local LINE = { blocks = false, collide = false }
+local SOFT = { blocks = false }
 
--- 주차된 차(큰 상자형): 바퀴 4개 + 차체 + 객실 + 범퍼·창틀 선
-function P.Car(ctx: any, i: number, j: number)
-	local Kit = ctx.Kit
-	local p = base(ctx, i, j)
-	stallLines(ctx, i, j, p)
-	local nose = if ctx.hash(i, j, 91) < 0.5 then 1 else -1
-	local yaw = (ctx.hash(i, j, 92) - 0.5) * 0.12
-	local cf = CFrame.new(p) * CFrame.Angles(0, yaw, 0)
+local function model(ctx: any, name: string): Model
 	local m = Instance.new("Model")
-	m.Name = "Car"
+	m.Name = name
 	m.Parent = ctx.props
-	for _, x in { -2.3, 2.3 } do
-		for _, z in { -2.5, 2.5 } do
-			local w = cf * CFrame.new(x, 1.05, z)
-			Kit.cylinder(m, (w * CFrame.new(-0.35, 0, 0)).Position, (w * CFrame.new(0.35, 0, 0)).Position, 1.05, { blocks = false, collide = false })
-		end
-	end
-	Kit.box(m, cf * CFrame.new(0, 2.0, 0), Vector3.new(4.8, 1.9, 7.4), { name = "CarBody" })
-	Kit.box(m, cf * CFrame.new(0, 3.75, -nose * 0.5), Vector3.new(4.2, 1.6, 3.8), { name = "CarCabin" })
-	-- 앞·뒤 유리 경사(쐐기)
-	Kit.wedge(m, cf * CFrame.new(0, 3.75, nose * 1.95) * CFrame.Angles(0, if nose == 1 then 0 else math.pi, 0), Vector3.new(4.2, 1.6, 0.8), { blocks = false, collide = false })
-	-- 창틀 가운데 기둥, 범퍼, 전조등
-	for _, s in { -1, 1 } do
-		Kit.box(m, cf * CFrame.new(s * 2.12, 3.75, -nose * 0.5), Vector3.new(0.08, 1.4, 0.25), { blocks = false, collide = false })
-		Kit.box(m, cf * CFrame.new(0, 1.3, s * 3.78), Vector3.new(5.0, 0.5, 0.25), { blocks = false, collide = false })
-		Kit.box(m, cf * CFrame.new(s * 1.6, 2.3, nose * 3.72), Vector3.new(0.9, 0.4, 0.12), { blocks = false, collide = false })
-	end
-	Kit.box(m, cf * CFrame.new(0, 2.4, 0), Vector3.new(5.0, 4.6, 7.6), { invisible = true, tag = false })
+	return m
 end
 
--- 빈 주차 칸(바닥선만)
-function P.EmptyStall(ctx: any, i: number, j: number)
-	stallLines(ctx, i, j, base(ctx, i, j))
+-- ── 주차 칸(두 칸: 머리 Q·W·I·l + 꼬리 q·y) ──
+local TAIL = { q = true, y = true }
+local HEAD = { Q = true, W = true, I = true, l = true }
+
+-- 머리 칸에서 꼬리 칸 쪽 단위 벡터(꼬리가 없으면 +Z)
+local function tailDir(ctx: any, i: number, j: number): Vector3
+	for _, d in { { 0, 1 }, { 0, -1 }, { 1, 0 }, { -1, 0 } } do
+		if TAIL[ctx.at(i + d[1], j + d[2])] then
+			return Vector3.new(d[1], 0, d[2])
+		end
+	end
+	return Vector3.new(0, 0, 1)
 end
+
+-- 주차 칸 바닥선: 한쪽 옆선(두 칸 길이) + 옆 칸이 주차 칸이 아니면 반대쪽 옆선 + 꼬리 끝 바퀴 멈춤턱 하나
+local function stallLines(ctx: any, i: number, j: number, mid: Vector3, dir: Vector3)
+	local T = ctx.T
+	local across = Vector3.new(dir.Z, 0, -dir.X)
+	for _, s in { -1, 1 } do
+		local ni, nj = i + math.round(across.X * s), j + math.round(across.Z * s)
+		if s == -1 or not HEAD[ctx.at(ni, nj)] then
+			local p = mid + across * s * (T / 2 - 0.15) + Vector3.new(0, 0.04, 0)
+			Kit.box(ctx.props, CFrame.lookAt(p, p + dir), Vector3.new(0.25, 0.08, 2 * T - 1), LINE)
+		end
+	end
+	local st = mid + dir * (T - 1.1) + Vector3.new(0, 0.25, 0)
+	Kit.box(ctx.props, CFrame.lookAt(st, st + dir), Vector3.new(3.6, 0.5, 0.6), LINE)
+end
+
+-- 두 칸 주차 칸의 가운데 바닥점과 방향
+local function stallFrame(ctx: any, i: number, j: number): (Vector3, Vector3)
+	local dir = tailDir(ctx, i, j)
+	return base(ctx, i, j) + dir * (ctx.T / 2), dir
+end
+
+-- Q 주차된 차(실제 비율 5.6 x 12.8): 바퀴 띠 + 차체 + 객실 + 앞·뒤 유리 쐐기 = 부품 5개(+ 바닥선 2~3)
+function P.Car(ctx: any, i: number, j: number)
+	local mid, dir = stallFrame(ctx, i, j)
+	stallLines(ctx, i, j, mid, dir)
+	local nose = if ctx.hash(i, j, 91) < 0.5 then 1 else -1 -- 1: 앞이 벽(꼬리) 쪽, -1: 앞이 차로 쪽(후진 주차)
+	local yaw = (ctx.hash(i, j, 92) - 0.5) * 0.08
+	local cf = CFrame.lookAt(mid, mid + dir * nose) * CFrame.Angles(0, yaw, 0) -- 로컬 -Z = 차 앞
+	local m = model(ctx, "Car")
+	Kit.box(m, cf * CFrame.new(0, 0.7, 0), Vector3.new(5.2, 1.4, 10.2), SOFT) -- 바퀴·차 밑 띠
+	Kit.box(m, cf * CFrame.new(0, 2.2, 0), Vector3.new(5.6, 1.8, 12.8), { name = "CarBody" })
+	Kit.box(m, cf * CFrame.new(0, 3.9, 0.8), Vector3.new(5.0, 1.6, 5.6), { name = "CarCabin" })
+	Kit.wedge(m, cf * CFrame.new(0, 3.9, -3.0), Vector3.new(5.0, 1.6, 2.0), LINE) -- 앞 유리
+	Kit.wedge(m, cf * CFrame.new(0, 3.9, 4.3) * CFrame.Angles(0, math.pi, 0), Vector3.new(5.0, 1.6, 1.4), LINE) -- 뒤 유리
+end
+
+-- W 덮개 씌운 장기 주차 차: 차 모양 덩어리 위로 천이 늘어진다 = 부품 5개(+ 바닥선)
+function P.CoveredCar(ctx: any, i: number, j: number)
+	local mid, dir = stallFrame(ctx, i, j)
+	stallLines(ctx, i, j, mid, dir)
+	local cf = CFrame.lookAt(mid, mid + dir) * CFrame.Angles(0, (ctx.hash(i, j, 93) - 0.5) * 0.1, 0)
+	local m = model(ctx, "CoveredCar")
+	Kit.box(m, cf * CFrame.new(0, 1.5, 0), Vector3.new(6.0, 2.8, 13.0), { name = "CarCover" })
+	Kit.box(m, cf * CFrame.new(0, 3.6, 0.6), Vector3.new(5.4, 1.4, 6.4), SOFT) -- 덮개 아래 객실 덩어리
+	Kit.wedge(m, cf * CFrame.new(0, 3.6, -3.6), Vector3.new(5.4, 1.4, 2.0), LINE)
+	Kit.wedge(m, cf * CFrame.new(0, 3.6, 4.6) * CFrame.Angles(0, math.pi, 0), Vector3.new(5.4, 1.4, 1.6), LINE)
+	-- 바닥까지 끌린 천 자락(한쪽 옆)
+	local s = if ctx.hash(i, j, 94) < 0.5 then 1 else -1
+	Kit.box(m, cf * CFrame.new(s * 3.3, 1.2, 1.5) * CFrame.Angles(0, 0, s * 0.25), Vector3.new(0.12, 2.6, 7.0), LINE)
+end
+
+-- I 사고 차량: 차로를 가로질러 비스듬히 멈춘 차(앞이 찌그러지고 문 하나가 바닥에) = 부품 6개
+function P.CrashedCar(ctx: any, i: number, j: number)
+	local mid, dir = stallFrame(ctx, i, j)
+	local cf = CFrame.lookAt(mid, mid + dir) * CFrame.Angles(0, 0.35, 0)
+	local m = model(ctx, "CrashedCar")
+	Kit.box(m, cf * CFrame.new(0, 0.7, 0.4), Vector3.new(5.2, 1.4, 9.6), SOFT)
+	Kit.box(m, cf * CFrame.new(0, 2.2, 0.6), Vector3.new(5.6, 1.8, 11.6), { name = "CarBody" })
+	Kit.wedge(m, cf * CFrame.new(0, 2.0, -5.9) * CFrame.Angles(0.25, 0, 0), Vector3.new(5.4, 1.6, 1.8), LINE) -- 찌그러진 앞
+	Kit.box(m, cf * CFrame.new(0.3, 3.8, 1.6) * CFrame.Angles(0, 0, 0.12), Vector3.new(4.8, 1.5, 5.2), { name = "CarCabin" })
+	Kit.box(m, cf * CFrame.new(-4.6, 0.15, -0.5) * CFrame.Angles(0, 0.6, 0), Vector3.new(0.3, 0.3, 3.4), LINE) -- 떨어진 문짝
+	Kit.box(m, cf * CFrame.new(3.6, 0.06, -3.0), Vector3.new(2.6, 0.08, 1.8), LINE) -- 유리 조각 더미
+end
+
+-- l 빈 주차 칸(두 칸 바닥선만)
+function P.EmptyStall(ctx: any, i: number, j: number)
+	local mid, dir = stallFrame(ctx, i, j)
+	stallLines(ctx, i, j, mid, dir)
+end
+
+-- q·y·X: 차 꼬리·빈 칸 꼬리·기둥이 걸친 칸(머리 칸이나 기둥이 함께 짓는다)
+function P.Blank(_ctx: any, _i: number, _j: number) end
 
 -- 굵은 기둥 + 모서리 보호대 + 네 면 번호판(7세그먼트 숫자 두 자리)
 local SEG = {
@@ -97,28 +141,36 @@ local function digit(ctx: any, ch: string, origin: Vector3, right: Vector3, out:
 		ctx.Kit.box(ctx.props, CFrame.fromMatrix((a + z) / 2, d.Unit, out:Cross(d.Unit).Unit), Vector3.new(d.Magnitude + t, t, 0.12), { blocks = false, collide = false })
 	end
 end
+
+-- B 굵은 기둥: 맞댄 주차 줄에서는 이음선(옆 칸 X 쪽으로 반 칸) 위에, 벽 쪽에서는 칸 가운데. 기둥 + 머리 + 보호대 띠 +
+-- 차로 쪽 한 면 번호판(7세그먼트 숫자 두 자리) = 부품 약 13개. 두 층 기둥이 같은 자리라 번호가 층마다 같다
 function P.Pillar(ctx: any, i: number, j: number)
 	local Kit = ctx.Kit
 	local p = base(ctx, i, j)
-	local h = ctx.H - ctx.floorY(i, j)
-	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, h / 2, 0)), Vector3.new(4.0, h, 4.0), { name = "Pillar" })
-	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, 0.5, 0)), Vector3.new(4.8, 1.0, 4.8), { name = "PillarBase" })
-	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, h - 0.8, 0)), Vector3.new(5.0, 1.6, 5.0), { name = "PillarCap" })
-	local label = string.format("%02d", (j * 47 + i) % 97) -- 칸 위치로 정해지는 번호(다시 지어도 같다)
-	-- 번호판은 마주 보는 두 면에만(부품·선을 줄인다)
-	for _, f in { Vector3.xAxis, -Vector3.xAxis } do
-		local right = Vector3.new(f.Z, 0, -f.X) -- 번호판을 마주 본 사람의 오른쪽
-		local face = p + f * 2.05 + Vector3.new(0, 6.0, 0)
-		Kit.box(ctx.props, CFrame.lookAt(face, face + f), Vector3.new(2.8, 1.9, 0.1), { blocks = false, collide = false })
-		local dh = 1.2
-		for n = 1, 2 do
-			local o = face + Vector3.new(0, -dh / 2, 0) + right * ((n - 1.5) * dh * 0.95 - dh * 0.27) + f * 0.05
-			digit(ctx, label:sub(n, n), o, right, f, dh)
+	for _, d in { { 0, 1 }, { 0, -1 }, { 1, 0 }, { -1, 0 } } do
+		if ctx.at(i + d[1], j + d[2]) == "X" then
+			p += Vector3.new(d[1], 0, d[2]) * (ctx.T / 2)
+			break
 		end
 	end
-	-- 모서리 보호대: 기둥을 두르는 띠 두 줄
-	for _, y in { 1.6, 2.6 } do
-		Kit.box(ctx.props, CFrame.new(p + Vector3.new(0, y, 0)), Vector3.new(4.2, 0.3, 4.2), { blocks = false, collide = false })
+	local h = ctx.H - ctx.floorY(i, j)
+	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, h / 2, 0)), Vector3.new(4.0, h, 4.0), { name = "Pillar" })
+	Kit.box(ctx.geo, CFrame.new(p + Vector3.new(0, h - 0.8, 0)), Vector3.new(5.0, 1.6, 5.0), { name = "PillarCap" })
+	Kit.box(ctx.props, CFrame.new(p + Vector3.new(0, 2.0, 0)), Vector3.new(4.3, 0.5, 4.3), LINE) -- 모서리 보호대 띠
+	local label = string.format("%02d", (j * 47 + i) % 97) -- 칸 위치로 정해지는 번호(다시 지어도 같다)
+	local f = if ctx.hash(i, j, 5) < 0.5 then Vector3.zAxis else -Vector3.zAxis -- 차로 쪽 한 면
+	if ctx.isWall(i, j - 1) then
+		f = Vector3.zAxis
+	elseif ctx.isWall(i, j + 1) then
+		f = -Vector3.zAxis
+	end
+	local right = Vector3.new(f.Z, 0, -f.X)
+	local face = p + f * 2.05 + Vector3.new(0, 5.2, 0)
+	Kit.box(ctx.props, CFrame.lookAt(face, face + f), Vector3.new(2.8, 1.9, 0.1), LINE)
+	local dh = 1.2
+	for n = 1, 2 do
+		local o = face + Vector3.new(0, -dh / 2, 0) + right * ((n - 1.5) * dh * 0.95 - dh * 0.27) + f * 0.05
+		digit(ctx, label:sub(n, n), o, right, f, dh)
 	end
 end
 
@@ -218,46 +270,7 @@ function P.PayMachine(ctx: any, i: number, j: number)
 	Kit.box(ctx.props, CFrame.lookAt(f + Vector3.new(0, 1.3, 0), f + Vector3.new(0, 1.3, 0) - side), Vector3.new(1.6, 0.5, 0.2), { blocks = false, collide = false })
 end
 
--- 램프: 계단(s)이 옆으로 이어진 넓은 곳은 매끈한 경사판 + 가장자리 연석으로 덮는다(비상계단은 계단 그대로)
-function P.Ramp(ctx: any, i: number, j: number)
-	local wide = ctx.at(i - 1, j) == "s" or ctx.at(i + 1, j) == "s" or ctx.at(i, j - 1) == "s" or ctx.at(i, j + 1) == "s"
-	if not wide then
-		return
-	end
-	local Kit = ctx.Kit
-	local up = Vector3.new(0, 0, -1)
-	for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
-		local n = ctx.at(i + d[1], j + d[2])
-		if n ~= "#" and not ctx.isPit(i + d[1], j + d[2]) then
-			up = Vector3.new(d[1], 0, d[2])
-		end
-	end
-	local c = ctx.center(i, j)
-	local rise = -ctx.PIT_Y
-	-- 경사선이 계단 코보다 조금 위로 오도록 아래쪽으로 1.1 밀어 둔다
-	local mid = c - up * 1.1 + Vector3.new(0, ctx.PIT_Y + rise / 2, 0)
-	Kit.wedge(ctx.props, CFrame.lookAt(mid, mid - up), Vector3.new(ctx.T, rise, ctx.T), { name = "Ramp" })
-	local across = Vector3.new(up.Z, 0, -up.X)
-	for _, s in { -1, 1 } do
-		if ctx.isWall(i + math.round(across.X * s), j + math.round(across.Z * s)) then
-			local a = c + across * s * (ctx.T / 2 - 0.4) - up * (ctx.T / 2) + Vector3.new(0, ctx.PIT_Y + 0.5, 0)
-			local b = a + up * ctx.T + Vector3.new(0, rise, 0)
-			local d = b - a
-			Kit.box(ctx.props, CFrame.lookAt((a + b) / 2, b), Vector3.new(0.6, 1.0, d.Magnitude), { blocks = false, collide = false })
-		end
-	end
-end
 
--- ── 새 장비 ──
-local LINE = { blocks = false, collide = false }
-local SOFT = { blocks = false }
-
-local function model(ctx: any, name: string): Model
-	local m = Instance.new("Model")
-	m.Name = name
-	m.Parent = ctx.props
-	return m
-end
 local function solid(m: Instance, cf: CFrame, size: Vector3)
 	Kit.box(m, cf * CFrame.new(0, size.Y / 2, 0), size, { invisible = true, tag = false })
 end
@@ -534,6 +547,72 @@ function P.RecycleBin(ctx: any, i: number, j: number)
 		Kit.ball(m, at(cf, -1.4 + k * 2.6, 0.8, -1.8 + ctx.hash(i, j, 6 + k)), 0.9, LINE)
 	end
 	solid(m, cf * CFrame.new(0, 0, 1.2), Vector3.new(5.8, 4.8, 4.0))
+end
+
+
+-- r 램프 앞 바닥 화살표(지나갈 수 있다): 가장 가까운 램프 칸(1, 지하 1층은 구멍 o) 쪽을 가리킨다 = 부품 3개
+function P.RampMark(ctx: any, i: number, j: number)
+	local p = base(ctx, i, j) + Vector3.new(0, 0.05, 0)
+	local dir = Vector3.new(0, 0, -1)
+	for r = 1, 2 do
+		local found = false
+		for _, d in { { 0, -1 }, { 0, 1 }, { 1, 0 }, { -1, 0 } } do
+			local c = ctx.at(i + d[1] * r, j + d[2] * r)
+			if c == "1" or c == "o" then
+				dir = Vector3.new(d[1], 0, d[2])
+				found = true
+				break
+			end
+		end
+		if found then
+			break
+		end
+	end
+	local cf = CFrame.lookAt(p, p + dir)
+	Kit.box(ctx.props, cf * CFrame.new(0, 0, 0.6), Vector3.new(0.7, 0.08, 4.0), LINE)
+	for _, s in { -1, 1 } do
+		Kit.box(ctx.props, cf * CFrame.new(s * 0.75, 0, -1.7) * CFrame.Angles(0, s * 0.75, 0), Vector3.new(0.6, 0.08, 2.4), LINE)
+	end
+end
+
+-- M 집수정: 바닥 철망 덮개(테두리 + 살 둘) + 배수 펌프 모터 + 천장으로 오르는 배관 = 부품 6개
+function P.SumpPit(ctx: any, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "SumpPit")
+	local cf = CFrame.new(p)
+	Kit.box(m, cf * CFrame.new(0, 0.15, 0), Vector3.new(6.4, 0.3, 6.4), SOFT)
+	for _, x in { -1.2, 1.2 } do
+		Kit.box(m, cf * CFrame.new(x, 0.32, 0), Vector3.new(0.25, 0.1, 6.0), LINE)
+	end
+	Kit.cylinder(m, at(cf, 1.8, 0.3, 1.8), at(cf, 1.8, 2.6, 1.8), 0.9)
+	Kit.cylinder(m, at(cf, 1.8, 2.6, 1.8), at(cf, 1.8, roomH(ctx, i, j), 1.8), 0.35, LINE)
+	solid(m, cf, Vector3.new(6.4, 2.8, 6.4))
+end
+
+-- K 압력 탱크(세로 원통 + 다리 + 위로 오르는 배관) = 부품 5개
+function P.PressureTank(ctx: any, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "PressureTank")
+	local cf = CFrame.new(p)
+	Kit.cylinder(m, at(cf, 0, 1.0, 0), at(cf, 0, 6.6, 0), 2.0)
+	Kit.ball(m, at(cf, 0, 6.6, 0), 2.0, LINE)
+	for _, x in { -1.4, 1.4 } do
+		Kit.box(m, cf * CFrame.new(x, 0.5, 0), Vector3.new(0.3, 1.0, 3.2), LINE)
+	end
+	Kit.cylinder(m, at(cf, 0, 8.4, 0), at(cf, 0, roomH(ctx, i, j), 0), 0.4, LINE)
+end
+
+-- F 발전기 연료 탱크(눕힌 원통 + 받침 둘 + 주유구) = 부품 5개
+function P.FuelTank(ctx: any, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "FuelTank")
+	local cf = CFrame.new(p)
+	Kit.cylinder(m, at(cf, 0, 2.4, -2.8), at(cf, 0, 2.4, 2.8), 1.9)
+	for _, z in { -1.8, 1.8 } do
+		Kit.box(m, cf * CFrame.new(0, 0.5, z), Vector3.new(3.6, 1.0, 0.5), LINE)
+	end
+	Kit.cylinder(m, at(cf, 0, 4.2, 1.0), at(cf, 0, 5.0, 1.0), 0.35, LINE)
+	solid(m, cf, Vector3.new(4.0, 4.4, 6.0))
 end
 
 return P

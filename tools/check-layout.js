@@ -25,7 +25,7 @@ for (const id of stageIds()) {
 		const unknown = new Set();
 		for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
 			const c = at(i, j);
-			if (!(known.has(c) || (f === 1 && c === "o"))) unknown.add(c);
+			if (!(known.has(c) || (f === 1 && (c === "o" || c === "_")))) unknown.add(c); // (2층: o 계단 구멍, _ 두 층 높이 공간)
 			if ((i === 0 || j === 0 || i === W - 1 || j === H - 1) && c !== "#") bad.push(`${tag}border open r${j}c${i}`);
 			if (c === "D" || c === "A") {
 				const wx = wall(i - 1, j) && wall(i + 1, j), wz = wall(i, j - 1) && wall(i, j + 1);

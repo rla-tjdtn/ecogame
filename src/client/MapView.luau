@@ -208,10 +208,10 @@ local function at(i: number, j: number, f: number?): string
 	end
 	return rs[j]:sub(i, i)
 end
--- (2층의 계단 구멍 o 도 지도에서는 벽처럼 윤곽을 친다)
+-- (2층의 계단 구멍 o·두 층 높이 공간 _ 도 지도에서는 벽처럼 윤곽을 친다)
 local function isWall(i: number, j: number, f: number?): boolean
 	local c = at(i, j, f)
-	return c == "#" or c == "o"
+	return c == "#" or c == "o" or c == "_"
 end
 
 -- 격자 꼭짓점 (x1,y1)-(x2,y2) 사이 선(가로 또는 세로 한 칸)

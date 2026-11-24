@@ -151,7 +151,14 @@ function writeStage(file, grid, headerLines) {
 		src = src.replace(/^(--!strict\n)((?:--[^\n]*\n)*)/, (_, a) => a + headerLines.map((l) => `-- ${l}`).join("\n") + "\n");
 	}
 	const out = process.env.STAGE_OUT_DIR ? path.join(process.env.STAGE_OUT_DIR, file) : f; // (STAGE_OUT_DIR: 다른 폴더에 써서 시험)
-	fs.writeFileSync(out, crlf ? src.replace(/\n/g, "\r\n") : src);
+	// (Rojo 감시가 잠깐 파일을 잡고 있으면 쓰기가 실패한다 → 잠깐 기다렸다 다시. 늘 한 번에 통째로 쓴다)
+	const text = crlf ? src.replace(/\n/g, "\r\n") : src;
+	for (let k = 0; ; k++) {
+		try { fs.writeFileSync(out, text); break; } catch (e) {
+			if (k >= 10) throw e;
+			const until = Date.now() + 300; while (Date.now() < until) {}
+		}
+	}
 	return out;
 }
 

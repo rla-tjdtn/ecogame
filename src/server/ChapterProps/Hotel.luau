@@ -7,6 +7,10 @@
 --   W 업소용 세탁기(둥근 문)                                       j 린넨 선반(접힌 수건·시트 더미)
 --   l 직원 사물함 줄(좁은 문 셋)                                   h 하우스키핑 카트(선반 + 빨래 자루 + 손잡이)
 --   V 제빙기·자판기(층 제빙기실)                                   e 엘리베이터 문(문틀 + 두 짝 문 + 층 표시판 + 호출 버튼)
+--   ── 객실(재작업 2차: 실제 객실 한 칸 = 욕실 · 침대와 협탁 · 책상·TV · 짐 받침대 · 옷장) ──
+--   R 더블 침대(머리판 + 양옆 협탁·스탠드)   r 트윈 침대(가운데 협탁)   u 욕실(칸막이 + 욕조·변기·세면대·거울)
+--   T 책상 + 의자 + 벽걸이 TV + 스탠드        y 짐 받침대 + 여행 가방     a 붙박이 옷장(숨는 곳 아닌 것)
+--   ── 로비·연회장 ──  Y 분수(3x3 가운데 칸이 짓는다, i = 분수가 덮는 빈 칸)  N 샹들리에(천장에 매달림, 지나갈 수 있다)  z 연회 무대
 -- 각 함수는 StageBuilder 의 ctx 와 타일 좌표(i, j)를 받는다. 1층 천장은 11(2층 건물)이라 모든 소품은 바닥에서 10 아래.
 
 local Kit = require(script.Parent.Parent.MapKit)
@@ -60,8 +64,11 @@ end
 function P.FrontDesk(ctx, i: number, j: number)
 	local p = base(ctx, i, j)
 	local axis = runAxis(ctx, i, j, "F")
-	-- 손님 쪽: 가로 줄이면 남쪽(+Z), 세로 줄이면 동쪽(+X)
+	-- 손님 쪽: 가로 줄이면 남쪽(+Z), 세로 줄이면 동쪽(+X). 그쪽 두 칸 앞이 벽이면(데스크 뒤 직원 통로 + 벽) 반대쪽이 손님 쪽
 	local front = if math.abs(axis.X) > 0.5 then Vector3.new(0, 0, 1) else Vector3.new(1, 0, 0)
+	if ctx.isWall(i + math.round(front.X) * 2, j + math.round(front.Z) * 2) then
+		front = -front
+	end
 	local cf = frame(p, axis, front) -- 로컬 -Z = 앞
 	local m = model(ctx, "FrontDesk")
 	local L = ctx.T
@@ -340,6 +347,229 @@ function P.Elevator(ctx, i: number, j: number)
 	Kit.box(m, cf * CFrame.new(0, 9.1, wz + 0.1), Vector3.new(2.0, 0.7, 0.15), { blocks = false, collide = false }) -- 층 표시판
 	Kit.box(m, cf * CFrame.new(3.4, 4.2, wz + 0.1), Vector3.new(0.5, 1.0, 0.12), { blocks = false, collide = false }) -- 호출 버튼
 	Kit.box(m, cf * CFrame.new(0, 4.0, wz), Vector3.new(6.0, 8.0, 1.0), { invisible = true, tag = false })
+end
+
+-- ── 객실 ──
+-- 벽 쪽 방향들(없으면 빈 목록)
+local function wallDirs(ctx, i: number, j: number): { Vector3 }
+	local out = {}
+	for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+		if ctx.isWall(i + d[1], j + d[2]) then
+			table.insert(out, Vector3.new(d[1], 0, d[2]))
+		end
+	end
+	return out
+end
+
+-- 침대 하나(머리판 쪽이 로컬 +Z): 너비 w, 길이 6.4, 가운데 x
+local function bedAt(m: Model, cf: CFrame, x: number, w: number)
+	local head = 3.75
+	local mid = head - 3.3
+	Kit.box(m, cf * CFrame.new(x, 0.6, mid), Vector3.new(w, 0.8, 6.4), { blocks = false }) -- 침대 틀
+	Kit.box(m, cf * CFrame.new(x, 1.35, mid), Vector3.new(w - 0.2, 0.7, 6.2), { blocks = false }) -- 매트리스
+	Kit.box(m, cf * CFrame.new(x, 1.75, mid - 1.0), Vector3.new(w, 0.2, 4.0), { blocks = false, collide = false }) -- 이불(발 쪽)
+	Kit.box(m, cf * CFrame.new(x, 1.95, head - 0.9), Vector3.new(w - 0.8, 0.45, 1.0), { blocks = false, collide = false }) -- 베개
+	Kit.box(m, cf * CFrame.new(x, 2.4, head + 0.05), Vector3.new(w + 0.2, 3.4, 0.3), { blocks = false }) -- 머리판
+end
+
+-- 협탁 + 스탠드(로컬 좌표 x, 머리판 옆)
+local function nightstand(m: Model, cf: CFrame, x: number)
+	Kit.box(m, cf * CFrame.new(x, 1.0, 3.1), Vector3.new(1.2, 2.0, 1.3), { blocks = false })
+	local b = (cf * CFrame.new(x, 2.0, 3.2)).Position
+	Kit.cylinder(m, b, b + Vector3.new(0, 1.1, 0), 0.1, { blocks = false, collide = false })
+	Kit.cylinder(m, b + Vector3.new(0, 1.1, 0), b + Vector3.new(0, 1.9, 0), 0.5, { blocks = false, collide = false }) -- 갓
+end
+
+-- 더블 침대: 머리판은 칸막이벽에, 양옆에 협탁과 스탠드
+function P.GuestBed(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j, Vector3.new(0, 0, -1))
+	local axis = Vector3.new(side.Z, 0, -side.X)
+	local cf = frame(p, axis, -side) -- 로컬 +Z = 벽(머리 쪽)
+	local m = model(ctx, "GuestBed")
+	bedAt(m, cf, 0, 5.0)
+	for _, s in { -1, 1 } do
+		nightstand(m, cf, s * 3.25)
+	end
+	Kit.box(m, cf * CFrame.new(0, 1.4, 0.45), Vector3.new(5.2, 2.8, 6.6), { invisible = true, tag = false })
+end
+
+-- 트윈 침대: 싱글 침대 둘 사이에 협탁 하나
+function P.TwinBeds(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j, Vector3.new(0, 0, -1))
+	local axis = Vector3.new(side.Z, 0, -side.X)
+	local cf = frame(p, axis, -side)
+	local m = model(ctx, "TwinBeds")
+	for _, s in { -1, 1 } do
+		bedAt(m, cf, s * 2.2, 2.6)
+	end
+	nightstand(m, cf, 0)
+	Kit.box(m, cf * CFrame.new(0, 1.4, 0.45), Vector3.new(7.2, 2.8, 6.6), { invisible = true, tag = false })
+end
+
+-- 욕실: 칸 안을 칸막이로 막고(입구 쪽 칸막이에 문틈), 벽을 따라 욕조 · 변기 · 세면대(거울)
+function P.Bathroom(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "Bathroom")
+	local T = ctx.T
+	local hgt = math.min(ctx.H, 11) - 1.4
+	local walls = wallDirs(ctx, i, j)
+	-- 칸막이: 벽이 아닌 쪽 가장자리마다. 문(D) 옆 칸 쪽이면 문틈을 낸다
+	for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+		local ni, nj = i + d[1], j + d[2]
+		if not ctx.isWall(ni, nj) then
+			local dir = Vector3.new(d[1], 0, d[2])
+			local along = Vector3.new(d[2], 0, -d[1])
+			local entry = false
+			for _, e in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+				if same(ctx, ni + e[1], nj + e[2], "D") then
+					entry = true
+				end
+			end
+			local c = p + dir * (T / 2 - 0.2)
+			local cf = CFrame.lookAt(c, c + dir)
+			if entry then
+				-- 문틈(3.2)은 벽에서 먼 쪽 끝: 칸막이 한 토막 + 문 위 인방 + 반쯤 열린 문짝
+				local s = 1
+				for _, w in walls do
+					if w:Dot(along) > 0.5 then
+						s = -1
+					end
+				end
+				local len = T - 3.2
+				Kit.box(m, CFrame.new(c + along * (-s * (T / 2 - len / 2)) + Vector3.new(0, hgt / 2, 0)) * cf.Rotation, Vector3.new(len, hgt, 0.4))
+				Kit.box(m, CFrame.new(c + along * (s * (T / 2 - 1.6)) + Vector3.new(0, hgt - 0.6, 0)) * cf.Rotation, Vector3.new(3.2, 1.2, 0.4), { blocks = false })
+				local hinge = c + along * (s * (T / 2 - 3.2)) - dir * 0.2
+				Kit.box(m, CFrame.lookAt(hinge, hinge - dir) * CFrame.Angles(0, -s * 0.6, 0) * CFrame.new(0, 3.4, -1.3), Vector3.new(0.15, 6.8, 2.6), { blocks = false, collide = false })
+			else
+				Kit.box(m, CFrame.new(c + Vector3.new(0, hgt / 2, 0)) * cf.Rotation, Vector3.new(T, hgt, 0.4))
+			end
+		end
+	end
+	-- 설비: 첫째 벽(a)을 따라 욕조, 둘째 벽(b, 있으면)을 따라 변기와 세면대
+	local a = walls[1] or Vector3.new(0, 0, -1)
+	local b = walls[2]
+	if not b or math.abs(b:Dot(a)) > 0.5 then
+		b = Vector3.new(a.Z, 0, -a.X)
+	end
+	local function at(u: number, v: number, y: number): Vector3
+		return p + a * u + b * v + Vector3.new(0, y, 0)
+	end
+	local rot = CFrame.lookAt(Vector3.zero, a).Rotation
+	local tubLong = if math.abs(b.X) > 0.5 then Vector3.new(5.4, 1.8, 2.6) else Vector3.new(2.6, 1.8, 5.4)
+	Kit.box(m, CFrame.new(at(T / 2 - 1.6, -1.0, 0.9)), tubLong, { blocks = false }) -- 욕조
+	Kit.box(m, CFrame.new(at(T / 2 - 1.6, -1.0, 1.85)), tubLong - Vector3.new(0.6, 1.75, 0.6), { blocks = false, collide = false }) -- 욕조 안쪽 테
+	Kit.cylinder(m, at(T / 2 - 0.4, -3.4, 2.0), at(T / 2 - 0.4, -3.4, 3.4), 0.12, { blocks = false, collide = false }) -- 수전
+	-- 변기(둘째 벽 쪽, 욕조에서 먼 쪽)
+	Kit.box(m, CFrame.new(at(-0.6, T / 2 - 0.5, 1.6)) * rot, Vector3.new(1.6, 1.8, 0.6), { blocks = false }) -- 물탱크
+	Kit.cylinder(m, at(-0.6, T / 2 - 1.6, 0), at(-0.6, T / 2 - 1.6, 1.3), 0.7, { blocks = false }) -- 변기
+	-- 세면대 + 거울
+	Kit.box(m, CFrame.new(at(-2.6, T / 2 - 0.9, 1.4)) * rot, Vector3.new(2.2, 2.8, 1.6), { blocks = false }) -- 세면대 장
+	Kit.cylinder(m, at(-2.6, T / 2 - 0.9, 2.8), at(-2.6, T / 2 - 0.9, 3.0), 0.6, { blocks = false, collide = false }) -- 세면 볼
+	Kit.box(m, CFrame.new(at(-2.6, T / 2 - 0.12, 4.8)) * rot, Vector3.new(2.0, 2.4, 0.1), { blocks = false, collide = false }) -- 거울
+end
+
+-- 책상(창가 벽) + 의자 + 벽걸이 TV + 스탠드
+function P.WritingDesk(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j)
+	local axis = Vector3.new(side.Z, 0, -side.X)
+	local cf = frame(p, axis, -side) -- 로컬 +Z = 벽
+	local m = model(ctx, "WritingDesk")
+	local back = ctx.T / 2 - 1.3
+	Kit.box(m, cf * CFrame.new(0, 3.0, back), Vector3.new(5.0, 0.2, 2.2), { blocks = false }) -- 상판
+	for _, x in { -2.35, 2.35 } do
+		Kit.box(m, cf * CFrame.new(x, 1.45, back), Vector3.new(0.2, 2.9, 2.0), { blocks = false }) -- 옆판
+	end
+	Kit.box(m, cf * CFrame.new(0, 5.6, ctx.T / 2 - 0.15), Vector3.new(3.8, 2.2, 0.2), { blocks = false, collide = false }) -- 벽걸이 TV
+	local lp = (cf * CFrame.new(-1.8, 3.1, back + 0.4)).Position
+	Kit.cylinder(m, lp, lp + Vector3.new(0, 1.2, 0), 0.08, { blocks = false, collide = false })
+	Kit.cylinder(m, lp + Vector3.new(0, 1.2, 0), lp + Vector3.new(0, 1.8, 0), 0.45, { blocks = false, collide = false })
+	local ch = cf * CFrame.new(0.6, 0, back - 2.0) * CFrame.Angles(0, ctx.hash(i, j, 67) * 0.8 - 0.4, 0)
+	Kit.box(m, ch * CFrame.new(0, 1.8, 0), Vector3.new(1.7, 0.2, 1.7), { blocks = false, collide = false }) -- 의자 좌판
+	Kit.box(m, ch * CFrame.new(0, 2.9, -0.8), Vector3.new(1.7, 2.0, 0.15), { blocks = false, collide = false }) -- 등받이
+	Kit.box(m, ch * CFrame.new(0, 0.9, 0), Vector3.new(0.3, 1.8, 0.3), { blocks = false, collide = false }) -- 의자 기둥
+	Kit.box(m, cf * CFrame.new(0, 1.6, back - 0.6), Vector3.new(5.0, 3.2, 3.4), { invisible = true, tag = false })
+end
+
+-- 짐 받침대(접이식 다리) + 여행 가방
+function P.LuggageRack(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j)
+	local axis = Vector3.new(side.Z, 0, -side.X)
+	local cf = frame(p, axis, -side) * CFrame.new(0, 0, ctx.T / 2 - 1.4)
+	local m = model(ctx, "LuggageRack")
+	for _, x in { -1.3, 1.3 } do
+		Kit.box(m, cf * CFrame.new(x, 1.0, 0) * CFrame.Angles(0.5, 0, 0), Vector3.new(0.12, 2.3, 0.12), { blocks = false, collide = false }) -- X 다리
+		Kit.box(m, cf * CFrame.new(x, 1.0, 0) * CFrame.Angles(-0.5, 0, 0), Vector3.new(0.12, 2.3, 0.12), { blocks = false, collide = false })
+	end
+	Kit.box(m, cf * CFrame.new(0, 2.05, 0), Vector3.new(3.0, 0.12, 1.8), { blocks = false }) -- 받침 끈
+	local open = ctx.hash(i, j, 68) > 0.6
+	Kit.box(m, cf * CFrame.new(0, 2.65, 0), Vector3.new(2.8, if open then 0.6 else 1.1, 1.7), { blocks = false }) -- 가방
+	if open then -- 열린 채 버려진 가방: 뚜껑이 벽에 기대 있다
+		Kit.box(m, cf * CFrame.new(0, 3.6, 1.1) * CFrame.Angles(0.35, 0, 0), Vector3.new(2.8, 1.8, 0.25), { blocks = false, collide = false })
+	else
+		Kit.box(m, cf * CFrame.new(0, 3.35, 0), Vector3.new(0.9, 0.25, 0.25), { blocks = false, collide = false }) -- 손잡이
+	end
+	Kit.box(m, cf * CFrame.new(0, 1.6, 0), Vector3.new(3.0, 3.2, 1.9), { invisible = true, tag = false })
+end
+
+-- 붙박이 옷장(숨는 곳이 아닌 것): 벽에 붙은 키 큰 상자 + 문 틈 + 손잡이 둘
+function P.Wardrobe(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j)
+	local axis = Vector3.new(side.Z, 0, -side.X)
+	local cf = frame(p, axis, -side)
+	local m = model(ctx, "Wardrobe")
+	local back = ctx.T / 2 - 1.1
+	Kit.box(m, cf * CFrame.new(0, 3.8, back), Vector3.new(4.4, 7.6, 2.2))
+	Kit.box(m, cf * CFrame.new(0, 3.8, back - 1.12), Vector3.new(0.08, 7.0, 0.08), { blocks = false, collide = false }) -- 문 틈
+	for _, x in { -0.35, 0.35 } do
+		Kit.box(m, cf * CFrame.new(x, 4.0, back - 1.16), Vector3.new(0.12, 1.0, 0.12), { blocks = false, collide = false })
+	end
+end
+
+-- ── 로비 ──
+-- 분수: 3x3 칸 가운데에서 지름 20 의 둥근 수반 + 가운데 기둥 + 위 받침 접시 + 꼭대기 장식
+function P.Fountain(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "Fountain")
+	Kit.cylinder(m, p, p + Vector3.new(0, 1.8, 0), 10.2) -- 수반 테두리(막힌다)
+	Kit.cylinder(m, p + Vector3.new(0, 1.8, 0), p + Vector3.new(0, 1.95, 0), 9.4, { blocks = false, collide = false }) -- 수면
+	Kit.cylinder(m, p + Vector3.new(0, 1.8, 0), p + Vector3.new(0, 4.6, 0), 1.0, { blocks = false })
+	Kit.cylinder(m, p + Vector3.new(0, 4.6, 0), p + Vector3.new(0, 5.2, 0), 3.6, { blocks = false }) -- 위 접시
+	Kit.cylinder(m, p + Vector3.new(0, 5.2, 0), p + Vector3.new(0, 7.0, 0), 0.45, { blocks = false, collide = false })
+	Kit.ball(m, p + Vector3.new(0, 7.3, 0), 0.6, { blocks = false, collide = false })
+end
+
+-- 분수가 덮는 빈 칸(아무것도 짓지 않는다: 막힌 칸 표시만)
+function P.Blank(_ctx, _i: number, _j: number) end
+
+-- 샹들리에: 천장에서 내려온 사슬 + 위아래 둥근 고리 둘 + 가운데 수정 방울(머리 위라 지나갈 수 있다)
+function P.Chandelier(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "Chandelier")
+	local top = math.min(ctx.H, 14) - 0.1
+	Kit.cylinder(m, p + Vector3.new(0, top, 0), p + Vector3.new(0, top - 2.2, 0), 0.08, { blocks = false, collide = false })
+	Kit.cylinder(m, p + Vector3.new(0, top - 2.4, 0), p + Vector3.new(0, top - 2.1, 0), 3.0, { blocks = false, collide = false })
+	Kit.cylinder(m, p + Vector3.new(0, top - 3.3, 0), p + Vector3.new(0, top - 3.0, 0), 1.9, { blocks = false, collide = false })
+	Kit.cylinder(m, p + Vector3.new(0, top - 4.2, 0), p + Vector3.new(0, top - 2.1, 0), 0.35, { blocks = false, collide = false })
+end
+
+-- ── 연회장 ──
+-- 연회 무대: 칸마다 낮은 단(높이 1.6) + 앞 가장자리 띠, 해시로 연설대 하나
+function P.BanquetStage(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j, Vector3.new(0, 0, -1))
+	local m = model(ctx, "BanquetStage")
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 0.8, 0)), Vector3.new(ctx.T, 1.6, ctx.T))
+	local edge = p - side * (ctx.T / 2 - 0.1) + Vector3.new(0, 1.0, 0)
+	Kit.box(m, CFrame.lookAt(edge, edge + side), Vector3.new(ctx.T, 0.3, 0.2), { blocks = false, collide = false })
+	if ctx.hash(i, j, 69) > 0.6 then
+		local lp = p + Vector3.new(0, 1.6, 0)
+		Kit.box(m, CFrame.lookAt(lp + Vector3.new(0, 1.9, 0), lp + Vector3.new(0, 1.9, 0) - side), Vector3.new(1.8, 3.8, 1.2), { blocks = false })
+	end
 end
 
 return P

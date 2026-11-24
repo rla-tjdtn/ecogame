@@ -1,11 +1,14 @@
 --!strict
 -- 챕터 3 하수도 전용 소품(타일 문자 → 함수). Stage3.luau 의 Props 줄에서 쓴다.
 -- MapKit 부품만(검은 무광, 음파 윤곽선). 굵은 윤곽 위주, 소품 하나 25개 이하. 막는 소품은 보이지 않는 충돌 상자를 둔다.
---   l 맨홀 사다리(벽에 붙은 철제 사다리 + 천장 맨홀 테, 지나갈 수 있음)
+--   w 수로(물 + 터널이면 세 칸마다 벽에서 벽까지 아치 갈비: 간선 5칸 폭·지선 3칸 폭 모두)     Q 낙차 유입관(벽·천장 관에서 떨어지는 오수, 물 칸)
+--   K 배관 다리(수로 위를 가로지르는 굵은 관 — 랜드마크, 물 칸)    U 월류 위어(수로를 막은 낮은 둑, 물 칸)
+--   l 맨홀 사다리(벽에 붙은 철제 사다리 + 천장 맨홀 테, 지나갈 수 있음)    R 맨홀 수직갱(바닥 갱구 + 천장 원통, 막힘)
 --   M 원심 펌프(모터 + 펌프 몸통 + 토출관이 천장으로)       V 밸브 스탠드(기둥 + 큰 손바퀴)
 --   Y 계기 제어반(둥근 압력계 줄 + 스위치)                  G 수문 승강기(문틀 + 나사봉 + 손바퀴)
 --   H 협잡물 스크린(수로 칸: 물 + 비스듬한 철창, 아래층 칸)  J 정비 작업대
 --   I 배관 자재 더미(굵은 관 토막을 쌓아 묶음)
+
 
 local Kit = require(script.Parent.Parent.MapKit)
 local Props = require(script.Parent.Parent.Props)
@@ -201,6 +204,138 @@ function Sewer.PipeStack(ctx, i: number, j: number)
 		Kit.cylinder(m, c - ax * half, c + ax * half, r, { rings = 1 })
 	end
 	solid(m, p, Vector3.new(6.6, 4.6, 6.6))
+end
+
+-- ── 물길 칸(아래층 높이, Stage3 의 PitTiles) ──
+local WATERY = { w = true, H = true, Q = true, U = true, K = true, b = true }
+local function watery(ctx, i: number, j: number): boolean
+	return WATERY[ctx.at(i, j)] == true
+end
+-- 물 흐르는 방향과 직각(터널 가로) 방향. 모퉁이·홀이면 nil
+local function acrossOf(ctx, i: number, j: number): Vector3?
+	local fx = watery(ctx, i - 1, j) or watery(ctx, i + 1, j)
+	local fz = watery(ctx, i, j - 1) or watery(ctx, i, j + 1)
+	if fx and not fz then
+		return Vector3.new(0, 0, 1)
+	elseif fz and not fx then
+		return Vector3.new(1, 0, 0)
+	end
+	return nil
+end
+-- 가로 방향 양쪽 벽까지(칸 수, 4칸 안). 터널이 아니면(홀) nil
+local function tunnelSpan(ctx, i: number, j: number, across: Vector3): (number?, number?)
+	local function reach(s: number): number?
+		for d = 1, 4 do
+			if ctx.isWall(i + across.X * s * d, j + across.Z * s * d) then
+				return d
+			end
+		end
+		return nil
+	end
+	return reach(-1), reach(1)
+end
+
+-- w 수로: 얕은 물 + 터널이면 세 칸마다 벽에서 벽까지 벽돌 아치 갈비(간선 5칸 폭은 넓고 낮은 아치, 지선 3칸 폭은 둥근 아치)
+function Sewer.Channel(ctx, i: number, j: number)
+	Props.Water(ctx, i, j)
+	if (i + j) % 3 ~= 0 then
+		return
+	end
+	local across = acrossOf(ctx, i, j)
+	if not across then
+		return
+	end
+	local a, b = tunnelSpan(ctx, i, j, across)
+	if not a or not b then
+		return
+	end
+	local T = ctx.T
+	local c = ctx.center(i, j) + across * ((b - a) * T / 2)
+	local half = (a + b - 1) * T / 2 - 0.3
+	local spring, rise = 5.0, math.min(8.4, ctx.H - 5.6)
+	local m = model(ctx, "ArchRib")
+	local prev: Vector3? = nil
+	local N = 8
+	for k = 0, N do
+		local t = math.pi * k / N
+		local p = c + across * (half * math.cos(t)) + Vector3.new(0, spring + rise * math.sin(t), 0)
+		if prev then
+			local mid = (prev + p) / 2
+			Kit.box(m, CFrame.lookAt(mid, p), Vector3.new(0.8, 0.6, (p - prev).Magnitude + 0.15), { collide = false, blocks = false })
+		end
+		prev = p
+	end
+end
+
+-- Q 낙차 유입관: 물 + 벽에서 튀어나온 큰 관 입구(플랜지) + 수로로 떨어지는 오수 기둥 + 물보라 테.
+--   벽이 없는 곳(저류조 한가운데)은 천장에서 내려온 관에서 떨어진다
+function Sewer.DropInlet(ctx, i: number, j: number)
+	Props.Water(ctx, i, j)
+	local c = ctx.center(i, j)
+	local m = model(ctx, "DropInlet")
+	local side = wallSide(ctx, i, j)
+	local mouth: Vector3
+	if side then
+		local wallP = c + side * (ctx.T / 2) + Vector3.new(0, 5.5, 0)
+		mouth = wallP - side * 2.6
+		Kit.cylinder(m, wallP, mouth, 1.7, { rings = 2 })
+		Kit.cylinder(m, mouth + side * 0.2, mouth - side * 0.15, 2.15, { blocks = false, collide = false, rings = 1 })
+		mouth -= side * 1.4 + Vector3.new(0, 1.4, 0)
+	else
+		local top = c + Vector3.new(0, ctx.H, 0)
+		mouth = c + Vector3.new(0, 8.5, 0)
+		Kit.cylinder(m, top, mouth, 1.6, { rings = 2 })
+		Kit.cylinder(m, mouth + Vector3.new(0, 0.2, 0), mouth - Vector3.new(0, 0.15, 0), 2.1, { blocks = false, collide = false, rings = 1 })
+	end
+	local water = Vector3.new(mouth.X, c.Y + ctx.PIT_Y + 1.2, mouth.Z)
+	Kit.cylinder(m, mouth, water, 0.9, { blocks = false, collide = false })
+	Kit.cylinder(m, water, water + Vector3.new(0, 0.12, 0), 2.6, { blocks = false, collide = false, rings = 2 })
+end
+
+-- K 배관 다리(랜드마크): 물 + 수로 위를 벽에서 벽까지 가로지르는 굵은 관(보행로 허리 높이) + 받침 안장 둘 + 플랜지
+function Sewer.PipeBridge(ctx, i: number, j: number)
+	Props.Water(ctx, i, j)
+	local across = acrossOf(ctx, i, j) or Vector3.new(1, 0, 0)
+	local a, b = tunnelSpan(ctx, i, j, across)
+	local T = ctx.T
+	local aa, bb = a or 3, b or 3
+	local c = ctx.center(i, j) + across * ((bb - aa) * T / 2) + Vector3.new(0, 2.6, 0)
+	local half = (aa + bb - 1) * T / 2 - 0.2
+	local m = model(ctx, "PipeBridge")
+	Kit.cylinder(m, c - across * half, c + across * half, 1.5, { rings = 3 })
+	for _, s in { -1, 1 } do
+		local f = c + across * (s * T * 0.5)
+		Kit.cylinder(m, f - across * 0.2, f + across * 0.2, 1.95, { blocks = false, collide = false })
+		local saddle = c + across * (s * (T / 2 + 2.0)) - Vector3.new(0, 2.0, 0)
+		Kit.box(m, CFrame.lookAt(saddle, saddle + across), Vector3.new(2.6, 1.4, 0.6), { blocks = false })
+	end
+end
+
+-- U 월류 위어: 물 + 수로를 가로막은 낮은 콘크리트 둑(보행로 바로 아래까지) + 수위 눈금 막대
+function Sewer.Weir(ctx, i: number, j: number)
+	Props.Water(ctx, i, j)
+	local across = acrossOf(ctx, i, j) or Vector3.new(1, 0, 0)
+	local c = ctx.center(i, j)
+	local m = model(ctx, "Weir")
+	local wallC = c + Vector3.new(0, ctx.PIT_Y + 2.1, 0)
+	Kit.box(m, CFrame.lookAt(wallC, wallC + Vector3.new(across.Z, 0, across.X)), Vector3.new(ctx.T, 4.2, 1.2), { name = "Weir" })
+	local staff = c + Vector3.new(across.Z, 0, across.X) * 1.0 + across * 2.6
+	Kit.box(m, CFrame.new(staff + Vector3.new(0, ctx.PIT_Y + 4.5, 0)), Vector3.new(0.3, 9, 0.3), { blocks = false, collide = false, axis = "Y" })
+end
+
+-- R 맨홀 수직갱: 바닥의 둥근 갱구(턱 + 막는 충돌) + 천장으로 솟은 원통 갱(지상 맨홀까지)
+function Sewer.ManholeShaft(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "ManholeShaft")
+	Kit.cylinder(m, p, p + Vector3.new(0, 0.9, 0), 3.2, { rings = 2 })
+	Kit.cylinder(m, p + Vector3.new(0, 0.9, 0), p + Vector3.new(0, 1.0, 0), 2.6, { blocks = false, collide = false, rings = 1 })
+	Kit.cylinder(m, p + Vector3.new(0, 9.0, 0), p + Vector3.new(0, ctx.H, 0), 2.8, { rings = 2 })
+	for k = 0, 3 do
+		local a = k * math.pi / 2 + math.pi / 4
+		local q = p + Vector3.new(math.cos(a) * 3.0, 0, math.sin(a) * 3.0)
+		Kit.cylinder(m, q + Vector3.new(0, 0.9, 0), q + Vector3.new(0, 3.6, 0), 0.12, { blocks = false })
+	end
+	solid(m, p, Vector3.new(6.8, 3.6, 6.8))
 end
 
 return Sewer

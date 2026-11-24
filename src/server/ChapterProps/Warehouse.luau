@@ -7,7 +7,7 @@
 --   g 지게차 충전기(벽 쪽 캐비닛 + 케이블)        e 냉동기 증발기(천장 쪽 벽걸이 팬 — 지나갈 수 있음)
 --   R 서버 랙(전산실)    Y 포장대·검수대(작업대 + 모니터 + 상자)    W 랩 감는 기계(회전판 + 기둥 + 감긴 팔레트)
 --   B 정비 작업대(바이스 + 공구판)    d 도크 문(말아 올린 셔터 + 도크 레벨러 — 지나갈 수 있음)
---   x 내려온 화재 셔터(벽 틈을 막은 철판, 막힘)    K 탑차(줄 머리에서 짐칸·운전석·바퀴)    G 정문 경비 초소
+--   x 내려온 화재 셔터(벽 틈을 막은 철판, 막힘)    K 탑차(줄 머리에서 짐칸·운전석·바퀴)    G 정문 경비 초소    q 화물 승강기
 -- 각 함수는 StageBuilder 의 ctx 와 타일 좌표(i, j)를 받는다(i = 열 = X, j = 행 = Z). ctx.at 으로 이웃 칸 문자를 본다.
 
 
@@ -414,6 +414,27 @@ function W.GuardBooth(ctx, i: number, j: number)
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 1.6, 0)), Vector3.new(5.4, 3.2, 5.4), { name = "BoothWall" })
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 7.8, 0)), Vector3.new(6.6, 0.4, 6.6), { blocks = false })
 	Kit.box(m, CFrame.new(p + Vector3.new(0, 5.2, 0)), Vector3.new(5.6, 0.15, 5.6), { blocks = false, collide = false }) -- 창 아래 테
+end
+
+-- q 화물 승강기(1층·2층 같은 칸): 승강로 철망 틀(네 기둥 + 위·아래 테) + 앞쪽 접이문 막대 + 운반대. 막힘
+function W.GoodsLift(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j)
+	local m = model(ctx, "GoodsLift")
+	local H = ctx.H
+	for _, x in { -3.4, 3.4 } do
+		for _, z in { -3.4, 3.4 } do
+			Kit.box(m, CFrame.new(p + Vector3.new(x, H / 2, z)), Vector3.new(0.4, H, 0.4), { blocks = false, axis = "Y" })
+		end
+	end
+	Kit.box(m, CFrame.new(p + Vector3.new(0, H - 0.4, 0)), Vector3.new(7.2, 0.5, 7.2), { blocks = false })
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 0.3, 0)), Vector3.new(6.6, 0.6, 6.6), { blocks = false }) -- 운반대
+	local across = Vector3.new(side.Z, 0, -side.X)
+	for k = -2, 2 do
+		local g = p - side * 3.5 + across * (k * 1.5) + Vector3.new(0, 4, 0)
+		Kit.box(m, CFrame.new(g), Vector3.new(0.15, 8, 0.15), { blocks = false, collide = false }) -- 접이문
+	end
+	Kit.box(m, CFrame.new(p + Vector3.new(0, H / 2, 0)), Vector3.new(7.2, H, 7.2), { invisible = true, tag = false })
 end
 
 return W

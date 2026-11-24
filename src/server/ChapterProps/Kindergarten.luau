@@ -6,6 +6,7 @@
 --   x 보건실 침대       I 어린이 세면대(벽)  a 유희실 무대                 F 낮은 식탁(긴 의자)       V 배식대
 --   R 조리대 + 후드(벽) K 조리 작업대        J 정글짐                      w 그네                    e 시소
 --   H 스프링 목마       g 모래밭(지나감)     u 화분 상자(벽)
+--   Q 낮은 나무 울타리(마당)  l 가로등(후문, 지나감)  t 마른 나무(마당)
 
 local Kit = require(script.Parent.Parent.MapKit)
 
@@ -474,6 +475,61 @@ function P.Planter(ctx, i: number, j: number)
 		Kit.cylinder(m, at(cf, -2.2 + k * 1.5, 1.6, z), at(cf, -2.2 + k * 1.5 + (r - 0.5) * 1.6, 3.2 + r * 1.2, z - (r - 0.3)), 0.08, LINE)
 	end
 	solid(m, cf * CFrame.new(0, 0, z), Vector3.new(6.2, 2, 2.2))
+end
+
+-- ── 바깥 마당(QA 재작업: 마당이 실내 방이 아니라 바깥으로 읽히게) ──
+-- Q 낮은 나무 울타리(허리 높이 3.2): 기둥 + 가로대 둘 + 살 넷. 음파는 너머로 지나가고(blocks = false) 몸은 막는다(보이지 않는 높은 충돌 판)
+function P.Fence(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "Fence")
+	local ax = runAxis(ctx, i, j, "Q")
+	if ax.X ~= 0 and not (ctx.at(i - 1, j) == "Q" or ctx.at(i + 1, j) == "Q") then
+		-- 혼자 선 칸: 벽이 있는 쪽과 나란하게
+		ax = if ctx.isWall(i, j - 1) or ctx.isWall(i, j + 1) then Vector3.new(1, 0, 0) else Vector3.new(0, 0, 1)
+	end
+	local cf = CFrame.lookAt(p, p + ax) -- 로컬 Z = 울타리 방향
+	local L = ctx.T
+	Kit.box(m, cf * CFrame.new(0, 1.0, 0), Vector3.new(0.25, 0.35, L), SOFT)
+	Kit.box(m, cf * CFrame.new(0, 2.6, 0), Vector3.new(0.25, 0.35, L), SOFT)
+	for k = 0, 3 do
+		local z = -L / 2 + 1.0 + k * (L - 2.0) / 3
+		Kit.box(m, cf * CFrame.new(0, 1.6, z), Vector3.new(0.3, 3.2, 0.5), LINE)
+	end
+	Kit.box(m, cf * CFrame.new(0, 3.5, 0), Vector3.new(0.12, 7.0, L), { invisible = true, tag = false }) -- (넘어가지 못하게)
+end
+
+-- l 가로등(후문 양옆, 지나갈 수 있다): 받침 + 기둥 + 팔 + 등갓 = 부품 5개
+function P.LampPost(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "LampPost")
+	local top = math.min(ctx.H - 1.5, 11)
+	local out = if ctx.at(i - 1, j) == "E" or ctx.at(i - 1, j - 1) == "E" then Vector3.new(-1, 0, 0) else Vector3.new(1, 0, 0)
+	if ctx.at(i + 1, j - 1) == "E" then
+		out = Vector3.new(1, 0, 0)
+	end
+	Kit.cylinder(m, p, p + Vector3.new(0, 0.6, 0), 0.7, LINE)
+	Kit.cylinder(m, p, p + Vector3.new(0, top, 0), 0.22, SOFT)
+	local a = p + Vector3.new(0, top - 0.3, 0)
+	Kit.cylinder(m, a, a + out * 1.6, 0.1, LINE)
+	Kit.wedge(m, CFrame.lookAt(a + out * 1.6 - Vector3.new(0, 0.5, 0), a + out * 1.6 - Vector3.new(0, 0.5, 0) + out), Vector3.new(1.2, 0.6, 1.0), LINE)
+	Kit.box(m, CFrame.new(a + out * 1.6 - Vector3.new(0, 0.95, 0)), Vector3.new(0.7, 0.3, 0.7), LINE)
+end
+
+-- t 마른 나무(마당): 줄기 + 가지 셋 + 듬성한 잎 덩어리 = 부품 6개, 줄기만 막는다
+function P.Tree(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "Tree")
+	local top = math.min(ctx.H - 2, 11)
+	Kit.cylinder(m, p, p + Vector3.new(0, top * 0.6, 0), 0.7)
+	for k = 0, 2 do
+		local r = ctx.hash(i, j, 20 + k)
+		local ang = k * 2.1 + r
+		local a = p + Vector3.new(0, top * (0.45 + k * 0.08), 0)
+		local b = a + Vector3.new(math.cos(ang) * 2.6, 1.8 + r, math.sin(ang) * 2.6)
+		Kit.cylinder(m, a, b, 0.22, LINE)
+	end
+	Kit.ball(m, p + Vector3.new(0.4, top * 0.85, -0.3), 2.2, LINE)
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 0.1, 0)), Vector3.new(3.0, 0.2, 3.0), LINE) -- 나무 둘레 보호판
 end
 
 return P

@@ -100,6 +100,24 @@ up.fill(9, 9, 19, 31).set(10, 8, "D");
 for (const [y0, y1] of [[10, 17], [20, 26]]) { colY(up, "k", 11, y0, y1); colY(up, "k", 12, y0, y1); colY(up, "k", 16, y0, y1); colY(up, "k", 17, y0, y1); }
 colY(up, "u", 14, 11, 26);
 up.put("Y", [[11, 29], [17, 29]]).set(19, 9, "Z").set(9, 31, "Z").set(9, 20, "L").set(19, 31, "c");
+// ── 2층 상부 보관층(x21~37, y9~28): 랙 홀 동쪽 위 철골 바닥. 가벼운 짐(팔레트 바닥 적치 구역 + 낮은 랙 두 줄쌍) — 1층 격자 랙과 달리
+//    넓은 바닥 적치 칸 사이 지게차 통로. 피킹 메자닌과 방화문 둘(x20)로만 이어진다(관리동 복도·계단과 직접 잇지 않아 지름길이 아니다).
+//    화물 승강기(q) 승강장: 1층 홀 북동쪽 모서리와 같은 칸. 그 아래 남쪽(y29~32)은 출고 대기장 위로 뚫린 2층 높이 공간(2층 바닥 없음) ──
+up.fill(21, 9, 37, 28).set(20, 14, "D").set(20, 24, "D");
+for (const y of [12, 13]) rowX(up, "H", 25, 33, y); // (낮은 경량 랙 한 줄쌍)
+for (const y of [21, 22]) rowX(up, "H", 25, 33, y);
+up.put("J", [[23, 16], [24, 16], [27, 17], [31, 16], [34, 17], [23, 26], [27, 26], [31, 26], [35, 26]]); // 바닥 적치 팔레트
+up.set(37, 10, "q").set(22, 9, "Z").set(37, 28, "Z").set(37, 18, "Z").set(21, 28, "L").set(29, 9, "c");
+g.set(37, 10, "q"); // (1층 쪽 화물 승강기 칸)
+// ── 2층 동쪽 별관(x39~45, y9~32): 상부 보관층에서 방화문 둘(x38)로 들어오는 직원 별관 — 복도(x39~40) + 휴게실 · 숙직실 · 출하 기록 보관실 ──
+up.fill(39, 9, 40, 32).set(38, 11, "D").set(38, 27, "D"); // (문 둘을 복도 양 끝 가까이: 괴물 하나가 별관을 끊지 못하게)
+up.fill(42, 9, 45, 15).set(41, 10, "D").set(41, 14, "D"); // 휴게실(문 둘)
+up.put("T", [[43, 11], [44, 13]]).set(45, 9, "Z").set(45, 15, "c");
+up.fill(42, 17, 45, 22).set(41, 19, "D"); // 숙직실(문 하나: 숨는 곳만)
+up.put("N", [[45, 18], [45, 21]]).set(42, 22, "L");
+up.fill(42, 24, 45, 32).set(41, 24, "D").set(41, 31, "D"); // 출하 기록 보관실(문 둘): 서류 상자 줄
+up.put("c", [[45, 25], [45, 27], [45, 29]]).set(45, 32, "Z").set(42, 32, "L").set(43, 28, "T");
+up.set(39, 32, "L").set(40, 9, "c");
 
 // ── 계단(2층 바닥을 다 판 뒤에 놓아야 2층 계단 구멍 o 가 덮이지 않는다) ──
 g.stairs(45, 5, 0, -1); // 경비실 동쪽 벽 → 2층 계단 홀
@@ -107,6 +125,8 @@ g.stairs(14, 31, 0, -1); // 홀 남서쪽 계단실 → 피킹 메자닌 남쪽 
 
 const WALK = ["e", "d"];
 const opts = { id: 2, walkable: WALK };
+// 두 층 높이 공간(2층 격자 _): 출고 대기장·하역 도크 위는 층 사이 판 없이 지붕까지 트인다
+for (const [x0, y0, x1, y1] of [[1,29,45,37]]) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (up.get(x, y) === "#" && g.get(x, y) !== "#" && [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].every(([a, b]) => ["#", "_"].includes(up.get(x + a, y + b)))) up.set(x, y, "_"); // (2층 방 둘레 벽 한 칸은 남긴다)
 const r = report("물류 창고", g, opts);
 if (process.argv.includes("--print")) for (const [name, gr] of [["1층", g], ["2층", up]]) console.log(name + "\n" + gr.rows().map((row, i) => String(i).padStart(2) + " " + row).join("\n"));
 if (!process.argv.includes("--dry")) {
@@ -127,7 +147,7 @@ if (!process.argv.includes("--dry")) {
 	const real = outDir ? path.join(outDir, "Stage2.luau") : path.join(__dirname, "..", "..", "src", "server", "Stages", "Stage2.luau");
 	let src = fs.readFileSync(path.join(tmp, "Stage2.luau"), "utf8");
 	const nl = src.includes("\r\n") ? "\r\n" : "\n";
-	src = src.replace(/\tProps = \{[^\n]*\n/, `\tProps = { H = WP.RackRunX, h = WP.RackRunZ, K = WP.BoxTruck, T = Props.Desk, F = WP.Forklift, J = WP.PalletStack, u = WP.ConveyorRun, g = WP.Charger, e = WP.Evaporator, R = WP.ServerRack, d = WP.DockDoor, x = WP.FireShutter, W = WP.StretchWrapper, Y = WP.PackStation, k = WP.CartonFlow, B = WP.Workbench, G = WP.GuardBooth },${nl}`);
+	src = src.replace(/\tProps = \{[^\n]*\n/, `\tProps = { H = WP.RackRunX, h = WP.RackRunZ, K = WP.BoxTruck, T = Props.Desk, F = WP.Forklift, J = WP.PalletStack, u = WP.ConveyorRun, g = WP.Charger, e = WP.Evaporator, R = WP.ServerRack, d = WP.DockDoor, x = WP.FireShutter, W = WP.StretchWrapper, Y = WP.PackStation, k = WP.CartonFlow, B = WP.Workbench, G = WP.GuardBooth, q = WP.GoodsLift, N = Props.Bed },${nl}`);
 	src = src.replace(/\tWalkable = \{[^\n]*\n/, `\tWalkable = { e = true, d = true }, -- (증발기는 천장 쪽 벽걸이, 도크 문은 열린 셔터 문틀이라 바닥은 지나갈 수 있다)${nl}`);
 	src = src.replace(/\tPipeChance = [^\n]*\n/, `\tPipeChance = 0.2, -- (벽 배관은 볼트까지 부품이 많다: 줄 수를 줄인다)${nl}`);
 	fs.writeFileSync(real, src);

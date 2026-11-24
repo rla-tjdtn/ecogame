@@ -9,7 +9,7 @@ const st = loadStage(id);
 const T = 20, W = st.rows[0].length, H = st.rows.length;
 
 function render(rows, label, file) {
-	const wall = (i, j) => (i < 0 || j < 0 || i >= W || j >= H ? true : rows[j][i] === "#" || rows[j][i] === "o");
+	const wall = (i, j) => (i < 0 || j < 0 || i >= W || j >= H ? true : rows[j][i] === "#" || rows[j][i] === "o" || rows[j][i] === "_");
 	const top = label ? 34 : 0;
 	let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W * T}" height="${H * T + top}" style="background:#000"><rect width="100%" height="100%" fill="#000"/>`;
 	if (label) svg += `<text x="10" y="25" fill="#ddd" font-size="22" font-family="sans-serif" font-weight="bold">STAGE ${id} · ${label}</text>`;
@@ -18,6 +18,7 @@ function render(rows, label, file) {
 	for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
 		const c = rows[j][i];
 		if (c === "1" || c === "2") svg += `<rect x="${i * T + 2}" y="${j * T + 2}" width="${T - 4}" height="${T - 4}" fill="${c === "1" ? "#1c7c3c" : "#2fbf5f"}"/>`;
+		if (c === "_") svg += `<rect x="${i * T}" y="${j * T}" width="${T}" height="${T}" fill="#141414"/>`; // (두 층 높이 공간: 아래층이 트인 곳)
 		if (c === "o") svg += `<rect x="${i * T + 3}" y="${j * T + 3}" width="${T - 6}" height="${T - 6}" fill="none" stroke="#2fbf5f" stroke-width="2" stroke-dasharray="3 2"/>`;
 	}
 	const line = (x1, y1, x2, y2) => (svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#fff" stroke-width="2"/>`);

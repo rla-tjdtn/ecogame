@@ -227,8 +227,9 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 		end
 	end
 	if above then
-		-- 겹쳐 쌓은 1층: 천장 = 층 사이 판(1층 천장 H ~ 2층 바닥 UP). 계단 위(2층 격자의 o)만 뚫는다
-		for _, r in merge(function(i, j) return rowAt(above, i, j) ~= "o" end) do
+		-- 겹쳐 쌓은 1층: 천장 = 층 사이 판(1층 천장 H ~ 2층 바닥 UP). 계단 위(2층 격자의 o)와
+		-- 두 층 높이 공간(2층 격자의 _: 체육관·상영관·안뜰·하역장처럼 2층이 없고 지붕까지 트인 곳)만 뚫는다
+		for _, r in merge(function(i, j) local u = rowAt(above, i, j) return u ~= "o" and u ~= "_" end) do
 			rectSpan(r, H, UP, { name = "UpperFloor" })
 		end
 	elseif below then
@@ -301,6 +302,22 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 	info.route = function(from: Vector3, to: Vector3, monster: boolean?): { Vector3 }?
 		local function tileOf(p: Vector3): (number, number, number)
 			local i, j = math.floor(p.X / T) + 1, math.floor(p.Z / T) + 1
+			-- 점이 막힌 칸(상자·숨는 곳 바로 앞 경계 등)에 떨어지면 가장 가까운 지나갈 수 있는 이웃 칸으로
+			if not passable[at(i, j)] then
+				local best, bd = nil, math.huge
+				for _, d in dirs do
+					local ni, nj = i + d.di, j + d.dj
+					if passable[at(ni, nj)] then
+						local dd = (Vector3.new((ni - 0.5) * T, 0, (nj - 0.5) * T) - Vector3.new(p.X, 0, p.Z)).Magnitude
+						if dd < bd then
+							best, bd = { ni, nj }, dd
+						end
+					end
+				end
+				if best then
+					i, j = best[1], best[2]
+				end
+			end
 			local l = if p.Y < PIT_Y / 2 then 1 elseif p.Y > UP - 4 then 2 else 0
 			if not hasLevel(i, j, l) then
 				l = levelsAt(i, j)[1]
@@ -389,6 +406,13 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 		PIT_Y = PIT_Y,
 		info = info,
 		hash = hash,
+		-- 이 칸의 천장 높이(바닥 기준): 2층 격자가 _(두 층 높이 공간)이면 지붕까지(UP + 2층 높이), 아니면 이 층 천장 H
+		ceilAt = function(i: number, j: number): number
+			if above and rowAt(above, i, j) == "_" then
+				return UP + Builder.Height
+			end
+			return H
+		end,
 	}
 
 	-- 이 타일에서 벽이 있는 방향 목록
@@ -416,10 +440,23 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 	-- ── 벽면 장식: 벽기둥(필라스터), 천장 모서리 경사, 벽 배관 ──
 	local pipeChance = layout.PipeChance or 0.55
 	local seed = layout.Seed or 1
+	-- 천장 모서리 쐐기·전선관은 같은 벽 줄(방향·벽면 좌표·높이가 같고 칸이 이어진 것)마다 긴 부품 하나로 합친다
+	-- (같은 평면 이음매는 음파 격자가 어차피 지운다 → 윤곽은 같고 부품만 준다. map/physics 최적화 세션 요청)
+	type Run = { along: Vector3, n: Vector3, kind: string, items: { { t: number, face: Vector3 } } }
+	local runs: { [string]: Run } = {}
+	local function addRun(kind: string, d: any, along: Vector3, n: Vector3, face: Vector3)
+		local key = kind .. "|" .. d.di .. "," .. d.dj .. "|" .. math.round(face:Dot(d.v) * 100) .. "|" .. math.round(face.Y * 100)
+		local r = runs[key]
+		if not r then
+			r = { along = along, n = n, kind = kind, items = {} }
+			runs[key] = r
+		end
+		table.insert(r.items, { t = face:Dot(along), face = face })
+	end
 	for j = 1, nz do
 		for i = 1, nx do
 			local ch = at(i, j)
-			if ch ~= "#" and ch ~= "o" and not isFlight(i, j) then
+			if ch ~= "#" and ch ~= "o" and ch ~= "_" and not isFlight(i, j) then
 				local fy = floorY(i, j)
 				local c = center(i, j)
 				for _, d in wallSides(i, j) do
@@ -434,11 +471,7 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 					end
 					-- 천장 모서리 경사(쐐기): 바닥면이 천장에, 뒷면이 벽에 붙는다
 					if ch ~= "D" and ch ~= "A" and ch ~= "E" then
-						local s = 1.4
-						local pos = face + n * (s / 2) + Vector3.new(0, H - s / 2, 0)
-						local vY = Vector3.new(0, -1, 0)
-						local vZ = -n
-						Kit.wedge(geo, CFrame.fromMatrix(pos, vY:Cross(vZ), vY, vZ), Vector3.new(T, s, s), { name = "Haunch", collide = false, blocks = false })
+						addRun("haunch", d, along, n, face) -- (아래에서 벽 줄마다 긴 쐐기 하나로)
 					end
 					-- 벽 배관: 같은 벽 줄(행/열 + 방향)마다 정해진 확률로, 줄 전체에 이어진다
 					local lineKey = if math.abs(d.v.X) > 0 then i * 2 + (if d.v.X > 0 then 1 else 0) else j * 2 + (if d.v.Z > 0 then 1 else 0)
@@ -470,14 +503,39 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 						end
 						-- 가는 전선관(위쪽)
 						if hash(lineKey, axisKey, seed + 7) < 0.5 then
-							local off2 = n * 0.45
-							local a2 = face - along * (T / 2) + off2 + Vector3.new(0, H - 1.9, 0)
-							local b2 = face + along * (T / 2) + off2 + Vector3.new(0, H - 1.9, 0)
-							Kit.cylinder(props, a2, b2, 0.16, { blocks = false, collide = false })
+							addRun("conduit", d, along, n, face) -- (아래에서 벽 줄마다 긴 원통 하나로)
 						end
 					end
 				end
 			end
+		end
+	end
+
+	-- 모은 벽 줄을 이어진 칸끼리 묶어 짓는다
+	for _, r in runs do
+		table.sort(r.items, function(a, b)
+			return a.t < b.t
+		end)
+		local k = 1
+		while k <= #r.items do
+			local last = k
+			while last < #r.items and math.abs(r.items[last + 1].t - r.items[last].t - T) < 0.01 do
+				last += 1
+			end
+			local first, final = r.items[k].face, r.items[last].face
+			local len = T * (last - k + 1)
+			local mid = (first + final) / 2
+			if r.kind == "haunch" then
+				local sz = 1.4
+				local pos = mid + r.n * (sz / 2) + Vector3.new(0, H - sz / 2, 0)
+				local vY = Vector3.new(0, -1, 0)
+				local vZ = -r.n
+				Kit.wedge(geo, CFrame.fromMatrix(pos, vY:Cross(vZ), vY, vZ), Vector3.new(len, sz, sz), { name = "Haunch", collide = false, blocks = false })
+			else
+				local off2 = r.n * 0.45 + Vector3.new(0, H - 1.9, 0)
+				Kit.cylinder(props, first - r.along * (T / 2) + off2, final + r.along * (T / 2) + off2, 0.16, { blocks = false, collide = false })
+			end
+			k = last + 1
 		end
 	end
 
@@ -757,15 +815,15 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 		end
 	end
 
-	-- ── 겹쳐 쌓은 2층: 계단 구멍(o) 둘레 난간(계단이 올라와 닿는 칸 쪽은 뚫는다) ──
+	-- ── 겹쳐 쌓은 2층: 계단 구멍(o)·두 층 높이 공간(_) 둘레 난간(계단이 올라와 닿는 칸 쪽은 뚫는다) ──
 	if below then
 		for j = 1, nz do
 			for i = 1, nx do
-				if at(i, j) ~= "#" and at(i, j) ~= "o" then
+				if at(i, j) ~= "#" and at(i, j) ~= "o" and at(i, j) ~= "_" then
 					for _, d in dirs do
 						local hi, hj = i + d.di, j + d.dj
-						if at(hi, hj) == "o" then
-							local landing = rowAt(below, hi, hj) == "2" and rowAt(below, hi + d.di, hj + d.dj) == "1"
+						if at(hi, hj) == "o" or at(hi, hj) == "_" then
+							local landing = at(hi, hj) == "o" and rowAt(below, hi, hj) == "2" and rowAt(below, hi + d.di, hj + d.dj) == "1"
 							if not landing then
 								local c = center(i, j)
 								local edge = c + d.v * (T / 2 - 0.3)
@@ -854,6 +912,23 @@ function Builder.build(layout: Layout, parent: Instance, name: string): StageInf
 	info.route = function(from: Vector3, to: Vector3, monster: boolean?): { Vector3 }?
 		local function tileOf(p: Vector3): (number, number, number, number)
 			local i, j = math.floor(p.X / T) + 1, math.floor(p.Z / T) + 1
+			local fl = if p.Y > UP - 3 then 2 else 1
+			-- 점이 막힌 칸(상자·숨는 곳 바로 앞 경계 등)에 떨어지면 같은 층의 가장 가까운 지나갈 수 있는 이웃 칸으로
+			if not passable[ch(fl, i, j)] then
+				local best, bd = nil, math.huge
+				for _, d in D4 do
+					local ni, nj = i + d[1], j + d[2]
+					if passable[ch(fl, ni, nj)] then
+						local dd = (Vector3.new((ni - 0.5) * T, 0, (nj - 0.5) * T) - Vector3.new(p.X, 0, p.Z)).Magnitude
+						if dd < bd then
+							best, bd = { ni, nj }, dd
+						end
+					end
+				end
+				if best then
+					i, j = best[1], best[2]
+				end
+			end
 			local f = if p.Y > UP - 3 and passable[ch(2, i, j)] then 2 else 1
 			local l = if f == 1 and p.Y < PIT_Y / 2 then 1 else 0
 			if not has(f, i, j, l) then
