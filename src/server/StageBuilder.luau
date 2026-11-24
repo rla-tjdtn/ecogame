@@ -756,6 +756,15 @@ local function buildGrid(layout: Layout, parent: Instance?, name: string, fl: Fl
 						up = d
 					end
 				end
+				-- 2 칸은 1 칸에서 이어지는 방향(1 의 반대쪽)으로 올라간다. 계단 구멍 옆에도 2층 바닥이 있으면 위 고르기가
+				-- 옆 칸을 골라 경사로가 옆 벽 쪽으로 돌아가 버렸다(6장 2곳·10장 1곳: 크기와 상관없이 꼭대기·이음매에서 멈춤)
+				if ch == "2" then
+					for _, d in dirs do
+						if at(i - d.di, j - d.dj) == "1" then
+							up = d
+						end
+					end
+				end
 				local bottom = c - up.v * (T / 2)
 				Kit.stairs(props, bottom, up.v, 6, UP / 2, T, 8)
 				-- 벽 쪽 손잡이(양옆)

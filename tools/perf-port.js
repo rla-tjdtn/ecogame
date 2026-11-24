@@ -6,6 +6,9 @@ const [file, port] = process.argv.slice(2);
 const j = JSON.parse(fs.readFileSync(file, "utf8"));
 const ss = j.tree.ServerStorage || {};
 ss["$className"] = "ServerStorage";
-ss["$attributes"] = Object.assign(ss["$attributes"] || {}, { TestPort: { Float64: Number(port) } });
+const attrs = { TestPort: { Float64: Number(port) } };
+// env PROPMESH_OFF=1: 소품 메시 끄기(PropMesh.dress 가 아무것도 안 함 → 예전 부품 그대로) — 전/후 비교용
+if (process.env.PROPMESH_OFF) attrs.PropMeshOff = { Bool: true };
+ss["$attributes"] = Object.assign(ss["$attributes"] || {}, attrs);
 j.tree.ServerStorage = ss;
 fs.writeFileSync(file, JSON.stringify(j, null, 1));

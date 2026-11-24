@@ -2939,6 +2939,180 @@ local function pbench()
 	R.info.pbench = rows
 end
 
+-- stairs (env STAGE=n, 없으면 전부): 계단(보이지 않는 경사로)마다 캐릭터 크기 1.0 / 0.75 / 0.55 로 아래에서 위로 걸어 올라가는가.
+-- 실패하면 멈춘 높이·자리·Humanoid 상태를 남긴다(작은 아바타가 계단을 못 오른다는 보고)
+local function stairsTest()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local only = tonumber(args.Stage) or 0
+	local scales = if args.Quick then { 0.55 } else { 1.0, 0.75, 0.55 }
+	local summary = {}
+	for st = 1, #Config.Stages do
+		if only > 0 and st ~= only then
+			continue
+		end
+		Round.startStage(st)
+		task.wait(1)
+		if not readyPlayers(1) then
+			check("stage " .. st .. " ready", false)
+			continue
+		end
+		for _, list in { Round.monsters, Round.doppels, Round.flowers } do
+			for _, m in list do
+				rawset(m, "checkCatch", function() end)
+				if m.root then
+					m.root.Anchored = true -- (괴물은 세워 둔다: 계단 시험 방해 금지)
+				end
+			end
+		end
+		-- 계단 하나 = Stairs 모델(경사로가 여러 조각일 수 있다): 가장 낮은 쐐기의 아래 끝 → 가장 높은 쐐기의 위 끝
+		local ramps = {}
+		for _, mdl in stageFolder():GetDescendants() do
+			if mdl:IsA("Model") and mdl.Name == "Stairs" then
+				local lowW, highW = nil, nil
+				for _, d in mdl:GetChildren() do
+					if d:IsA("WedgePart") then
+						if not lowW or d.Position.Y < lowW.Position.Y then
+							lowW = d
+						end
+						if not highW or d.Position.Y > highW.Position.Y then
+							highW = d
+						end
+					end
+				end
+				if lowW and highW then
+					local fw = -lowW.CFrame.LookVector
+					fw = Vector3.new(fw.X, 0, fw.Z).Unit
+					local lo = lowW.Position - fw * (lowW.Size.Z / 2) - Vector3.new(0, lowW.Size.Y / 2, 0)
+					local hi = highW.Position + fw * (highW.Size.Z / 2) + Vector3.new(0, highW.Size.Y / 2, 0)
+					table.insert(ramps, { f = fw, low = lo, high = hi, mid = (lo + hi) / 2, run = (hi - lo):Dot(fw), rise = hi.Y - lo.Y })
+				end
+			end
+		end
+		local fails = {}
+		local tried = 0
+		for _, scale in scales do
+			local char = p.Character
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			if not char or not hum then
+				break
+			end
+			char:ScaleTo(scale)
+			task.wait(0.3)
+			for k, w in ramps do
+				if k > 12 then
+					break -- (장마다 앞 12개)
+				end
+				local f, mid, run, rise, low, high = w.f, w.mid, w.run, w.rise, w.low, w.high
+				local r = root(p)
+				if not r or p:GetAttribute("Status") ~= "Alive" then
+					break
+				end
+				local startY = hum.HipHeight + r.Size.Y / 2 + 0.3
+				place(p, low - f * 2.5 + Vector3.new(0, startY, 0), low + f * 10 + Vector3.new(0, startY, 0))
+				task.wait(0.4)
+				local target = high + f * 2.5
+				hum:MoveTo(target)
+				local ok = waitFor(function()
+					local rr = root(p)
+					if not rr then
+						return nil
+					end
+					local feet = rr.Position.Y - (hum.HipHeight + rr.Size.Y / 2)
+					local flat = Vector3.new(rr.Position.X - target.X, 0, rr.Position.Z - target.Z).Magnitude
+					return feet > high.Y - 0.8 and flat < 2.5
+				end, 5 + run / 4)
+				tried += 1
+				if not ok then
+					local rr = root(p)
+					local feet = rr and (rr.Position.Y - (hum.HipHeight + rr.Size.Y / 2)) or 0
+					local along = rr and (rr.Position - low):Dot(f) or 0
+					-- 막은 것: 캐릭터 둘레 2.5스터드 안의 부딪히는 파트(캐릭터 제외) — 이름, 경로 끝, 윗면 높이
+					local near = {}
+					if rr then
+						local op = OverlapParams.new()
+						op.FilterType = Enum.RaycastFilterType.Exclude
+						op.FilterDescendantsInstances = { p.Character }
+						for _, bp in workspace:GetPartBoundsInRadius(rr.Position + f * 1.2, 2.5, op) do
+							if bp.CanCollide and #near < 6 then
+								local top = bp.Position.Y + bp.Size.Y / 2
+								table.insert(near, string.format("%s<%s>%s top%.1f %s", bp.Name, bp.Parent and bp.Parent.Name or "?", bp.ClassName == "WedgePart" and "W" or "", top - low.Y, bp.Transparency >= 1 and "inv" or ""))
+							end
+						end
+					end
+					-- 몸이 실제로 닿은 것(부딪히지 않는 것 포함) + 발밑 재질
+					local touch = {}
+					for _, bodyPart in p.Character:GetChildren() do
+						if bodyPart:IsA("BasePart") and bodyPart.CanCollide then
+							local op2 = OverlapParams.new()
+							op2.FilterType = Enum.RaycastFilterType.Exclude
+							op2.FilterDescendantsInstances = { p.Character }
+							for _, hit in workspace:GetPartsInPart(bodyPart, op2) do
+								if #touch < 8 then
+									table.insert(touch, string.format("%s>%s<%s>%s", bodyPart.Name, hit.Name, hit.Parent and hit.Parent.Name or "?", hit.CanCollide and "C" or "nc"))
+								end
+							end
+						end
+					end
+					table.insert(fails, string.format("x%.1f ramp%d(c%d,r%d rise%.0f) stuck feet %.1f/%.1f along %.1f/%.1f state %s floor %s hip %.2f near[%s] touch[%s]", scale, k, math.floor(mid.X / 8), math.floor(mid.Z / 8), rise, feet - low.Y, rise, along, run, hum:GetState().Name, hum.FloorMaterial.Name, hum.HipHeight, table.concat(near, "; "), table.concat(touch, "; ")))
+				end
+			end
+		end
+		local ch = p.Character
+		if ch then
+			ch:ScaleTo(1)
+		end
+		summary[st] = { ramps = #ramps, tried = tried, fails = #fails }
+		check(string.format("stage %d: every stair climbable at scale 1.0/0.75/0.55 (%d ramps)", st, #ramps), #fails == 0, table.concat(fails, " | "):sub(1, 2400))
+	end
+	R.info.stairs = summary
+end
+
+-- spin (env STAGE=n): 가장 무거운 곳에서 카메라를 마구 돌리며 음파 — 화면 안 선 밝기가 틀린 수(opt-sonar 화면 밖 색 미루기 검사)
+local function spin()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local stageNo = tonumber(args.Stage) or 0
+	if stageNo > 0 and stageNo ~= Round.stageIndex then
+		Round.startStage(stageNo)
+		task.wait(1)
+		readyPlayers(1)
+	end
+	for _, list in { Round.monsters, Round.doppels, Round.flowers } do
+		for _, m in list do
+			rawset(m, "checkCatch", function() end)
+		end
+	end
+	local spot = heaviestNode()
+	place(p, spot + Vector3.new(0, 0.5, 0))
+	task.wait(3)
+	for _, cfg in { { 10, 8, 40 }, { 10, 3, 0 } } do
+		local res, done = nil, false
+		task.spawn(function()
+			local ok, r = pcall(function()
+				return (ReplicatedStorage:WaitForChild("TestProbe") :: RemoteFunction):InvokeClient(p, "spinCheck", cfg) -- (이 줄의 probe 는 아래 probe() 테스트 함수에 가려진다)
+			end)
+			res = if ok then r else tostring(r)
+			done = true
+		end)
+		waitFor(function()
+			return done
+		end, 40)
+		local tag = string.format("spin %ds max %d°/frame flick %d", cfg[1], cfg[2], cfg[3])
+		R.info[tag] = res
+		check(tag .. ": on-screen lines all at the right brightness (bad == 0)", type(res) == "table" and res.bad == 0, if type(res) == "table" then HttpService:JSONEncode(res) else tostring(res))
+		task.wait(Config.Sonar.Hold + 0.5)
+	end
+end
+
 local function census()
 	local ps = readyPlayers(1)
 	check("player ready", ps ~= nil)
@@ -3015,6 +3189,7 @@ local function census()
 		end
 		c.serverBuildMs = math.floor(Round.lastBuildMs)
 		c.segs = st and st.segs
+		c.viewParts = st and st.viewParts -- (보는 위치마다 실루엣을 다시 계산하는 원통·구 수)
 		c.clientBuildSec = st and r2(st.build.seconds)
 		c.clientBuildCpu = st and r2(st.build.cpu)
 		c.grid = st and table.concat(st.grid, "x")
@@ -3094,6 +3269,10 @@ task.spawn(function()
 			pbench()
 		elseif args.Test == "census" then
 			census()
+		elseif args.Test == "stairs" then
+			stairsTest()
+		elseif args.Test == "spin" then
+			spin()
 		elseif args.Test == "dense" then
 			dense()
 		elseif args.Test == "lobby" then
