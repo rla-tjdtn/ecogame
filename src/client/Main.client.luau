@@ -783,6 +783,57 @@ task.spawn(function()
 		elseif cmd == "resetCooldown" then
 			lastFire = -math.huge
 			return true
+		elseif cmd == "spinCheck" then
+			-- (음파 선 시야 검사) arg = { seconds, maxDeg, flickEvery }: 카메라를 프레임마다 maxDeg 까지 마구 돌리며(flickEvery 프레임마다 180도 휙)
+			-- 쿨다운마다 음파를 쏘고, 그려진 뒤(Heartbeat) 화면 안 선 중 밝기가 틀린 수(Lines.viewMismatch)를 센다. 늘 0 이어야 한다
+			local t = arg :: { any }
+			local seconds, maxDeg, flickEvery = t[1] or 8, t[2] or 8, t[3] or 0
+			local cam = workspace.CurrentCamera
+			local oldType = cam.CameraType
+			cam.CameraType = Enum.CameraType.Scriptable
+			local base = cam.CFrame.Position
+			local yaw, pitch, frame = 0, 0, 0
+			local flicked = false
+			RunService:BindToRenderStep("SonarSpinCheck", Enum.RenderPriority.Camera.Value, function()
+				frame += 1
+				flicked = flickEvery > 0 and frame % flickEvery == 0
+				yaw += if flicked then math.pi else math.rad((math.random() * 2 - 1) * maxDeg)
+				pitch = math.clamp(pitch + math.rad((math.random() * 2 - 1) * maxDeg * 0.3), -1.2, 1.2)
+				local head = player.Character and player.Character:FindFirstChild("Head") :: BasePart?
+				local pos = if head then head.Position else base
+				cam.CFrame = CFrame.new(pos) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch, 0, 0)
+			end)
+			local res = { frames = 0, bad = 0, max = 0, flickBad = 0, flicks = 0, fired = 0, deferred0 = Lines.deferred }
+			local hb = RunService.Heartbeat:Connect(function()
+				local m = Lines.viewMismatch()
+				res.frames += 1
+				if flicked then
+					res.flicks += 1
+					if m > 0 then
+						res.flickBad += 1
+					end
+				elseif m > 0 then
+					res.bad += 1
+				end
+				res.max = math.max(res.max, m)
+			end)
+			local t0 = os.clock()
+			local nextFire = 0
+			while os.clock() - t0 < seconds do
+				if os.clock() - t0 >= nextFire then
+					nextFire += Config.Sonar.Cooldown
+					lastFire = -math.huge
+					if fire() then
+						res.fired += 1
+					end
+				end
+				task.wait()
+			end
+			hb:Disconnect()
+			RunService:UnbindFromRenderStep("SonarSpinCheck")
+			cam.CameraType = oldType
+			res.deferred = Lines.deferred - res.deferred0
+			return res
 		elseif cmd == "pulseAt" then
 			-- 시각 효과만(서버에 알리지 않음): 지정 지점에서 음파
 			return Pulses.start(arg :: Vector3, player.Character, true)

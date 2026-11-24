@@ -35,6 +35,9 @@ type Rec = {
 	tint: Color3?, -- 이 선만의 색(괴물 이빨 등, 파트 속성 SonarColor). 없으면 Config.Sonar.LineColor
 	a: Vector3,
 	b: Vector3,
+	m: Vector3, -- 가운데 점(시야 판정)
+	lq: number, -- 지금 있어야 할 밝기 단계(q 는 파트에 실제로 칠한 단계 — 시야 밖이면 칠하기를 미뤄 둘이 다를 수 있다)
+	dirty: boolean, -- 시야 밖이라 칠하기를 미뤘다(dirtyList 에 있다)
 }
 
 local folder: Folder? = nil
@@ -118,7 +121,7 @@ local function newRec(): Rec
 	p.BottomSurface = Enum.SurfaceType.Smooth
 	p.Parent = getFolder()
 	created += 1
-	return { part = p, sk = FIRST_SK, on = false, t0 = 0, peak = 0, key = nil, q = -1, slot = 0, wake = 0, tint = nil, a = Vector3.zero, b = Vector3.zero }
+	return { part = p, sk = FIRST_SK, on = false, t0 = 0, peak = 0, key = nil, q = -1, slot = 0, wake = 0, tint = nil, a = Vector3.zero, b = Vector3.zero, m = HIDDEN.Position, lq = -1, dirty = false }
 end
 
 local function giveFree(rec: Rec)
@@ -166,6 +169,7 @@ local function release(i: number)
 		rec.key = nil
 	end
 	rec.on = false
+	-- (rec.dirty 는 그대로: 미룬 목록에 남아 있으면 다음에 다시 볼 때 빠진다. dirty == 목록에 있음)
 	frameRelease += 1
 	-- (색은 그대로 두고 화면 밖으로만 옮긴다: 다시 쓸 때 첫 갱신에서 색을 정한다)
 	table.insert(moveParts, rec.part)
@@ -226,6 +230,7 @@ local function place(rec: Rec, a: Vector3, b: Vector3, sk: number, w: number, l:
 		Lines.sized += 1
 	end
 	local mid = (a + b) / 2
+	rec.m = mid
 	local d = b - a
 	local up = if math.abs(d.Y) > 0.98 * d.Magnitude then Vector3.xAxis else Vector3.yAxis
 	table.insert(moveParts, rec.part)
@@ -293,8 +298,68 @@ local function level(age: number): number
 	return S.BaseLevel * (1 - t) * (1 - t * 0.35)
 end
 
+-- ── 시야 밖 선은 색 칠하기를 미룬다 ──
+-- 선 쪽 비용의 거의 전부가 색 바꾸기(파트 하나 약 8µs, 4명이 쏘면 초당 1만 번 넘게)다. 음파는 사방으로 퍼지므로 대부분 화면 밖이다.
+-- 화면 밖 선은 "있어야 할 밝기(lq)"만 따라가고 칠하지 않는다. 카메라가 돌거나 움직이면 미룬 선을 다시 보고, 시야(+여유각)에 들어온 선은
+-- 그 자리에서 지금 밝기로 칠한다. 여유각(VIEW_MARGIN)이 한 번 다시 보는 사이 카메라가 도는 각(VIEW_RECHECK)보다 훨씬 커서,
+-- 화면에 보이는 선은 늘 예전과 같은 밝기다.
+local VIEW_MARGIN = math.rad(15)
+local VIEW_RECHECK = math.cos(math.rad(3)) -- 마지막으로 다시 본 뒤 이만큼 돌면 다시 본다
+local VIEW_MOVE = 0.5 -- (스터드) 이만큼 움직여도
+local VIEW_NEAR = 4 -- 이보다 가까운 선은 늘 칠한다
+local VIEW_SLACK = 2 -- 선 반 길이·굵기 여유(스터드)
+local dirtyList: { Rec } = {}
+local vP, vR, vU, vL = Vector3.zero, Vector3.xAxis, Vector3.yAxis, -Vector3.zAxis
+local vTH, vTV = 10, 10
+local lastL, lastU, lastP, lastFov, lastAspect = Vector3.zero, Vector3.zero, Vector3.new(1e9, 0, 0), 0, 0
+Lines.deferred = 0 -- (측정) 시야 밖이라 칠하기를 미룬 수
+local deferredSeen = 0
+
+local function visible(m: Vector3): boolean
+	local d = m - vP
+	if d.Magnitude < VIEW_NEAR then
+		return true
+	end
+	local z = d:Dot(vL)
+	if z <= 0 then
+		return false
+	end
+	return math.abs(d:Dot(vR)) <= z * vTH + VIEW_SLACK and math.abs(d:Dot(vU)) <= z * vTV + VIEW_SLACK
+end
+
+local function paint(rec: Rec, q: number)
+	rec.q = q
+	local v = q / QUANT
+	local c = rec.tint
+	rec.part.Color = if c then Color3.new(c.R * v, c.G * v, c.B * v) else LEVELS[q]
+	frameColor += 1
+end
+
+-- 이 프레임 카메라. 돌았거나 움직였으면 true(미룬 선을 다시 볼 때)
+local function setupView(): boolean
+	local cam = workspace.CurrentCamera
+	if not cam then
+		vTH, vTV = 1e9, 1e9 -- (카메라가 없으면 전부 칠한다)
+		return true
+	end
+	local cf = cam.CFrame
+	vP, vR, vU, vL = cf.Position, cf.RightVector, cf.UpVector, cf.LookVector
+	local vs = cam.ViewportSize
+	local aspect = if vs.Y > 0 then vs.X / vs.Y else 16 / 9
+	local fov = cam.FieldOfView
+	local halfV = math.rad(fov) / 2
+	vTV = math.tan(math.min(halfV + VIEW_MARGIN, math.rad(89)))
+	vTH = math.tan(math.min(math.atan(math.tan(halfV) * aspect) + VIEW_MARGIN, math.rad(89)))
+	if vL:Dot(lastL) < VIEW_RECHECK or vU:Dot(lastU) < VIEW_RECHECK or (vP - lastP).Magnitude > VIEW_MOVE or fov ~= lastFov or aspect ~= lastAspect then
+		lastL, lastU, lastP, lastFov, lastAspect = vL, vU, vP, fov, aspect
+		return true
+	end
+	return false
+end
+
 function Lines.update(now: number)
 	local c0 = os.clock()
+	local recheck = setupView()
 	local i = 1
 	local fadeStart = S.Hold - S.FadeTime
 	local step = S.FadeTime / QUANT
@@ -318,14 +383,38 @@ function Lines.update(now: number)
 				else math.min(now + step * (0.6 + math.random() * 0.8), rec.t0 + S.Hold)
 			local l = level(age) * rec.peak
 			local q = math.floor(l * QUANT + 0.5)
+			rec.lq = q
 			if q ~= rec.q then
-				rec.q = q
-				local v = q / QUANT
-				local c = rec.tint
-				rec.part.Color = if c then Color3.new(c.R * v, c.G * v, c.B * v) else LEVELS[q]
-				frameColor += 1
+				if visible(rec.m) then
+					paint(rec, q)
+				elseif not rec.dirty then
+					rec.dirty = true
+					table.insert(dirtyList, rec)
+					Lines.deferred += 1
+				end
 			end
 			i += 1
+		end
+	end
+	-- 카메라가 돌았거나 움직였다: 미룬 선 중 시야에 들어온 것을 지금 밝기로 칠한다(꺼졌거나 이미 칠한 것은 목록에서 뺀다)
+	if recheck and #dirtyList > 0 then
+		local n = #dirtyList
+		local k = 1
+		while k <= n do
+			local rec = dirtyList[k]
+			local keep = rec.on and rec.dirty and rec.lq ~= rec.q
+			if keep and visible(rec.m) then
+				paint(rec, rec.lq)
+				keep = false
+			end
+			if keep then
+				k += 1
+			else
+				rec.dirty = false
+				dirtyList[k] = dirtyList[n]
+				dirtyList[n] = nil
+				n -= 1
+			end
 		end
 	end
 	pruneOrder()
@@ -342,6 +431,8 @@ function Lines.update(now: number)
 	Perf.count("lines.color", frameColor)
 	Perf.count("lines.moved", moved)
 	Perf.count("lines.release", frameRelease)
+	Perf.count("lines.deferred", Lines.deferred - deferredSeen)
+	deferredSeen = Lines.deferred
 	frameRelease = 0
 	Lines.maxColor = math.max(Lines.maxColor, frameColor)
 	Lines.maxPlace = math.max(Lines.maxPlace, framePlace)
@@ -352,7 +443,7 @@ end
 function Lines.countNear(p: Vector3, r: number): number
 	local n = 0
 	for _, rec in active do
-		if rec.q > 0 and (rec.part.Position - p).Magnitude < r then
+		if rec.lq > 0 and (rec.part.Position - p).Magnitude < r then
 			n += 1
 		end
 	end
@@ -374,6 +465,10 @@ function Lines.prewarm(n: number)
 end
 
 function Lines.clear()
+	for _, r in dirtyList do
+		r.dirty = false
+	end
+	table.clear(dirtyList)
 	while #active > 0 do
 		release(#active)
 	end
@@ -387,21 +482,44 @@ function Lines.clear()
 	end
 end
 
+-- (테스트) 실제 화면(여유각 없이) 안에 있는데 칠한 밝기가 있어야 할 밝기와 다른 선 수 — 늘 0 이어야 한다
+function Lines.viewMismatch(): number
+	local cam = workspace.CurrentCamera
+	if not cam then
+		return 0
+	end
+	local cf = cam.CFrame
+	local p, r, u, l = cf.Position, cf.RightVector, cf.UpVector, cf.LookVector
+	local vs = cam.ViewportSize
+	local halfV = math.rad(cam.FieldOfView) / 2
+	local tv = math.tan(halfV)
+	local th = tv * (if vs.Y > 0 then vs.X / vs.Y else 16 / 9)
+	local n = 0
+	for _, rec in active do
+		local d = rec.m - p
+		local z = d:Dot(l)
+		if z > 0.1 and math.abs(d:Dot(r)) <= z * th and math.abs(d:Dot(u)) <= z * tv and rec.q ~= rec.lq and rec.lq >= 0 then
+			n += 1
+		end
+	end
+	return n
+end
+
 function Lines.stats()
 	local lit = 0
 	for _, r in active do
-		if r.q > 0 then
+		if r.lq > 0 then
 			lit += 1
 		end
 	end
-	return { active = #active, lit = lit, created = created, free = freeCount, order = tail - head + 1, sized = Lines.sized, stolen = Lines.stolen, dropped = Lines.dropped, shown = Lines.shownTotal, maxColor = Lines.maxColor, maxPlace = Lines.maxPlace }
+	return { active = #active, lit = lit, created = created, free = freeCount, order = tail - head + 1, sized = Lines.sized, stolen = Lines.stolen, deferred = Lines.deferred, dirty = #dirtyList, viewMismatch = Lines.viewMismatch(), dropped = Lines.dropped, shown = Lines.shownTotal, maxColor = Lines.maxColor, maxPlace = Lines.maxPlace }
 end
 
 -- 테스트용: 현재 켜진 선의 가운데 점들
 function Lines.litMidpoints(): { Vector3 }
 	local out = {}
 	for _, r in active do
-		if r.q > 0 then
+		if r.lq > 0 then
 			table.insert(out, r.part.Position)
 		end
 	end
