@@ -2127,6 +2127,76 @@ local function flowerSpot()
 	end
 end
 
+-- 챕터 괴물 하나(env CREATURE=id)를 켜고 그 챕터에서 나오게 해 본다: 생성·선 수·움직임·애니메이션·잡기
+local function creatureTest()
+	local id = args.Creature
+	check("creature id given", typeof(id) == "string" and id ~= "", tostring(id))
+	local chapter = nil
+	for ch, list in Config.Creatures.Chapters do
+		if table.find(list, id) then
+			chapter = ch
+		end
+	end
+	check("creature belongs to a chapter", chapter ~= nil, tostring(chapter))
+	local Monster = require(script.Parent.Monster)
+	check("creature module loads", Monster.creatureModule(id) ~= nil, id)
+	if not chapter then
+		return
+	end
+	Config.Creatures.On[id] = true
+	local stageIdx = nil
+	for i, s in Config.Stages do
+		if s.Id == chapter then
+			stageIdx = i
+		end
+	end
+	local ps = readyPlayers(1)
+	if not ps then
+		check("player ready", false)
+		return
+	end
+	local p = ps[1]
+	Round.startStage(stageIdx)
+	readyPlayers(1)
+	local m = nil
+	waitFor(function()
+		for _, mm in Round.monsters do
+			if mm.model:GetAttribute("Creature") == id then
+				m = mm
+			end
+		end
+		return m ~= nil
+	end, 15)
+	check("creature spawned in its chapter", m ~= nil, "stage " .. tostring(stageIdx))
+	if not m then
+		return
+	end
+	local lines, balls = 0, 0
+	for _, d in m.model:GetDescendants() do
+		if d.Name == "Line" then
+			lines += 1
+		elseif d.Name == "Ball" then
+			balls += 1
+		end
+	end
+	check("sonar line budget 30..140", lines + balls >= 30 and lines + balls <= 140, lines .. " lines + " .. balls .. " balls")
+	check("own rig (Rig=3)", m.model:GetAttribute("Rig") == 3)
+	ask(p, "creature", "reset")
+	local start = m.root.Position
+	-- 플레이어 근처로 불러 쫓게 한다
+	place(p, start + Vector3.new(14, 3, 0))
+	task.wait(1)
+	m.startAt = 0
+	m:hear(p.Character and p.Character.PrimaryPart and p.Character.PrimaryPart.Position or start, 60, p, "Sonar")
+	task.wait(8)
+	local moved = (m.root.Position - start).Magnitude
+	check("creature moves", moved > 3, string.format("moved %.1f", moved))
+	local st = ask(p, "creature", id)
+	check("client animates its own rig", st ~= nil and st.frames > 30 and st.maxAngle > 0.05, st and string.format("frames %d maxAngle %.2f steps %d", st.frames, st.maxAngle, st.steps) or "no stats")
+	check("creature still alive and in map", m.alive and m.root.Position.Y > -50, tostring(m.root.Position))
+	Config.Creatures.On[id] = nil
+end
+
 task.spawn(function()
 	local ok, err = pcall(function()
 		if args.Test == "dense" then
@@ -2151,6 +2221,8 @@ task.spawn(function()
 			seal()
 		elseif args.Test == "doppel" then
 			doppelTest()
+		elseif args.Test == "creature" then
+			creatureTest()
 		elseif args.Test == "flowerspot" then
 			flowerSpot()
 		elseif args.Test == "chase" then

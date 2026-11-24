@@ -292,6 +292,25 @@ Config.Hide = {
 	Tile = 8, -- 맵 한 칸(스터드), StageBuilder 와 같게
 }
 
+-- ─────────────────────────────── 챕터 괴물(새 디자인) ───────────────────────────────
+-- 챕터마다 사람형(h)·비인간형(n) 두 종. On 에 true 인 것만 실제로 나온다(검수 통과 + 게임 구현 끝난 것).
+-- 켜진 괴물이 있는 챕터는 메인 괴물 자리를 켜진 괴물들이 번갈아 채운다(꺼져 있으면 기존 메인 괴물 그대로).
+Config.Creatures = {
+	Chapters = {
+		[1] = { "c1h", "c1n" },
+		[2] = { "c2h", "c2n" },
+		[3] = { "c3h", "c3n" },
+		[4] = { "c4h", "c4n" },
+		[5] = { "c5h", "c5n" },
+		[6] = { "c6h", "c6n" },
+		[7] = { "c7h", "c7n" },
+		[8] = { "c8h", "c8n" },
+		[9] = { "c9h", "c9n" },
+		[10] = { "c10h", "c10n" },
+	},
+	On = {} :: { [string]: boolean },
+}
+
 Config.Stages = {
 	{ Id = 1, Name = "STAGE 1 — 지하 시설", Module = "Stage1", Monsters = 2 },
 	{ Id = 2, Name = "STAGE 2 — 물류 창고", Module = "Stage2", Monsters = 2 },
@@ -1277,6 +1296,8 @@ return Geo
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Kit = require(script.Parent.Parent.MapKit)
 local Faces = require(ReplicatedStorage.Shared.MonsterFaces)
+local Config = require(ReplicatedStorage.Shared.Config)
+local CollectionService = game:GetService("CollectionService")
 
 local Rig = {}
 
@@ -1359,6 +1380,44 @@ function Rig.build(model: Model, root: BasePart, cf: CFrame, def: Def): { [strin
 	return parts
 end
 
+-- 괴물 모델의 기본 틀: 루트 파트 + Humanoid(점프·기어오르기 끔). build() 에서 Rig.build 전에 부른다
+function Rig.shell(name: string, cf: CFrame, rootSize: Vector3?): (Model, BasePart)
+	local model = Instance.new("Model")
+	model.Name = name
+	model:SetAttribute(Config.Tags.Dynamic, true)
+	model:SetAttribute("State", "Wander")
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = rootSize or Vector3.new(2, 2, 1.2)
+	root.Transparency = 1
+	root.CanCollide = true
+	root.CanTouch = false
+	root.CFrame = cf
+	root.Parent = model
+	model.PrimaryPart = root
+	return model, root
+end
+function Rig.humanoid(model: Model, hip: number, speed: number): Humanoid
+	local hum = Instance.new("Humanoid")
+	hum.RigType = Enum.HumanoidRigType.R15
+	hum.HipHeight = hip
+	hum.WalkSpeed = speed
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	hum.BreakJointsOnDeath = false
+	hum.MaxHealth = math.huge
+	hum.Health = math.huge
+	hum.AutoJumpEnabled = false
+	hum.UseJumpPower = true
+	hum.JumpPower = 0
+	hum.Parent = model
+	for _, st in { Enum.HumanoidStateType.Jumping, Enum.HumanoidStateType.Climbing, Enum.HumanoidStateType.Swimming, Enum.HumanoidStateType.FallingDown, Enum.HumanoidStateType.Ragdoll, Enum.HumanoidStateType.Seated, Enum.HumanoidStateType.Dead } do
+		hum:SetStateEnabled(st, false)
+	end
+	CollectionService:AddTag(model, Config.Tags.Monster)
+	return hum
+end
+
 -- 2D 시안 좌표(px)를 3D 로: 정면 그림(x 가운데 cx, 바닥 y fy, px 당 스터드 k), z 는 직접
 function Rig.fromSheet(cx: number, fy: number, k: number, floorY: number): (number, number, number) -> Vector3
 	return function(x: number, y: number, z: number): Vector3
@@ -1370,8 +1429,127 @@ return Rig
 ]]></string>
           </Properties>
         </Item>
+        <Item class="ModuleScript" referent="23">
+          <Properties>
+            <string name="Name">c7n</string>
+            <string name="Source"><![CDATA[--!strict
+-- c7n 굴렁쇠 (7장 학교 · 비인간형) — 사양서: art/creatures/sheets/ch7/c7n_spec.md
+-- 뒤로 접혀 제 발목을 쥔 아이의 몸이 닫힌 고리가 되어 구른다. 걷지 않는다.
+-- 뼈: HoopCenter(구름·기울기·회전) 하나가 몸 전체를 움직인다. 선은 고리를 따라 이어진 몸통·다리·팔·머리.
+-- 공포 장치 「곧은 복도」: 직선에서 빠르게 굴러오지만, 방향을 바꾸려면 1.8초 동안 쓰러져 돌아야 한다(그동안 멈춤).
+local Rig = require(script.Parent.Rig)
+
+local M = {}
+M.cfg = {
+	WanderSpeed = 5,
+	InvestigateSpeed = 12,
+	ChaseSpeed = 22, -- 플레이어 달리기 18 × 1.2 (직선에서 따라잡힌다)
+	AgentRadius = 1.4,
+	AgentHeight = 4.5,
+	CatchDistance = 2.4,
+}
+M.spawnLift = 1.2
+M.voice = "3" -- (소리: 아직 전용 소리 없음 — 손톱 톡톡 계열을 임시로)
+
+local HIP = 0.98 -- 루트 가운데 높이 = HIP + 1
+local FLOOR = -(HIP + 1)
+local R = 1.55 -- 몸 중심선 반지름
+local CY = FLOOR + 1.98 -- 고리 중심 높이(루트 기준)
+
+-- 고리 위의 점: θ(도, 0 = 바닥 접점, 앞쪽(-Z)으로 증가), 반지름 r, 옆(x)
+local function P(deg: number, r: number, x: number): Vector3
+	local t = math.rad(deg)
+	return Vector3.new(x, CY - r * math.cos(t), -r * math.sin(t))
+end
+
+function M.build(cf: CFrame): Model
+	local model, root = Rig.shell("Hoop", cf, Vector3.new(1.6, 2, 1.6))
+	local lines: { Rig.Line } = {}
+	local balls: { Rig.Ball } = {}
+	local function arc(d0: number, d1: number, n: number, r: number, x: number, w: number, red: boolean?)
+		for i = 0, n - 1 do
+			local a, b = d0 + (d1 - d0) * i / n, d0 + (d1 - d0) * (i + 1) / n
+			table.insert(lines, { bone = "Hoop", a = P(a, r, x), b = P(b, r, x), r = w, red = red })
+		end
+	end
+	-- 몸통(가슴 → 배 → 골반): 바깥이 배, 안쪽이 등. 두께는 어깨 폭 1.2 → 옆 두 선
+	arc(30, 200, 8, R, -0.38, 0.2)
+	arc(30, 200, 8, R, 0.38, 0.2)
+	-- 갈비뼈: 가슴 쪽 몸을 가로지르는 짧은 선
+	for _, d in { 48, 62, 76, 90 } do
+		table.insert(lines, { bone = "Hoop", a = P(d, R + 0.12, -0.42), b = P(d, R + 0.12, 0.42), r = 0.06 })
+	end
+	-- 골반
+	table.insert(lines, { bone = "Hoop", a = P(196, R + 0.1, -0.48), b = P(196, R + 0.1, 0.48), r = 0.09 })
+	-- 다리(허벅지 → 무릎 → 부러진 두 번째 무릎 → 발목): 고리 나머지를 감싼다, 무릎마다 살짝 밖으로 꺾임
+	for _, s in { -1, 1 } do
+		local x = 0.3 * s
+		table.insert(lines, { bone = "Hoop", a = P(200, R, x), b = P(248, R + 0.1, x), r = 0.16 })
+		table.insert(lines, { bone = "Hoop", a = P(248, R + 0.1, x), b = P(286, R + 0.22, x * 1.1), r = 0.13 })
+		table.insert(lines, { bone = "Hoop", a = P(286, R + 0.22, x * 1.1), b = P(322, R + 0.05, x), r = 0.11 })
+		table.insert(lines, { bone = "Hoop", a = P(322, R + 0.05, x), b = P(344, R - 0.05, x * 0.8), r = 0.09 }) -- 발
+		table.insert(balls, { bone = "Hoop", c = P(248, R + 0.1, x), r = 0.16 })
+		table.insert(balls, { bone = "Hoop", c = P(286, R + 0.22, x * 1.1), r = 0.15 })
+		-- 팔: 어깨(가슴 끝)에서 몸 바깥을 돌아 발목을 쥠
+		local ax = 0.56 * s
+		table.insert(lines, { bone = "Hoop", a = P(34, R + 0.05, ax), b = P(352, R + 0.3, ax * 1.15), r = 0.1 })
+		table.insert(lines, { bone = "Hoop", a = P(352, R + 0.3, ax * 1.15), b = P(326, R + 0.12, ax * 0.75), r = 0.09 })
+		table.insert(balls, { bone = "Hoop", c = P(352, R + 0.3, ax * 1.15), r = 0.11 })
+	end
+	-- 거꾸로 된 머리: 고리 아래쪽(두 발 사이), 정수리가 바닥을 스침
+	local hc = P(10, R - 0.05, 0)
+	table.insert(balls, { bone = "Hoop", c = hc, r = 0.5 })
+	table.insert(lines, { bone = "Hoop", a = hc + Vector3.new(-0.18, 0.05, -0.46), b = hc + Vector3.new(-0.08, 0.06, -0.48), r = 0.05 }) -- 눈(거꾸로)
+	table.insert(lines, { bone = "Hoop", a = hc + Vector3.new(0.08, 0.06, -0.48), b = hc + Vector3.new(0.18, 0.05, -0.46), r = 0.05 })
+	table.insert(lines, { bone = "Hoop", a = hc + Vector3.new(-0.12, 0.25, -0.44), b = hc + Vector3.new(0.12, 0.25, -0.44), r = 0.05 }) -- 벌린 입(거꾸로라 위)
+	-- 안쪽 등뼈 7마디: 고리 안쪽으로 박힌 바퀴살
+	for i = 0, 6 do
+		local d = 40 + i * 24
+		table.insert(lines, { bone = "Hoop", a = P(d, R - 0.3, 0), b = P(d, R - 0.85, 0), r = 0.07 })
+	end
+	-- 붉은 쓸린 줄(가슴·배 앞면, 회전이 보이게)
+	arc(60, 170, 4, R + 0.36, 0, 0.05, true)
+	Rig.build(model, root, cf, {
+		id = "c7n",
+		bones = { { name = "Hoop", parent = nil, joint = Vector3.new(0, CY, 0), tip = Vector3.new(0, 0, -1) } },
+		lines = lines,
+		balls = balls,
+		floorY = FLOOR,
+		mass = 0.6,
+	})
+	Rig.humanoid(model, HIP, M.cfg.WanderSpeed)
+	return model
+end
+
+-- 방향 전환: 진행 방향이 50° 넘게 바뀌면 1.8초 동안 쓰러져 돌기(멈춤). 클라이언트는 Spin 속성으로 동작을 맞춘다
+function M.tick(self: any, now: number): boolean
+	local d = self.cdata
+	if d.spinUntil and now < d.spinUntil then
+		self.hum:MoveTo(self.root.Position)
+		return true
+	end
+	local v = self.root.AssemblyLinearVelocity
+	local flat = Vector3.new(v.X, 0, v.Z)
+	if flat.Magnitude > 4 then
+		local dir = flat.Unit
+		if d.lastDir and d.lastDir:Dot(dir) < math.cos(math.rad(50)) then
+			d.spinUntil = now + 1.8
+			d.lastDir = nil
+			self.model:SetAttribute("Spin", now)
+			self.hum:MoveTo(self.root.Position)
+			return true
+		end
+		d.lastDir = dir
+	end
+	return false
+end
+
+return M
+]]></string>
+          </Properties>
+        </Item>
       </Item>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="24">
         <Properties>
           <string name="Name">Doors</string>
           <string name="Source"><![CDATA[--!strict
@@ -1564,7 +1742,7 @@ return Doors
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="24">
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">Hiding</string>
           <string name="Source"><![CDATA[--!strict
@@ -1815,7 +1993,7 @@ return Hiding
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">Lobby</string>
           <string name="Source"><![CDATA[--!strict
@@ -2078,7 +2256,7 @@ return Lobby
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="26">
+      <Item class="Script" referent="27">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -2191,7 +2369,7 @@ task.spawn(Lobby.boot)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="27">
+      <Item class="ModuleScript" referent="28">
         <Properties>
           <string name="Name">MapKit</string>
           <string name="Source"><![CDATA[--!strict
@@ -2493,7 +2671,7 @@ return Kit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="28">
+      <Item class="ModuleScript" referent="29">
         <Properties>
           <string name="Name">Monster</string>
           <string name="Source"><![CDATA[--!strict
@@ -3573,10 +3751,22 @@ local function between(r: { number }): number
 end
 
 -- kind = "doppel" 이면 도플갱어(사람 모습으로 시작). 배회 지점(spawnPos)은 바닥 + 3
-function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> (), stage: number?, kind: string?): Monster
+-- 챕터 괴물 모듈(Creatures/<id>.luau): { cfg = { WanderSpeed, ChaseSpeed, ... }, build(cf: CFrame): Model, tick?, hear? }
+local creatureMods: { [string]: any } = {}
+function Monster.creatureModule(id: string): any
+	if creatureMods[id] == nil then
+		local folder = script.Parent:FindFirstChild("Creatures")
+		local ms = folder and folder:FindFirstChild(id)
+		creatureMods[id] = if ms and ms:IsA("ModuleScript") then require(ms) :: any else false
+	end
+	return creatureMods[id] or nil
+end
+
+function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> (), stage: number?, kind: string?, creature: string?): Monster
 	local isDoppel = kind == "doppel"
 	local isFlower = kind == "flower"
-	local own: any = if isDoppel then Config.Doppel elseif isFlower then Config.Flower else nil
+	local cmod: any = if creature then Monster.creatureModule(creature) else nil
+	local own: any = if isDoppel then Config.Doppel elseif isFlower then Config.Flower elseif cmod then (cmod.cfg or {}) else nil
 	local cfg: any = if own
 		then setmetatable({}, {
 			__index = function(_, k)
@@ -3591,6 +3781,7 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 	local model = if isDoppel
 		then buildDoppel(CFrame.new(spawnPos + Vector3.new(0, 0.1, 0)))
 		elseif isFlower then buildFlower(CFrame.new(spawnPos + Vector3.new(0, 1.1, 0)))
+		elseif cmod then cmod.build(CFrame.new(spawnPos + Vector3.new(0, cmod.spawnLift or 2, 0)))
 		else buildModel(CFrame.new(spawnPos + Vector3.new(0, 2.2, 0)), stage or 1)
 	model.Parent = parent
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
@@ -3652,9 +3843,15 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 		nextPing = os.clock() + between(Config.Doppel.FakePingEvery),
 		mawOpen = false,
 		tracks = nil,
+		creature = creature,
+		cmod = cmod,
+		cdata = {},
 	}, Monster)
 	-- 괴물마다 자기 소리(Config.MonsterVoices): 메인 괴물은 스테이지(머리 모양) 번호, 도플갱어는 "Doppel"
-	model:SetAttribute("Voice", if isDoppel then "Doppel" elseif isFlower then "Flower" else tostring(((stage or 1) - 1) % 5 + 1))
+	model:SetAttribute("Voice", if isDoppel then "Doppel" elseif isFlower then "Flower" elseif cmod and cmod.voice then cmod.voice else tostring(((stage or 1) - 1) % 5 + 1))
+	if cmod and cmod.init then
+		cmod.init(self)
+	end
 	if isDoppel then
 		self:setState("Disguise")
 	elseif isFlower then
@@ -3985,6 +4182,11 @@ function Monster.hear(self: Monster, pos: Vector3, radius: number, source: Playe
 		self:flowerHear(pos, radius, kind)
 		return
 	end
+	-- 챕터 괴물의 고유 규칙(공포 장치): true 를 돌려주면 기본 반응을 건너뛴다
+	local cm = (self :: any).cmod
+	if cm and cm.hear and cm.hear(self, pos, radius, source, kind) then
+		return
+	end
 	if self.form ~= "Beast" then
 		-- 사람 모습일 때는 소리에 반응하지 않는다. 다만 가까이서 쏜 음파에 모습이 드러나면 들킨 것
 		if self.form == "Disguise" and kind == "Sonar" and source then
@@ -4082,6 +4284,10 @@ function Monster.tick(self: Monster)
 	end
 	if self.kind == "flower" then
 		self:flowerTick(now)
+		return
+	end
+	local cm = (self :: any).cmod
+	if cm and cm.tick and cm.tick(self, now) then
 		return
 	end
 	if self.form == "Disguise" then
@@ -4886,7 +5092,7 @@ return Monster
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="29">
+      <Item class="ModuleScript" referent="30">
         <Properties>
           <string name="Name">Props</string>
           <string name="Source"><![CDATA[--!strict
@@ -5315,7 +5521,7 @@ return Props
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="30">
+      <Item class="ModuleScript" referent="31">
         <Properties>
           <string name="Name">Rejoin</string>
           <string name="Source"><![CDATA[--!strict
@@ -5429,7 +5635,7 @@ return Rejoin
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="31">
+      <Item class="ModuleScript" referent="32">
         <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[--!strict
@@ -5908,6 +6114,25 @@ local function spreadPick(list: { Vector3 }, placed: { Vector3 }, minD: number):
 end
 local MONSTER_GAP = 70 -- 괴물끼리 처음 자리 사이 최소 거리(스터드)
 
+-- 이 챕터에서 켜진 새 괴물들(Config.Creatures): k 번째 메인 괴물 자리를 번갈아 채운다. 없으면 nil(기존 메인 괴물)
+function Round.creatureFor(k: number): string?
+	local def = Config.Stages[Round.stageIndex]
+	local list = def and (Config.Creatures.Chapters :: any)[def.Id]
+	if not list then
+		return nil
+	end
+	local on = {}
+	for _, id in list do
+		if Config.Creatures.On[id] and Monster.creatureModule(id) then
+			table.insert(on, id)
+		end
+	end
+	if #on == 0 then
+		return nil
+	end
+	return on[(k - 1) % #on + 1]
+end
+
 function Round.spawnMonsters(count: number)
 	local placed: { Vector3 } = {}
 	local info = Round.info :: Builder.StageInfo
@@ -5968,7 +6193,7 @@ function Round.spawnMonsters(count: number)
 		end
 		local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
 			Round.kill(player, "monster")
-		end, Round.stageIndex)
+		end, Round.stageIndex, nil, Round.creatureFor(k))
 		m.route = info.route
 		;(m :: any).territory = half
 		table.insert(placed, pick)
@@ -6341,7 +6566,7 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="32">
+      <Item class="ModuleScript" referent="33">
         <Properties>
           <string name="Name">Search</string>
           <string name="Source"><![CDATA[--!strict
@@ -6699,7 +6924,7 @@ return Search
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="33">
+      <Item class="ModuleScript" referent="34">
         <Properties>
           <string name="Name">SoundBus</string>
           <string name="Source"><![CDATA[--!strict
@@ -6796,7 +7021,7 @@ return SoundBus
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="34">
+      <Item class="ModuleScript" referent="35">
         <Properties>
           <string name="Name">StageBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -7531,11 +7756,11 @@ return Builder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="35">
+      <Item class="Folder" referent="36">
         <Properties>
           <string name="Name">Stages</string>
         </Properties>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">Lobby</string>
             <string name="Source"><![CDATA[--!strict
@@ -7558,7 +7783,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">Stage1</string>
             <string name="Source"><![CDATA[--!strict
@@ -7627,7 +7852,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">Stage10</string>
             <string name="Source"><![CDATA[--!strict
@@ -7918,7 +8143,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">Stage2</string>
             <string name="Source"><![CDATA[--!strict
@@ -7987,7 +8212,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">Stage3</string>
             <string name="Source"><![CDATA[--!strict
@@ -8091,7 +8316,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">Stage4</string>
             <string name="Source"><![CDATA[--!strict
@@ -8161,7 +8386,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">Stage5</string>
             <string name="Source"><![CDATA[--!strict
@@ -8240,7 +8465,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">Stage6</string>
             <string name="Source"><![CDATA[--!strict
@@ -8310,7 +8535,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">Stage7</string>
             <string name="Source"><![CDATA[--!strict
@@ -8379,7 +8604,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">Stage8</string>
             <string name="Source"><![CDATA[--!strict
@@ -8447,7 +8672,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">Stage9</string>
             <string name="Source"><![CDATA[--!strict
@@ -8759,7 +8984,7 @@ return {
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="47">
+      <Item class="Script" referent="48">
         <Properties>
           <string name="Name">TestHarness</string>
           <token name="RunContext">0</token>
@@ -10892,6 +11117,76 @@ local function flowerSpot()
 	end
 end
 
+-- 챕터 괴물 하나(env CREATURE=id)를 켜고 그 챕터에서 나오게 해 본다: 생성·선 수·움직임·애니메이션·잡기
+local function creatureTest()
+	local id = args.Creature
+	check("creature id given", typeof(id) == "string" and id ~= "", tostring(id))
+	local chapter = nil
+	for ch, list in Config.Creatures.Chapters do
+		if table.find(list, id) then
+			chapter = ch
+		end
+	end
+	check("creature belongs to a chapter", chapter ~= nil, tostring(chapter))
+	local Monster = require(script.Parent.Monster)
+	check("creature module loads", Monster.creatureModule(id) ~= nil, id)
+	if not chapter then
+		return
+	end
+	Config.Creatures.On[id] = true
+	local stageIdx = nil
+	for i, s in Config.Stages do
+		if s.Id == chapter then
+			stageIdx = i
+		end
+	end
+	local ps = readyPlayers(1)
+	if not ps then
+		check("player ready", false)
+		return
+	end
+	local p = ps[1]
+	Round.startStage(stageIdx)
+	readyPlayers(1)
+	local m = nil
+	waitFor(function()
+		for _, mm in Round.monsters do
+			if mm.model:GetAttribute("Creature") == id then
+				m = mm
+			end
+		end
+		return m ~= nil
+	end, 15)
+	check("creature spawned in its chapter", m ~= nil, "stage " .. tostring(stageIdx))
+	if not m then
+		return
+	end
+	local lines, balls = 0, 0
+	for _, d in m.model:GetDescendants() do
+		if d.Name == "Line" then
+			lines += 1
+		elseif d.Name == "Ball" then
+			balls += 1
+		end
+	end
+	check("sonar line budget 30..140", lines + balls >= 30 and lines + balls <= 140, lines .. " lines + " .. balls .. " balls")
+	check("own rig (Rig=3)", m.model:GetAttribute("Rig") == 3)
+	ask(p, "creature", "reset")
+	local start = m.root.Position
+	-- 플레이어 근처로 불러 쫓게 한다
+	place(p, start + Vector3.new(14, 3, 0))
+	task.wait(1)
+	m.startAt = 0
+	m:hear(p.Character and p.Character.PrimaryPart and p.Character.PrimaryPart.Position or start, 60, p, "Sonar")
+	task.wait(8)
+	local moved = (m.root.Position - start).Magnitude
+	check("creature moves", moved > 3, string.format("moved %.1f", moved))
+	local st = ask(p, "creature", id)
+	check("client animates its own rig", st ~= nil and st.frames > 30 and st.maxAngle > 0.05, st and string.format("frames %d maxAngle %.2f steps %d", st.frames, st.maxAngle, st.steps) or "no stats")
+	check("creature still alive and in map", m.alive and m.root.Position.Y > -50, tostring(m.root.Position))
+	Config.Creatures.On[id] = nil
+end
+
 task.spawn(function()
 	local ok, err = pcall(function()
 		if args.Test == "dense" then
@@ -10916,6 +11211,8 @@ task.spawn(function()
 			seal()
 		elseif args.Test == "doppel" then
 			doppelTest()
+		elseif args.Test == "creature" then
+			creatureTest()
 		elseif args.Test == "flowerspot" then
 			flowerSpot()
 		elseif args.Test == "chase" then
@@ -10943,13 +11240,13 @@ end)
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="48">
+  <Item class="SoundService" referent="49">
     <Properties>
       <string name="Name">SoundService</string>
       <token name="AmbientReverb">11</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="49">
+  <Item class="StarterPlayer" referent="50">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -10961,11 +11258,11 @@ end)
       <float name="CharacterWalkSpeed">10</float>
       <bool name="EnableMouseLockOption">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="50">
+    <Item class="StarterPlayerScripts" referent="51">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="ModuleScript" referent="51">
+      <Item class="ModuleScript" referent="52">
         <Properties>
           <string name="Name">Audio</string>
           <string name="Source"><![CDATA[--!strict
@@ -11526,7 +11823,7 @@ return Audio
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="52">
+      <Item class="ModuleScript" referent="53">
         <Properties>
           <string name="Name">CreatureAnim</string>
           <string name="Source"><![CDATA[--!strict
@@ -11697,12 +11994,71 @@ return CreatureAnim
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="53">
+      <Item class="Folder" referent="54">
         <Properties>
           <string name="Name">Creatures</string>
         </Properties>
+        <Item class="ModuleScript" referent="55">
+          <Properties>
+            <string name="Name">c7n</string>
+            <string name="Source"><![CDATA[--!strict
+-- c7n 굴렁쇠: 고리 전체(Hoop 뼈)를 굴린다. 구름 각 = 이동 거리 / 반지름(미끄러짐 없음).
+-- 방향 전환(서버 Spin 속성) 땐 동전처럼 쓰러져 돌았다가 다시 일어선다. 한 바퀴마다 머리가 바닥을 스치는 소리.
+local A = require(script.Parent.Parent.CreatureAnim)
+
+local M = {}
+local RADIUS = 1.98
+
+function M.init(b: A.Body)
+	b.data.roll = 0
+	b.data.spin = -1
+	b.data.lastSpin = b.model:GetAttribute("Spin")
+	b.data.nextThump = math.pi * 2
+	b.data.tilt = 0
+end
+
+function M.step(b: A.Body, dt: number)
+	local d = b.data
+	local sp = b.model:GetAttribute("Spin")
+	if sp ~= d.lastSpin then
+		d.lastSpin = sp
+		d.spin = 0 -- 쓰러져 돌기 시작
+	end
+	local tiltT, yaw = 0, 0
+	if d.spin >= 0 then
+		d.spin += dt
+		local t = d.spin
+		-- 0~0.5 쓰러짐, 0.5~1.3 웅웅 돌기, 1.3~1.8 일어섬
+		if t < 0.5 then
+			tiltT = math.rad(68) * (t / 0.5)
+		elseif t < 1.3 then
+			tiltT = math.rad(68)
+			yaw = (t - 0.5) * 9
+		elseif t < 1.8 then
+			tiltT = math.rad(68) * (1 - (t - 1.3) / 0.5)
+		else
+			d.spin = -1
+		end
+	elseif b.state == "Wander" and b.speed < 0.5 then
+		tiltT = math.rad(13) -- 서 있을 땐 훌라후프처럼 비스듬히 기대 있음
+	end
+	d.tilt = A.approach(d.tilt, tiltT, 10, dt)
+	-- 구르기: 앞(-Z)으로 가면 고리 윗부분이 앞으로(X 축 음의 회전)
+	local fwd = -b.vel.Z
+	d.roll -= fwd * dt / RADIUS
+	if math.abs(d.roll) >= d.nextThump then
+		d.nextThump += math.pi * 2
+		b.step(b.root.Position + Vector3.new(0, -1.9, 0), math.clamp(b.speed / 14, 0.3, 1.4))
+	end
+	A.pose(b, "Hoop", d.roll, yaw, d.tilt)
+end
+
+return M
+]]></string>
+          </Properties>
+        </Item>
       </Item>
-      <Item class="ModuleScript" referent="54">
+      <Item class="ModuleScript" referent="56">
         <Properties>
           <string name="Name">DoppelFx</string>
           <string name="Source"><![CDATA[--!strict
@@ -11910,7 +12266,7 @@ return DoppelFx
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="55">
+      <Item class="ModuleScript" referent="57">
         <Properties>
           <string name="Name">JumpScare</string>
           <string name="Source"><![CDATA[--!strict
@@ -12235,7 +12591,7 @@ return JumpScare
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="56">
+      <Item class="ModuleScript" referent="58">
         <Properties>
           <string name="Name">KeyHUD</string>
           <string name="Source"><![CDATA[--!strict
@@ -12396,7 +12752,7 @@ return KeyHUD
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="57">
+      <Item class="ModuleScript" referent="59">
         <Properties>
           <string name="Name">LobbyUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -12703,7 +13059,7 @@ return LobbyUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="58">
+      <Item class="LocalScript" referent="60">
         <Properties>
           <string name="Name">Main</string>
           <string name="Source"><![CDATA[--!strict
@@ -13325,6 +13681,14 @@ task.spawn(function()
 			return MobileUI.state()
 		elseif cmd == "reveal" then
 			return Reveal.count()
+		elseif cmd == "creature" then
+			-- (테스트) 챕터 괴물 애니메이션 측정: 프레임 수, 최대 관절 각, 착지(소리) 수
+			if arg == "reset" then
+				CreatureAnim.range = 1e9
+				CreatureAnim.reset()
+				return true
+			end
+			return CreatureAnim.stats[arg]
 		elseif cmd == "anim" then
 			-- (테스트) 괴물 몸 움직임 측정: 디딘 발 미끄러짐, 걸음 수, 골반 오르내림, 척추 비틀림, 머리 지연, 실제 발소리 수
 			local s = MonsterAnim.summary()
@@ -13401,7 +13765,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="59">
+      <Item class="ModuleScript" referent="61">
         <Properties>
           <string name="Name">MapView</string>
           <string name="Source"><![CDATA[--!strict
@@ -13732,7 +14096,7 @@ return Map
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="60">
+      <Item class="ModuleScript" referent="62">
         <Properties>
           <string name="Name">Mates</string>
           <string name="Source"><![CDATA[--!strict
@@ -13822,7 +14186,7 @@ return Mates
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="61">
+      <Item class="ModuleScript" referent="63">
         <Properties>
           <string name="Name">MobileUI</string>
           <string name="Source"><![CDATA[--!strict
@@ -14080,7 +14444,7 @@ return MobileUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="62">
+      <Item class="ModuleScript" referent="64">
         <Properties>
           <string name="Name">MonsterAnim</string>
           <string name="Source"><![CDATA[--!strict
@@ -14918,7 +15282,7 @@ return Anim
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="63">
+      <Item class="ModuleScript" referent="65">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[--!strict
@@ -15020,7 +15384,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="64">
+      <Item class="LocalScript" referent="66">
         <Properties>
           <string name="Name">RbxCharacterSounds</string>
           <string name="Source"><![CDATA[-- 기본 캐릭터 소리(RbxCharacterSounds)를 대체한다: 같은 이름의 빈 스크립트를 두면 Roblox 기본 발소리가 꺼진다.
@@ -15028,7 +15392,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="65">
+      <Item class="ModuleScript" referent="67">
         <Properties>
           <string name="Name">Reveal</string>
           <string name="Source"><![CDATA[--!strict
@@ -15260,7 +15624,7 @@ return Reveal
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="66">
+      <Item class="ModuleScript" referent="68">
         <Properties>
           <string name="Name">SearchLook</string>
           <string name="Source"><![CDATA[--!strict
@@ -15352,7 +15716,7 @@ return SearchLook
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="67">
+      <Item class="ModuleScript" referent="69">
         <Properties>
           <string name="Name">SonarLines</string>
           <string name="Source"><![CDATA[--!strict
@@ -15666,7 +16030,7 @@ return Lines
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="68">
+      <Item class="ModuleScript" referent="70">
         <Properties>
           <string name="Name">SonarPulses</string>
           <string name="Source"><![CDATA[--!strict
@@ -16161,7 +16525,7 @@ return Pulses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="69">
+      <Item class="ModuleScript" referent="71">
         <Properties>
           <string name="Name">SonarWorld</string>
           <string name="Source"><![CDATA[--!strict
@@ -16740,7 +17104,7 @@ return World
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="70">
+      <Item class="ModuleScript" referent="72">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[--!strict
@@ -16953,7 +17317,7 @@ return UI
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="71">
+  <Item class="Workspace" referent="73">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

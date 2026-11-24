@@ -8,6 +8,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Kit = require(script.Parent.Parent.MapKit)
 local Faces = require(ReplicatedStorage.Shared.MonsterFaces)
+local Config = require(ReplicatedStorage.Shared.Config)
+local CollectionService = game:GetService("CollectionService")
 
 local Rig = {}
 
@@ -88,6 +90,44 @@ function Rig.build(model: Model, root: BasePart, cf: CFrame, def: Def): { [strin
 	model:SetAttribute("FloorY", def.floorY)
 	model:SetAttribute("Mass", def.mass or 1)
 	return parts
+end
+
+-- 괴물 모델의 기본 틀: 루트 파트 + Humanoid(점프·기어오르기 끔). build() 에서 Rig.build 전에 부른다
+function Rig.shell(name: string, cf: CFrame, rootSize: Vector3?): (Model, BasePart)
+	local model = Instance.new("Model")
+	model.Name = name
+	model:SetAttribute(Config.Tags.Dynamic, true)
+	model:SetAttribute("State", "Wander")
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = rootSize or Vector3.new(2, 2, 1.2)
+	root.Transparency = 1
+	root.CanCollide = true
+	root.CanTouch = false
+	root.CFrame = cf
+	root.Parent = model
+	model.PrimaryPart = root
+	return model, root
+end
+function Rig.humanoid(model: Model, hip: number, speed: number): Humanoid
+	local hum = Instance.new("Humanoid")
+	hum.RigType = Enum.HumanoidRigType.R15
+	hum.HipHeight = hip
+	hum.WalkSpeed = speed
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	hum.BreakJointsOnDeath = false
+	hum.MaxHealth = math.huge
+	hum.Health = math.huge
+	hum.AutoJumpEnabled = false
+	hum.UseJumpPower = true
+	hum.JumpPower = 0
+	hum.Parent = model
+	for _, st in { Enum.HumanoidStateType.Jumping, Enum.HumanoidStateType.Climbing, Enum.HumanoidStateType.Swimming, Enum.HumanoidStateType.FallingDown, Enum.HumanoidStateType.Ragdoll, Enum.HumanoidStateType.Seated, Enum.HumanoidStateType.Dead } do
+		hum:SetStateEnabled(st, false)
+	end
+	CollectionService:AddTag(model, Config.Tags.Monster)
+	return hum
 end
 
 -- 2D 시안 좌표(px)를 3D 로: 정면 그림(x 가운데 cx, 바닥 y fy, px 당 스터드 k), z 는 직접

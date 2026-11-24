@@ -1075,10 +1075,22 @@ local function between(r: { number }): number
 end
 
 -- kind = "doppel" 이면 도플갱어(사람 모습으로 시작). 배회 지점(spawnPos)은 바닥 + 3
-function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> (), stage: number?, kind: string?): Monster
+-- 챕터 괴물 모듈(Creatures/<id>.luau): { cfg = { WanderSpeed, ChaseSpeed, ... }, build(cf: CFrame): Model, tick?, hear? }
+local creatureMods: { [string]: any } = {}
+function Monster.creatureModule(id: string): any
+	if creatureMods[id] == nil then
+		local folder = script.Parent:FindFirstChild("Creatures")
+		local ms = folder and folder:FindFirstChild(id)
+		creatureMods[id] = if ms and ms:IsA("ModuleScript") then require(ms) :: any else false
+	end
+	return creatureMods[id] or nil
+end
+
+function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, geometry: Instance, onCatch: (Player, any) -> (), stage: number?, kind: string?, creature: string?): Monster
 	local isDoppel = kind == "doppel"
 	local isFlower = kind == "flower"
-	local own: any = if isDoppel then Config.Doppel elseif isFlower then Config.Flower else nil
+	local cmod: any = if creature then Monster.creatureModule(creature) else nil
+	local own: any = if isDoppel then Config.Doppel elseif isFlower then Config.Flower elseif cmod then (cmod.cfg or {}) else nil
 	local cfg: any = if own
 		then setmetatable({}, {
 			__index = function(_, k)
@@ -1093,6 +1105,7 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 	local model = if isDoppel
 		then buildDoppel(CFrame.new(spawnPos + Vector3.new(0, 0.1, 0)))
 		elseif isFlower then buildFlower(CFrame.new(spawnPos + Vector3.new(0, 1.1, 0)))
+		elseif cmod then cmod.build(CFrame.new(spawnPos + Vector3.new(0, cmod.spawnLift or 2, 0)))
 		else buildModel(CFrame.new(spawnPos + Vector3.new(0, 2.2, 0)), stage or 1)
 	model.Parent = parent
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
@@ -1154,9 +1167,15 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 		nextPing = os.clock() + between(Config.Doppel.FakePingEvery),
 		mawOpen = false,
 		tracks = nil,
+		creature = creature,
+		cmod = cmod,
+		cdata = {},
 	}, Monster)
 	-- 괴물마다 자기 소리(Config.MonsterVoices): 메인 괴물은 스테이지(머리 모양) 번호, 도플갱어는 "Doppel"
-	model:SetAttribute("Voice", if isDoppel then "Doppel" elseif isFlower then "Flower" else tostring(((stage or 1) - 1) % 5 + 1))
+	model:SetAttribute("Voice", if isDoppel then "Doppel" elseif isFlower then "Flower" elseif cmod and cmod.voice then cmod.voice else tostring(((stage or 1) - 1) % 5 + 1))
+	if cmod and cmod.init then
+		cmod.init(self)
+	end
 	if isDoppel then
 		self:setState("Disguise")
 	elseif isFlower then
@@ -1487,6 +1506,11 @@ function Monster.hear(self: Monster, pos: Vector3, radius: number, source: Playe
 		self:flowerHear(pos, radius, kind)
 		return
 	end
+	-- 챕터 괴물의 고유 규칙(공포 장치): true 를 돌려주면 기본 반응을 건너뛴다
+	local cm = (self :: any).cmod
+	if cm and cm.hear and cm.hear(self, pos, radius, source, kind) then
+		return
+	end
 	if self.form ~= "Beast" then
 		-- 사람 모습일 때는 소리에 반응하지 않는다. 다만 가까이서 쏜 음파에 모습이 드러나면 들킨 것
 		if self.form == "Disguise" and kind == "Sonar" and source then
@@ -1584,6 +1608,10 @@ function Monster.tick(self: Monster)
 	end
 	if self.kind == "flower" then
 		self:flowerTick(now)
+		return
+	end
+	local cm = (self :: any).cmod
+	if cm and cm.tick and cm.tick(self, now) then
 		return
 	end
 	if self.form == "Disguise" then

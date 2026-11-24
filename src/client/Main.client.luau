@@ -617,6 +617,14 @@ task.spawn(function()
 			return MobileUI.state()
 		elseif cmd == "reveal" then
 			return Reveal.count()
+		elseif cmd == "creature" then
+			-- (테스트) 챕터 괴물 애니메이션 측정: 프레임 수, 최대 관절 각, 착지(소리) 수
+			if arg == "reset" then
+				CreatureAnim.range = 1e9
+				CreatureAnim.reset()
+				return true
+			end
+			return CreatureAnim.stats[arg]
 		elseif cmd == "anim" then
 			-- (테스트) 괴물 몸 움직임 측정: 디딘 발 미끄러짐, 걸음 수, 골반 오르내림, 척추 비틀림, 머리 지연, 실제 발소리 수
 			local s = MonsterAnim.summary()

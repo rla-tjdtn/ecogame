@@ -474,6 +474,25 @@ local function spreadPick(list: { Vector3 }, placed: { Vector3 }, minD: number):
 end
 local MONSTER_GAP = 70 -- 괴물끼리 처음 자리 사이 최소 거리(스터드)
 
+-- 이 챕터에서 켜진 새 괴물들(Config.Creatures): k 번째 메인 괴물 자리를 번갈아 채운다. 없으면 nil(기존 메인 괴물)
+function Round.creatureFor(k: number): string?
+	local def = Config.Stages[Round.stageIndex]
+	local list = def and (Config.Creatures.Chapters :: any)[def.Id]
+	if not list then
+		return nil
+	end
+	local on = {}
+	for _, id in list do
+		if Config.Creatures.On[id] and Monster.creatureModule(id) then
+			table.insert(on, id)
+		end
+	end
+	if #on == 0 then
+		return nil
+	end
+	return on[(k - 1) % #on + 1]
+end
+
 function Round.spawnMonsters(count: number)
 	local placed: { Vector3 } = {}
 	local info = Round.info :: Builder.StageInfo
@@ -534,7 +553,7 @@ function Round.spawnMonsters(count: number)
 		end
 		local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
 			Round.kill(player, "monster")
-		end, Round.stageIndex)
+		end, Round.stageIndex, nil, Round.creatureFor(k))
 		m.route = info.route
 		;(m :: any).territory = half
 		table.insert(placed, pick)
