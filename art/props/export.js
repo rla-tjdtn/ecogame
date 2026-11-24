@@ -36,13 +36,16 @@ function writeGLB(file, meshes) {
 const r2 = x => Math.round(x * 100) / 100;
 const numList = a => a.map(x => { const v = r2(x); return Object.is(v, -0) ? '0' : String(v); }).join(',');
 
-function exportGroup(group, assets) {
+function exportGroup(group, assets, opts = {}) {
   const keys = Object.keys(models).filter(k => k.startsWith(group + '.')).sort();
   const meshes = [], items = [];
   let col = 0;
   for (const key of keys) {
+    // 선 = 자세한 모델, 몸 = 낮은 폴리(같은 함수를 LOW 로 한 번 더)
     const m = new Model(); models[key](m); const b = m.build();
-    if (!b.tris) { console.log('  skip (no mesh)', key); continue; }
+    const ml = new Model(); ml.low = true; models[key](ml); const bl = ml.build();
+    if (!bl.tris) { console.log('  skip (no mesh)', key); continue; }
+    b.P = bl.P; b.N = bl.N; b.I = bl.I; b.tris = bl.tris;
     if (b.tris > 18000) throw new Error(key + ' too many triangles ' + b.tris);
     const mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
     for (let i = 0; i < b.P.length; i += 3) for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], b.P[i + k]); mx[k] = Math.max(mx[k], b.P[i + k]); }
@@ -61,7 +64,7 @@ function exportGroup(group, assets) {
   const a = assets[group] || {};
   const asset = a.hash === hash ? a.id || 0 : 0; // (내용이 바뀌었으면 다시 올릴 때까지 0 = 기본 도형 그대로)
   const lua = `--!nocheck\n-- 자동 생성(art/props/export.js) — 손으로 고치지 말 것. 묶음 ${group}: 메시 ${meshes.length}개, glb ${hash}\nreturn {\n\tasset = ${asset},\n\thash = "${hash}",\n\titems = {\n${items.join('\n')}\n\t},\n}\n`;
-  fs.writeFileSync(path.join(DATAD, group + '.luau'), lua);
+  if (!opts.noData) fs.writeFileSync(path.join(DATAD, group + '.luau'), lua); // (upload.js 는 올리기에 성공한 뒤에만 쓴다: 실패하면 예전 에셋·데이터 그대로)
   console.log(`${group}: ${meshes.length} meshes, glb ${hash}, asset ${asset || '(not uploaded)'}`);
   return { group, hash, asset };
 }

@@ -105,6 +105,7 @@ class Model {
 
   // ── 빌드 ──
   build() {
+    LOW = !!this.low;
     const tri = [], seg = [], view = [];
     for (const p of this.prims) {
       const t0 = tri.length; emit(p, tri, seg, view);
@@ -140,6 +141,8 @@ class Model {
 }
 
 // ── 도형별: 메시·선·실루엣 ──
+// LOW = 낮은 폴리 몸(게임에 올리는 메시: 검은 몸은 뒤 선을 가리기만 하면 되고 렌더 부담이 크다). 선은 늘 자세한 모델에서 뽑는다
+let LOW = false;
 function quad(tri, a, b, c, d) { tri.push([a, b, c], [a, c, d]); }
 function lineAxisOk(o, axis) { const l = o.lines ?? 'all'; if (l === 'none') return false; if (l === 'all') return true; if (l === 'top') return axis !== 'Y'; return l.includes(axis); }
 function emit(p, tri, seg, view) {
@@ -149,7 +152,7 @@ function emit(p, tri, seg, view) {
     const [cx, cy, cz] = p.c, [sx, sy, sz] = p.s.map(v => v / 2);
     const bv = Math.min(p.k === 'cushion' ? p.rad : (o.bevel || 0), sx * 0.9, sy * 0.9, sz * 0.9);
     // 메시: 모따기 상자(26면) 또는 그냥 상자. cushion 은 모따기 2단(둥글게)
-    const steps = p.k === 'cushion' ? 3 : (bv > 0 ? 1 : 0);
+    const steps = LOW ? 0 : p.k === 'cushion' ? 3 : (bv > 0 ? 1 : 0); // (LOW: 몸은 그냥 상자 — 가리기만 하면 된다)
     roundedBoxMesh(tri, X, p.c, [sx, sy, sz], bv, steps);
     // 선: 12 모서리(모따기면 그 가운데), 축 지정이면 그 축 모서리만
     const lo = o.lines ?? 'all';
@@ -172,7 +175,7 @@ function emit(p, tri, seg, view) {
     if (o.line && o.lines !== 'none') { addSeg(a, b); return; }
     const dir = mulv(d, 1 / L); const [u, w] = basis(dir);
     const rm = Math.max(p.r1, p.r2);
-    const n = o.seg || Math.max(8, Math.min(24, Math.round(rm * 10) + 8));
+    const n = LOW ? Math.max(6, Math.min(10, Math.round(rm * 4) + 5)) : o.seg || Math.max(8, Math.min(24, Math.round(rm * 10) + 8));
     const ring = (c, r) => { const pts = []; for (let i = 0; i < n; i++) { const t = i / n * Math.PI * 2; pts.push(add(c, add(mulv(u, Math.cos(t) * r), mulv(w, Math.sin(t) * r)))); } return pts; };
     const A = ring(a, p.r1), B = ring(b, p.r2);
     for (let i = 0; i < n; i++) { const j = (i + 1) % n; quad(tri, X.p(A[i]), X.p(A[j]), X.p(B[j]), X.p(B[i])); }
@@ -189,14 +192,14 @@ function emit(p, tri, seg, view) {
     return;
   }
   if (p.k === 'sphere') {
-    const n = o.seg || 12; const m = Math.max(4, Math.round(n / 2));
+    const n = LOW ? 6 : o.seg || 12; const m = LOW ? 3 : Math.max(4, Math.round(n / 2));
     const pt = (i, j) => { const th = i / m * Math.PI, ph = j / n * Math.PI * 2; return X.p(add(p.c, [Math.sin(th) * Math.cos(ph) * p.r, Math.cos(th) * p.r, Math.sin(th) * Math.sin(ph) * p.r])); };
     for (let i = 0; i < m; i++) for (let j = 0; j < n; j++) quad(tri, pt(i, j), pt(i + 1, j), pt(i + 1, j + 1), pt(i, j + 1));
     if (o.lines !== 'none' && o.lines !== false) view.push({ t: 'b', a: X.p(p.c), b: X.p(p.c), r1: p.r * scaleOf(X, [1, 0, 0]), r2: p.r });
     return;
   }
   if (p.k === 'lathe') {
-    const pr = p.profile, n = o.seg || 20, c0 = o.at || [0, 0, 0];
+    const pr = p.profile, n = LOW ? Math.min(8, o.seg || 8) : o.seg || 20, c0 = o.at || [0, 0, 0];
     const P3 = (r, y, q) => X.p([c0[0] + Math.cos(q) * r, c0[1] + y, c0[2] + Math.sin(q) * r]);
     for (let s = 0; s + 1 < pr.length; s++) for (let i = 0; i < n; i++) { const q0 = i / n * Math.PI * 2, q1 = (i + 1) / n * Math.PI * 2; quad(tri, P3(pr[s][0], pr[s][1], q0), P3(pr[s + 1][0], pr[s + 1][1], q0), P3(pr[s + 1][0], pr[s + 1][1], q1), P3(pr[s][0], pr[s][1], q1)); }
     if (o.capMesh !== false) for (const e of [0, pr.length - 1]) if (pr[e][0] > 0.01) for (let i = 0; i < n; i++) { const q0 = i / n * Math.PI * 2, q1 = (i + 1) / n * Math.PI * 2; tri.push([X.p([c0[0], c0[1] + pr[e][1], c0[2]]), P3(pr[e][0], pr[e][1], q0), P3(pr[e][0], pr[e][1], q1)]); }
@@ -243,7 +246,7 @@ function emit(p, tri, seg, view) {
     return;
   }
   if (p.k === 'torus') {
-    const ax = norm(p.axis), [u, w] = basis(ax), n = o.seg || 24, m = o.tseg || 8;
+    const ax = norm(p.axis), [u, w] = basis(ax), n = LOW ? 10 : o.seg || 24, m = LOW ? 4 : o.tseg || 8;
     const pt = (i, j) => { const a = i / n * Math.PI * 2, b = j / m * Math.PI * 2; const dirR = add(mulv(u, Math.cos(a)), mulv(w, Math.sin(a))); return X.p(add(p.c, add(mulv(dirR, p.R + Math.cos(b) * p.r), mulv(ax, Math.sin(b) * p.r)))); };
     for (let i = 0; i < n; i++) for (let j = 0; j < m; j++) quad(tri, pt(i, j), pt(i + 1, j), pt(i + 1, j + 1), pt(i, j + 1));
     if (o.lines === 'none') return;

@@ -159,6 +159,13 @@ function PropMesh.dress(m: Instance, key: string, cf: CFrame, scale: Vector3?, p
 	end
 	mp.Size = d.size * sc
 	mp.CFrame = cf * CFrame.new(d.center * sc)
+	-- (측정용: ServerStorage 속성 PropMeshNoBody = true 면 검은 몸을 그리지 않는다 — 선은 그대로. 몸 렌더 비용과 선 비용을 나눠 잰다)
+	local okSS, ss = pcall(function()
+		return game:GetService("ServerStorage")
+	end)
+	if okSS and ss and (ss :: any):GetAttribute("PropMeshNoBody") == true then
+		mp.Transparency = 1
+	end
 	mp:SetAttribute("SonarShape", "Mesh")
 	mp:SetAttribute("SonarMesh", key)
 	if scale then

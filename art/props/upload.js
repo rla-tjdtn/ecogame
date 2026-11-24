@@ -30,8 +30,8 @@ async function upload(group) {
   if (!groups.length) groups = [...new Set(Object.keys(models).map(k => k.split('.')[0]))];
   for (const g of groups) {
     const assets = fs.existsSync(ASSETS) ? JSON.parse(fs.readFileSync(ASSETS, 'utf8')) : {};
-    const ex = exportGroup(g, assets); if (!ex) continue;
-    if (assets[g] && assets[g].hash === ex.hash && assets[g].id && !process.env.FORCE) { console.log(g, 'unchanged', assets[g].id); continue; }
+    const ex = exportGroup(g, assets, { noData: true }); if (!ex) continue;
+    if (assets[g] && assets[g].hash === ex.hash && assets[g].id && !process.env.FORCE) { exportGroup(g, assets); console.log(g, 'unchanged', assets[g].id); continue; }
     try {
       const id = await upload(g);
       const cur = fs.existsSync(ASSETS) ? JSON.parse(fs.readFileSync(ASSETS, 'utf8')) : {};

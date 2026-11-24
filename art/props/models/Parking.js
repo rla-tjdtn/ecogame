@@ -10,8 +10,8 @@ function bodyProfile(top, uf, ur, wy, ar, sill) {
   const back = top[top.length - 1], front = top[0];
   const a = Math.asin(Math.max(-1, Math.min(1, (sill - wy) / ar)));
   out.push([back[0] - 0.15, sill]);
-  for (const p of arc2(ur, wy, ar, a, Math.PI - a, 5)) out.push(p);
-  for (const p of arc2(uf, wy, ar, a, Math.PI - a, 5)) out.push(p);
+  for (const p of arc2(ur, wy, ar, a, Math.PI - a, 3)) out.push(p);
+  for (const p of arc2(uf, wy, ar, a, Math.PI - a, 3)) out.push(p);
   out.push([front[0] + 0.15, sill]);
   return out;
 }
@@ -19,7 +19,7 @@ function bodyProfile(top, uf, ur, wy, ar, sill) {
 function wheel(m, x, y, z, r, w) {
   const s = Math.sign(x);
   m.cyl([x - s * w, y, z], [x, y, z], r, { lines: 'none' });
-  m.line(circle2(r * 0.97, 8).map(([a, b]) => [x + s * 0.02, y + b, z + a]), { closed: true });
+  m.line(circle2(r * 0.97, 6).map(([a, b]) => [x + s * 0.02, y + b, z + a]), { closed: true });
 }
 
 // 천장 안내 표지(EXIT + 화살표): 판 가운데 높이 y, 천장 top. 앞면 = -z, 앞에서 볼 때 오른쪽 = -x
@@ -162,16 +162,13 @@ module.exports = {
       m.line([[x, 3.2, 0.7], [x, 4.5, 0.7]]);
       // 문 이음선(앞문 앞·앞문 뒤/뒷문 앞·뒷문 뒤)
       const xb = X + 0.02;
-      m.line([[xb, 3.05, -2.75], [xb, 1.0, -2.75]]); m.line([[xb, 3.08, 0.7], [xb, 0.7, 0.7]]);
+      m.line([[xb, 3.08, 0.7], [xb, 0.7, 0.7]]); // (문 이음선 하나 — 9장 성능: 선 줄임)
       // 거울
       m.box([X + 0.3, 3.45, -2.4], [0.6, 0.5, 0.3], { lines: 'XY' });
       // 전조등·후미등
       m.line([[1.5, 1.6, -6.43], [2.6, 1.6, -6.43], [2.6, 2.05, -6.43], [1.5, 2.05, -6.43]], { closed: true });
-      m.line([[1.5, 2.2, 6.42], [2.65, 2.2, 6.42], [2.65, 2.7, 6.42], [1.5, 2.7, 6.42]], { closed: true });
       for (const z of [uf, ur]) wheel(m, 2.55, wy, z, 1.12, 0.75);
     });
-    // 뒤 번호판
-    m.line([[-0.9, 1.75, 6.42], [0.9, 1.75, 6.42], [0.9, 2.35, 6.42], [-0.9, 2.35, 6.42]], { closed: true });
   },
   // 차 덮개(6.0 x 13.0, 높이 4.3): 차 모양 위로 씌운 천 — 둥근 아래 덩어리 + 객실 혹 + 옆 주름 + 아래 단(바퀴 아래만 보임) + 한쪽(+x) 바닥까지 끌린 자락
   'Parking.CoveredCar': (m) => {

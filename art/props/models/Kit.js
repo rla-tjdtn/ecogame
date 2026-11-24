@@ -53,7 +53,6 @@ module.exports = {
     // extrude 는 xy 다각형을 z 로 민다 → (단면 x = 계단 z, 단면 y = 높이, 미는 방향 = 계단 x)
     m.with(new (require('../lib/model.js').Xf)([0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0]), () => m.extrude(prof, W, { crease: 20 }));
     // 논슬립(디딤판 앞 끝에서 조금 안쪽 홈)
-    for (let i = 0; i < n; i++) m.line([[-W / 2 + 0.3, (i + 1) * sh + 0.01, -i * sd - 0.22], [W / 2 - 0.3, (i + 1) * sh + 0.01, -i * sd - 0.22]]);
   },
 
   // 나무 상자: 원점 = 바닥 가운데, 3×3×3 기준(dress 가 크기에 맞춰 늘린다). 둘레 각재 + 대각 버팀 + 판자 이음
@@ -65,7 +64,6 @@ module.exports = {
       const e = 0.01;
       m.line([[-h + f, f, e], [h - f, f, e], [h - f, s - f, e], [-h + f, s - f, e]], { closed: true });
       m.line([[-h + f, f, e], [h - f, s - f, e]]);
-      for (const y of [s / 3, 2 * s / 3]) { m.line([[-h + f, y, e], [-h + f + 0.35, y, e]]); m.line([[h - f - 0.35, y, e], [h - f, y, e]]); }
     });
     face(T(0, 0, h)); face(T(0, 0, -h).mul(Ry(Math.PI))); face(T(h, 0, 0).mul(Ry(Math.PI / 2))); face(T(-h, 0, 0).mul(Ry(-Math.PI / 2)));
     // 뚜껑: 판자 이음 3줄
@@ -102,13 +100,13 @@ module.exports = {
       m.box([x - 0.05, spring - 0.15, 0], [pier + 0.3, 0.3, depth + 0.16], { lines: 'all' }); // 받침돌
     });
     // 고리: 앞·뒤 면 윤곽(안쪽·바깥 반원) + 쐐기돌 이음(방사선) — 몸은 고리 모양 다각형을 깊이만큼
-    const n = 9, segs = 12;
+    const n = 9, segs = 10;
     const poly = [...arc2(0, 0, outer, 0, Math.PI, segs), ...arc2(0, 0, inner, Math.PI, 0, segs)];
     m.with(T(0, spring, 0), () => {
       m.extrude(poly, depth, { sides: false, crease: 50 });
       for (let i = 1; i < n; i++) {
         const a = i / n * Math.PI; const c = Math.cos(a), s = Math.sin(a);
-        for (const z of [d2 + 0.005, -d2 - 0.005]) m.line([[c * inner, s * inner, z], [c * outer, s * outer, z]]);
+        for (const z of [d2 + 0.005]) m.line([[c * inner, s * inner, z], [c * outer, s * outer, z]]);
       }
       // 이맛돌(가운데 쐐기돌이 살짝 튀어나옴)
       const ak = Math.PI / 2, w = Math.PI / n / 2;
@@ -134,14 +132,14 @@ module.exports = {
   // 기계(m): 원점 = 바닥 가운데. 받침 철골(스키드) 위 전동기(냉각 핀 원통) + 펌프 몸통(소용돌이 꼴) + 제어함 + 배관 받침 둘
   'Kit.Machine': (m) => {
     // 스키드: ㄷ자 강철 두 줄 + 가로대 + 앵커 볼트 판
-    for (const z of [-1.9, 1.9]) m.box([0, 0.4, z], [5.4, 0.8, 0.35], { lines: 'X' });
+    for (const z of [-1.9, 1.9]) m.box([0, 0.4, z], [5.4, 0.8, 0.35], { lines: 'none' });
     for (const x of [-2.5, 0, 2.5]) m.box([x, 0.4, 0], [0.35, 0.8, 3.5], { lines: 'none' });
     m.box([0, 0.78, 0], [5.4, 0.06, 4.2], { lines: 'all', solid: false });
     // 전동기: x 축 원통(반지름 1.45) + 냉각 핀(고리 3) + 끝 덮개(돔)
     m.cyl([-2.4, 2.35, 0], [-0.3, 2.35, 0], 1.45, { seg: 24 });
     m.box([-1.35, 1.05, 0], [1.8, 0.55, 2.4], { lines: 'XZ' }); // 전동기 발
     // 펌프 몸통: 짧은 원통(소용돌이) + 토출구
-    m.cyl([-0.3, 2.4, 0], [1.2, 2.4, 0], 1.6, { seg: 24 });
+    m.cyl([-0.3, 2.4, 0], [1.2, 2.4, 0], 1.6, { seg: 24, caps: false, rings: [1] });
     m.box([0.45, 3.75, 0], [0.9, 0.9, 0.9], { lines: 'Y' });
     // 제어함: 문 윤곽 + 손잡이 + 계기 둘
     m.box([1.9, 1.9, 0], [1.0, 2.2, 1.6], { bevel: 0.05 });
@@ -170,7 +168,7 @@ module.exports = {
   // 출구 사다리 + 천장 해치(E): 원점 = 사다리 아래 가운데(바닥), -z = 벽 쪽, 높이 14 기준(y 를 늘린다)
   'Kit.ExitLadder': (m) => {
     const H = 14;
-    for (const x of [-0.7, 0.7]) { m.box([x, H / 2, 0], [0.14, H, 0.3], { lines: 'Y' }); }
+    for (const x of [-0.7, 0.7]) { m.box([x, H / 2, 0], [0.14, H, 0.3], { lines: 'none' }); m.line([[x, 0, -0.16], [x, H, -0.16]]); m.line([[x, 0, 0.16], [x, H, 0.16]]); }
     for (let y = 1; y <= H - 1; y += 1.2) m.cyl([-0.7, y, 0], [0.7, y, 0], 0.05, { line: true });
     for (const y of [3, 8, 12.5]) m.mirrorX(() => m.box([0.7, y, -0.45], [0.12, 0.12, 0.6], { lines: 'Z' })); // 벽 고정쇠(벽 = -z 0.6)
     // 해치: 천장 테두리 사각 틀 + 반쯤 열린 뚜껑
