@@ -3,7 +3,9 @@
 #   powershell -File tools/perf-reopen.ps1 -Open <place.rbxlx>  : 그 플레이스로 새 Studio 창
 #   (둘 다 주면 닫고 나서 연다)
 #   powershell -File tools/perf-reopen.ps1 -Focus <이름 일부>   : 그 창을 앞으로(비활성 창은 15fps 로 묶여 시간 측정이 흔들린다)
-param([string]$Close, [string]$Open, [string]$Focus)
+#   powershell -File tools/perf-reopen.ps1 -ClosePlace <플레이스 파일 이름>  : 명령줄로 그 플레이스를 연 Studio 프로세스만 정상 종료
+#     (플레이 시험 뒤에는 창 제목이 "Roblox Studio" 로만 바뀌어 -Close 가 못 찾는 경우가 있다)
+param([string]$Close, [string]$Open, [string]$Focus, [string]$ClosePlace)
 Add-Type @'
 using System;using System.Text;using System.Collections.Generic;using System.Runtime.InteropServices;
 public class PW{ public delegate bool E(IntPtr h,IntPtr l);[DllImport("user32.dll")]public static extern bool EnumWindows(E e,IntPtr l);[DllImport("user32.dll")]public static extern uint GetWindowThreadProcessId(IntPtr h,out uint p);[DllImport("user32.dll")]public static extern bool IsWindowVisible(IntPtr h);[DllImport("user32.dll")]public static extern bool GetWindowRect(IntPtr h,out R r);[DllImport("user32.dll")]public static extern bool PostMessage(IntPtr h,uint m,IntPtr w,IntPtr l);
@@ -12,8 +14,14 @@ public static List<IntPtr> Of(uint pid){var o=new List<IntPtr>();EnumWindows((h,
 public static void Click(IntPtr h,int x,int y){IntPtr l=(IntPtr)((y<<16)|x);PostMessage(h,0x200,IntPtr.Zero,l);PostMessage(h,0x201,(IntPtr)1,l);PostMessage(h,0x202,IntPtr.Zero,l);}}
 '@
 $exe = "$env:LOCALAPPDATA\Roblox\Versions\version-8d7a1009c17e4ff8\RobloxStudioBeta.exe"
-if ($Close) {
+if ($ClosePlace) {
+	# 명령줄에 그 플레이스 파일 이름이 든 Studio 만(제목과 상관없이)
+	$Close = $ClosePlace
+	$pids = @(Get-CimInstance Win32_Process -Filter "Name='RobloxStudioBeta.exe'" | Where-Object { $_.CommandLine -like "*$ClosePlace*" } | ForEach-Object { [int]$_.ProcessId })
+} elseif ($Close) {
 	$pids = @(Get-Process RobloxStudioBeta -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "*$Close*" } | ForEach-Object { $_.Id })
+}
+if ($Close) {
 	foreach ($i in 1..12) {
 		$live = @($pids | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue })
 		if ($live.Count -eq 0) { break }

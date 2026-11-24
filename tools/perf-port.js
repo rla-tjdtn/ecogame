@@ -9,6 +9,8 @@ ss["$className"] = "ServerStorage";
 const attrs = { TestPort: { Float64: Number(port) } };
 // env PROPMESH_OFF=1: 소품 메시 끄기(PropMesh.dress 가 아무것도 안 함 → 예전 부품 그대로) — 전/후 비교용
 if (process.env.PROPMESH_OFF) attrs.PropMeshOff = { Bool: true };
+// env PROPMESH_NOBODY=1: 소품 메시의 검은 몸만 숨기고 선은 그대로(몸 그리기 비용과 선 비용을 가르는 진단용)
+if (process.env.PROPMESH_NOBODY) attrs.PropMeshNoBody = { Bool: true };
 ss["$attributes"] = Object.assign(ss["$attributes"] || {}, attrs);
 j.tree.ServerStorage = ss;
 fs.writeFileSync(file, JSON.stringify(j, null, 1));
