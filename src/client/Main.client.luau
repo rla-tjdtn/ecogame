@@ -134,7 +134,7 @@ local function tryBuild()
 		Reveal.clear()
 		World.build(stage)
 		MapView.load(stage)
-		task.spawn(Lines.prewarm, 2500) -- 선 파트 미리 만들기(음파 도중 끊김 방지)
+		task.spawn(Lines.prewarm, Config.Sonar.PoolSize) -- 선 파트를 풀 크기까지 미리 만들기(음파 도중 새로 만들면 그 프레임이 끊긴다)
 		building = false
 		if stage:GetAttribute("BuildId") ~= World.buildId then
 			tryBuild()

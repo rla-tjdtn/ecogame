@@ -38,6 +38,7 @@ type Rec = {
 	m: Vector3, -- 가운데 점(시야 판정)
 	lq: number, -- 지금 있어야 할 밝기 단계(q 는 파트에 실제로 칠한 단계 — 시야 밖이면 칠하기를 미뤄 둘이 다를 수 있다)
 	dirty: boolean, -- 시야 밖이라 칠하기를 미뤘다(dirtyList 에 있다)
+	wt: number, -- 시간 바퀴에 넣은 깨어날 틱(-1 = 바로 목록 또는 없음)
 }
 
 local folder: Folder? = nil
@@ -121,7 +122,7 @@ local function newRec(): Rec
 	p.BottomSurface = Enum.SurfaceType.Smooth
 	p.Parent = getFolder()
 	created += 1
-	return { part = p, sk = FIRST_SK, on = false, t0 = 0, peak = 0, key = nil, q = -1, slot = 0, wake = 0, tint = nil, a = Vector3.zero, b = Vector3.zero, m = HIDDEN.Position, lq = -1, dirty = false }
+	return { part = p, sk = FIRST_SK, on = false, t0 = 0, peak = 0, key = nil, q = -1, slot = 0, wake = 0, tint = nil, a = Vector3.zero, b = Vector3.zero, m = HIDDEN.Position, lq = -1, dirty = false, wt = -1 }
 end
 
 local function giveFree(rec: Rec)
@@ -238,6 +239,37 @@ local function place(rec: Rec, a: Vector3, b: Vector3, sk: number, w: number, l:
 end
 
 Lines.sized = 0 -- (측정) 크기를 바꾼 수
+
+-- ── 시간 바퀴: 깨어날 때가 된 선만 본다 ──
+-- (예전에는 매 프레임 켜진 선 전부(수천 개)를 훑어 깨어날 시각인지 봤다: 선이 많을수록 프레임마다 그만큼 든다)
+-- 틱 = 1/TPS 초. 칸 = 틱 % SIZE. 깨어날 시각은 그 틱 이상으로 올림해 넣으므로 예전처럼 now >= wake 일 때만 처리된다.
+-- 한 칸에는 같은 틱 항목만 있다(SIZE 틱 = 8.5초 > 가장 먼 깨어남 Hold). 다시 넣었거나 꺼진 선의 예전 항목은 wt 가 달라 건너뛴다.
+local TPS = 240
+local SIZE = 2048
+local wheelRec: { [number]: { Rec } } = {}
+local wheelWt: { [number]: { number } } = {}
+local nowList: { Rec } = {} -- 바로 처리할 선(새로 켰거나 다시 받음)
+local lastTick: number? = nil -- 여기까지 처리했다
+
+local function wakeNow(rec: Rec)
+	rec.wake = 0
+	rec.wt = -1
+	table.insert(nowList, rec)
+end
+
+local function schedule(rec: Rec, wake: number, minTick: number)
+	local t = math.max(math.ceil(wake * TPS), minTick)
+	rec.wt = t
+	local s = t % SIZE
+	local lr = wheelRec[s]
+	if lr then
+		table.insert(lr, rec)
+		table.insert(wheelWt[s], t)
+	else
+		wheelRec[s] = { rec }
+		wheelWt[s] = { t }
+	end
+end
 -- 선 하나를 보여 준다. key 가 같은 선이 이미 있으면 그 선을 갱신한다. tint: 이 선만의 색(없으면 기본 흰색)
 function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: number?, cam: Vector3, replace: boolean?, tint: Color3?)
 	local len = (b - a).Magnitude
@@ -252,7 +284,7 @@ function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: numb
 			pushOrder(rec, now)
 			rec.peak = math.max(peak, rec.peak * 0.5)
 			rec.q = -1
-			rec.wake = 0
+			wakeNow(rec)
 			rec.tint = tint
 			-- (그 자리 그대로면 옮기지 않는다: 서서 여러 번 쏠 때)
 			if replace and (rec.a ~= a or rec.b ~= b) then
@@ -272,7 +304,7 @@ function Lines.show(a: Vector3, b: Vector3, now: number, peak: number, key: numb
 	rec.peak = peak
 	rec.key = key
 	rec.q = -1
-	rec.wake = 0
+	wakeNow(rec)
 	rec.tint = tint
 	rec.slot = #active + 1
 	active[rec.slot] = rec
@@ -357,43 +389,81 @@ local function setupView(): boolean
 	return false
 end
 
+-- 선 하나가 깨어났다: 수명이 끝났으면 끄고, 아니면 밝기를 정하고 다음 깨어날 때를 바퀴에 넣는다
+local fadeStart = S.Hold - S.FadeTime
+local fadeStep = S.FadeTime / QUANT
+local function wakeRec(rec: Rec, now: number, minTick: number)
+	local age = now - rec.t0
+	if age >= S.Hold then
+		rec.wt = -1
+		release(rec.slot)
+		return
+	end
+	-- 다음에 밝기가 바뀔 때까지 쉰다(매 프레임 색을 바꾸지 않게):
+	--   플래시 동안: 플래시가 끝날 때(밝게 → 보통, 두 번만 바뀜)
+	--   유지 동안: 사라지기 시작할 때
+	--   사라지는 동안: 다음 단계쯤 — 같은 프레임에 켜진 선들이 한꺼번에 바뀌지 않게 조금씩 어긋나게
+	rec.wake = if age < S.FlashTime
+		then rec.t0 + S.FlashTime
+		elseif age < fadeStart then rec.t0 + fadeStart
+		else math.min(now + fadeStep * (0.6 + math.random() * 0.8), rec.t0 + S.Hold)
+	schedule(rec, rec.wake, minTick)
+	local l = level(age) * rec.peak
+	local q = math.floor(l * QUANT + 0.5)
+	rec.lq = q
+	if q ~= rec.q then
+		if visible(rec.m) then
+			paint(rec, q)
+		elseif not rec.dirty then
+			rec.dirty = true
+			table.insert(dirtyList, rec)
+			Lines.deferred += 1
+		end
+	end
+end
+
+local frameWoken = 0 -- (측정) 이 프레임에 깨운 선 수
 function Lines.update(now: number)
 	local c0 = os.clock()
 	local recheck = setupView()
-	local i = 1
-	local fadeStart = S.Hold - S.FadeTime
-	local step = S.FadeTime / QUANT
-	while i <= #active do
-		local rec = active[i]
-		if now < rec.wake then
-			i += 1
-			continue
+	local nowTick = math.floor(now * TPS)
+	local from = if lastTick then lastTick + 1 else nowTick
+	if nowTick < from - 1 then
+		from = nowTick -- (시계가 뒤로 갔다: 테스트의 가짜 시계 뒤. 바퀴는 Lines.clear 가 비운다)
+	end
+	from = math.max(from, nowTick - SIZE + 1)
+	lastTick = nowTick
+	local minTick = nowTick + 1 -- (다시 넣는 것은 다음 틱부터: 이 프레임에 두 번 처리하지 않는다)
+	-- 바로 처리할 선
+	if #nowList > 0 then
+		local list = nowList
+		nowList = {}
+		for _, rec in list do
+			if rec.on and rec.wake == 0 then
+				frameWoken += 1
+				wakeRec(rec, now, minTick)
+			end
 		end
-		local age = now - rec.t0
-		if age >= S.Hold then
-			release(i)
-		else
-			-- 다음에 밝기가 바뀔 때까지 쉰다(매 프레임 색을 바꾸지 않게):
-			--   플래시 동안: 플래시가 끝날 때(밝게 → 보통, 두 번만 바뀜)
-			--   유지 동안: 사라지기 시작할 때
-			--   사라지는 동안: 다음 단계쯤 — 같은 프레임에 켜진 선들이 한꺼번에 바뀌지 않게 조금씩 어긋나게
-			rec.wake = if age < S.FlashTime
-				then rec.t0 + S.FlashTime
-				elseif age < fadeStart then rec.t0 + fadeStart
-				else math.min(now + step * (0.6 + math.random() * 0.8), rec.t0 + S.Hold)
-			local l = level(age) * rec.peak
-			local q = math.floor(l * QUANT + 0.5)
-			rec.lq = q
-			if q ~= rec.q then
-				if visible(rec.m) then
-					paint(rec, q)
-				elseif not rec.dirty then
-					rec.dirty = true
-					table.insert(dirtyList, rec)
-					Lines.deferred += 1
+	end
+	-- 깨어날 틱이 된 칸들
+	for t = from, nowTick do
+		local s = t % SIZE
+		local lr = wheelRec[s]
+		if lr then
+			local lw = wheelWt[s]
+			wheelRec[s] = nil
+			wheelWt[s] = nil
+			for k, rec in lr do
+				local wt = lw[k]
+				if rec.on and rec.wt == wt then
+					if wt <= nowTick then
+						frameWoken += 1
+						wakeRec(rec, now, minTick)
+					else
+						schedule(rec, wt / TPS, wt) -- (한 바퀴 뒤 것: 그대로 다시 넣는다)
+					end
 				end
 			end
-			i += 1
 		end
 	end
 	-- 카메라가 돌았거나 움직였다: 미룬 선 중 시야에 들어온 것을 지금 밝기로 칠한다(꺼졌거나 이미 칠한 것은 목록에서 뺀다)
@@ -431,6 +501,8 @@ function Lines.update(now: number)
 	Perf.count("lines.color", frameColor)
 	Perf.count("lines.moved", moved)
 	Perf.count("lines.release", frameRelease)
+	Perf.count("lines.woken", frameWoken)
+	frameWoken = 0
 	Perf.count("lines.deferred", Lines.deferred - deferredSeen)
 	deferredSeen = Lines.deferred
 	frameRelease = 0
@@ -470,8 +542,13 @@ function Lines.clear()
 	end
 	table.clear(dirtyList)
 	while #active > 0 do
+		active[#active].wt = -1
 		release(#active)
 	end
+	table.clear(wheelRec)
+	table.clear(wheelWt)
+	table.clear(nowList)
+	lastTick = nil
 	table.clear(orderRec)
 	table.clear(orderT)
 	head, tail = 1, 0
