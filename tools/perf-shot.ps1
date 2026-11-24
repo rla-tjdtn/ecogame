@@ -4,12 +4,14 @@ param([string]$Title, [string]$Out)
 Add-Type -AssemblyName System.Drawing
 Add-Type @'
 using System;using System.Runtime.InteropServices;
-public class PS{[DllImport("user32.dll")]public static extern bool GetWindowRect(IntPtr h,out R r);[DllImport("user32.dll")]public static extern bool PrintWindow(IntPtr h,IntPtr dc,uint f);
+public class PS{[DllImport("user32.dll")]public static extern bool GetWindowRect(IntPtr h,out R r);[DllImport("user32.dll")]public static extern bool PrintWindow(IntPtr h,IntPtr dc,uint f);[DllImport("user32.dll")]public static extern bool IsIconic(IntPtr h);[DllImport("user32.dll")]public static extern bool ShowWindow(IntPtr h,int c);
 public struct R{public int l,t,r,b;}}
 '@
 $p = Get-Process RobloxStudioBeta -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "*$Title*" } | Select-Object -First 1
 if (-not $p) { "no window $Title"; exit 1 }
 $h = $p.MainWindowHandle
+# (최소화된 창은 제목 줄만 찍힌다: 활성화 없이 원래 크기로)
+if ([PS]::IsIconic($h)) { [void][PS]::ShowWindow($h, 4); Start-Sleep -Milliseconds 700 }
 $r = New-Object PS+R; [void][PS]::GetWindowRect($h, [ref]$r)
 $w = $r.r - $r.l; $hh = $r.b - $r.t
 $bmp = New-Object System.Drawing.Bitmap $w, $hh
