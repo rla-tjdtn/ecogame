@@ -17,7 +17,8 @@ for (const l of log) {
 	const m = l.match(/\[SHOT\] (ch\d+) (after|before) (\S+)/);
 	if (!m) continue;
 	const um = l.match(/unixms=(\d+)/); // (있으면 실제 시각을 그대로 쓴다)
-	const want = (um ? Number(um[1]) : Number(resultEpoch) - (end - time(l)) * 1000) + 4000; // 고정 8초의 가운데
+	// unixms 가 있으면 그 순간(시험이 장면 가운데에서 남긴다), 없으면 하네스 시간으로 어림한 고정 8초의 가운데
+	const want = um ? Number(um[1]) : Number(resultEpoch) - (end - time(l)) * 1000 + 4000;
 	let best = null;
 	for (const r of raws) if (!best || Math.abs(r.ms - want) < Math.abs(best.ms - want)) best = r;
 	if (!best) continue;
