@@ -1121,11 +1121,30 @@ local function aibench()
 	local secs = if args.Quick then 10 else 20
 	local acc = { tick = 0, ticks = 0, catch = 0, anim = 0, hbN = 0, los = 0, hbMs = 0 }
 	local origTick, origCatch, origAnim, origLos = Monster.tick, Monster.checkCatch, Monster.animate, Monster.lineOfSight
+	local origPath, origNote = Monster.pathTo, Monster.note
+	-- 경로 계산(ComputeAsync)은 양보한다: 그동안 다른 괴물 tick 이 돌므로 tick 시간에서 "그 괴물 자신의" pathTo 시간을 뺀다
+	-- (전체 합 Monster.stats.pathWall 을 빼면 남의 경로 시간까지 빠져 음수가 된다. pathTo 안의 작은 CPU(레이 1개·waypoint 복사)도 같이 빠진다)
+	local ownPath: { [any]: number } = {}
+	Monster.pathTo = function(self, goal)
+		local t = os.clock()
+		local ok = origPath(self, goal)
+		ownPath[self] = (ownPath[self] or 0) + (os.clock() - t)
+		return ok
+	end
+	-- 멈춤 기록: 어디서(칸·층), 어떤 상태로 멈췄나
+	local stuckAt: { string } = {}
+	Monster.note = function(self, s)
+		if s:sub(1, 5) == "stuck" and #stuckAt < 40 then
+			local p = self.root.Position
+			table.insert(stuckAt, string.format("%s#%s %s c%d,r%d y%.0f %s goal=%s wp=%d/%d", self.kind, tostring(table.find(Monster.registry, self)), s, p.X // 8, p.Z // 8, p.Y, self.state, if self.goal then string.format("c%d,r%d", self.goal.X // 8, self.goal.Z // 8) else "-", self.wp, #self.waypoints))
+		end
+		origNote(self, s)
+	end
 	Monster.tick = function(self)
 		local t = os.clock()
-		local w0 = Monster.stats.pathWall
+		local w0 = ownPath[self] or 0
 		origTick(self)
-		acc.tick += (os.clock() - t) - (Monster.stats.pathWall - w0)
+		acc.tick += (os.clock() - t) - ((ownPath[self] or 0) - w0)
 		acc.ticks += 1
 	end
 	Monster.checkCatch = function(self)
@@ -1178,6 +1197,7 @@ local function aibench()
 				acc[k] = 0
 			end
 			catches = 0
+			table.clear(stuckAt)
 			local s0 = { calls = Monster.stats.pathCalls, wall = Monster.stats.pathWall }
 			local pos0, stuck0 = {}, {}
 			for k, m in all do
@@ -1254,6 +1274,7 @@ local function aibench()
 				clientP99Ms = r2(x.p99Ms),
 				chaseSamples = chases,
 				stuckEvents = stuckN,
+				stuckAt = table.concat(stuckAt, " | "),
 				catches = catches,
 				travel = table.concat(trav, ","),
 				states = table.concat(states, ","),
@@ -1266,6 +1287,7 @@ local function aibench()
 	end
 	hbConn:Disconnect()
 	Monster.tick, Monster.checkCatch, Monster.animate, Monster.lineOfSight = origTick, origCatch, origAnim, origLos
+	Monster.pathTo, Monster.note = origPath, origNote
 	check("aibench rows", #rows > 0, #rows)
 	R.info.aibench = rows
 end
