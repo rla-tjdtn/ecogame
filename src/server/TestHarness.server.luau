@@ -125,10 +125,11 @@ local function tile(i, j, y)
 end
 
 -- 시작 → 출구를 실제로 걸을 수 있는가. 괴물과 같은 방식: 바로 계산이 안 되면 타일 경로를 LegTiles 칸씩 나눠 계산
-local function routeWalkable(agent, monster: boolean): (string, number)
+-- (from·to 를 주면 그 두 곳 사이: 맵 길찾기 검사 mapnav)
+local function routeWalkable(agent, monster: boolean, fromPos: Vector3?, toPos: Vector3?): (string, number)
 	local path = PathfindingService:CreatePath({ AgentRadius = agent.r, AgentHeight = agent.h, AgentCanJump = false })
-	local from = Round.info.spawns[1].Position - Vector3.new(0, 2.5, 0)
-	local to = Round.info.exitCFrame.Position - Vector3.new(0, 3.5, 0)
+	local from = fromPos or Round.info.spawns[1].Position - Vector3.new(0, 2.5, 0)
+	local to = toPos or Round.info.exitCFrame.Position - Vector3.new(0, 3.5, 0)
 	local function compute(a, b)
 		local ok = pcall(function()
 			path:ComputeAsync(a, b)
@@ -1523,6 +1524,75 @@ local function stages()
 	end
 end
 
+-- 맵 길찾기(레벨 디자인 검사): 스테이지마다 실제 길찾기(PathfindingService + 타일 경로 구간)로
+-- 시작 → 모든 뒤지는 곳(Z) 앞(플레이어), 출구 → 모든 Z 앞(괴물: 어디든 쫓아올 수 있는가), 괴물 배회 지점 아무 곳 12쌍(괴물, 2층 포함)
+local function mapNav()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local only = tonumber(args.Stage) or 0
+	for i = 1, #Config.Stages do
+		if only ~= 0 and i ~= only then
+			continue
+		end
+		local errBefore = #R.errors
+		Round.startStage(i)
+		if not readyPlayers(1) then
+			check("stage " .. i .. " ready", false)
+			continue
+		end
+		-- 짓는 동안 난 오류(괴물 애니메이션 에셋 로드 실패는 맵과 상관없어서 뺀다)
+		local errs = {}
+		for k = errBefore + 1, #R.errors do
+			if not string.find(R.errors[k], "animation", 1, true) then
+				table.insert(errs, R.errors[k])
+			end
+		end
+		local stage = workspace:FindFirstChild("Stage")
+		check(string.format("stage %d built without map errors (parts %s)", i, tostring(stage and stage:GetAttribute("PartCount"))), #errs == 0, table.concat(errs, " | "))
+		local player = { r = 1.2, h = 5.5 }
+		local monster = { r = Config.Monster.AgentRadius, h = Config.Monster.AgentHeight }
+		local exitPos = Round.info.exitCFrame.Position - Vector3.new(0, 3.5, 0)
+		local fails, mfails, n = {}, {}, 0
+		local upperSpots = 0
+		for _, spot in Search.all() do
+			n += 1
+			local to = spot.front + Vector3.new(0, 0.5, 0)
+			if to.Y > 9 then
+				upperSpots += 1
+			end
+			local st = routeWalkable(player, false, nil, to)
+			if st ~= "Success" then
+				table.insert(fails, string.format("Z(%d,%d,%s):%s", math.floor(to.X / 8), math.floor(to.Z / 8), if to.Y > 9 then "2F" else "1F", st))
+			end
+			local ms = routeWalkable(monster, true, exitPos, to)
+			if ms ~= "Success" then
+				table.insert(mfails, string.format("Z(%d,%d):%s", math.floor(to.X / 8), math.floor(to.Z / 8), ms))
+			end
+			task.wait()
+		end
+		check(string.format("stage %d: player can walk start -> every search spot (%d, 2F %d)", i, n, upperSpots), #fails == 0 and n > 0, table.concat(fails, " "))
+		check(string.format("stage %d: monster can walk exit -> every search spot", i), #mfails == 0, table.concat(mfails, " "))
+		local nodes = Round.info.nodes
+		local bad, upper = {}, 0
+		for k = 1, 12 do
+			local a = nodes[((k * 7919) % #nodes) + 1] - Vector3.new(0, 3, 0)
+			local b = nodes[((k * 104729 + 13) % #nodes) + 1] - Vector3.new(0, 3, 0)
+			if a.Y > 9 or b.Y > 9 then
+				upper += 1
+			end
+			local ms = routeWalkable(monster, true, a, b)
+			if ms ~= "Success" then
+				table.insert(bad, string.format("(%d,%d)->(%d,%d):%s", math.floor(a.X / 8), math.floor(a.Z / 8), math.floor(b.X / 8), math.floor(b.Z / 8), ms))
+			end
+			task.wait()
+		end
+		check(string.format("stage %d: monster roams between 12 random node pairs (%d touch 2F)", i, upper), #bad == 0, table.concat(bad, " "))
+	end
+end
+
 -- 스테이지마다 아무 곳 12군데에서 음파를 쏴 본다(실패하면 이유·위치)
 local function sonarAll()
 	local ps = readyPlayers(1)
@@ -2217,6 +2287,8 @@ task.spawn(function()
 			sonarAll()
 		elseif args.Test == "stages" then
 			stages()
+		elseif args.Test == "mapnav" then
+			mapNav()
 		elseif args.Test == "seal" then
 			seal()
 		elseif args.Test == "doppel" then

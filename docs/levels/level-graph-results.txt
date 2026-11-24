@@ -1,0 +1,20 @@
+Stage1 47x43 괴물2 | 최단 135 | 길 2갈래(135,177) | 끊는데 괴물 2마리 | Z 18곳 | 목 0 | 괴물둘 S→E 0.4% Z최악 1.4% | 배회 기다림 8/200판(42틱) 잡힘 75 | 구역 24 문 39 고리 16 다리문 1 | 좁은길 18% | 괴물못감 0 | PASS
+   · mincut: two monsters standing exactly at r19c26 + r19c20 would cut start→exit
+Stage2 47x43 2층 괴물2 | 최단 139 (2층 없이 139) | 길 3갈래(139,192,194) | 끊는데 괴물 2마리 | Z 27곳(2층 10) | 목 0 | 괴물둘 S→E 0.2% Z최악 0.3% | 배회 기다림 16/200판(88틱) 잡힘 75 | 구역 28 문 44 고리 17 다리문 4 | 좁은길 18% | 괴물못감 0 | PASS
+   · mincut: two monsters standing exactly at r32c7 + r38c7 would cut start→exit
+Stage3 47x43 괴물2 | 최단 135 | 길 3갈래(135,171,173) | 끊는데 괴물 2마리 | Z 18곳 | 목 0 | 괴물둘 S→E 0.3% Z최악 0.6% | 배회 기다림 3/200판(12틱) 잡힘 87 | 구역 38 문 37 고리 0 다리문 0 | 좁은길 9% | 괴물못감 0 | PASS
+   · mincut: two monsters standing exactly at r34c40 + r38c40 would cut start→exit
+Stage4 47x43 2층 괴물2 | 최단 121 (2층 없이 121) | 길 3갈래(121,144,161) | 끊는데 괴물 2마리 | Z 21곳(2층 6) | 목 0 | 괴물둘 S→E 0.0% Z최악 0.5% | 배회 기다림 12/200판(103틱) 잡힘 88 | 구역 43 문 58 고리 16 다리문 20 | 좁은길 13% | 괴물못감 0 | PASS
+   · mincut: two monsters standing exactly at r3c40 + r5c42 would cut start→exit
+Stage5 47x43 괴물2 | 최단 127 | 길 2갈래(127,183) | 끊는데 괴물 2마리 | Z 18곳 | 목 0 | 괴물둘 S→E 0.4% Z최악 0.6% | 배회 기다림 10/200판(60틱) 잡힘 80 | 구역 12 문 25 고리 14 다리문 0 | 좁은길 10% | 괴물못감 0 | PASS
+   · mincut: two monsters standing exactly at r24c24 + r16c24 would cut start→exit
+Stage6 47x43 2층 괴물3 | 최단 122 (2층 없이 122) | 길 3갈래(122,161,151) | 끊는데 괴물 2마리 | Z 20곳(2층 5) | 목 0 | 괴물둘 S→E 0.3% Z최악 0.0% | 배회 기다림 11/200판(61틱) 잡힘 79 | 구역 38 문 53 고리 16 다리문 16 | 좁은길 6% | 괴물못감 0 | PASS
+   · mincut: two monsters standing exactly at r32c9 + r40c12 would cut start→exit
+Stage7 47x43 2층 괴물4 | 최단 120 (2층 없이 120) | 길 4갈래(120,141,149,140) | 끊는데 괴물 2마리 | Z 20곳(2층 8) | 목 0 | 괴물둘 S→E 0.1% Z최악 0.8% | 배회 기다림 13/200판(61틱) 잡힘 140 | 구역 22 문 31 고리 10 다리문 11 | 좁은길 13% | 괴물못감 0 | PASS
+   · mincut: two monsters standing exactly at r5c8 + r5c2 would cut start→exit
+Stage8 47x43 괴물4 | 최단 126 | 길 3갈래(126,158,188) | 끊는데 괴물 2마리 | Z 27곳 | 목 0 | 괴물둘 S→E 0.1% Z최악 0.3% | 배회 기다림 14/200판(63틱) 잡힘 113 | 구역 16 문 30 고리 15 다리문 0 | 좁은길 6% | 괴물못감 0 | PASS
+   · mincut: two monsters standing exactly at r18c27 + r18c19 would cut start→exit
+Stage9 47x43 괴물4 | 최단 123 | 길 3갈래(123,149,159) | 끊는데 괴물 2마리 | Z 23곳 | 목 0 | 괴물둘 S→E 0.0% Z최악 0.0% | 배회 기다림 7/200판(30틱) 잡힘 108 | 구역 11 문 19 고리 9 다리문 1 | 좁은길 10% | 괴물못감 0 | PASS
+   · mincut: two monsters standing exactly at r36c36 + r39c38 would cut start→exit
+Stage10 47x43 2층 괴물5 | 최단 131 (2층 없이 131) | 길 3갈래(131,161,177) | 끊는데 괴물 2마리 | Z 30곳(2층 11) | 목 0 | 괴물둘 S→E 0.0% Z최악 0.3% | 배회 기다림 3/200판(17틱) 잡힘 151 | 구역 25 문 40 고리 16 다리문 13 | 좁은길 8% | 괴물못감 0 | PASS
+   · mincut: two monsters standing exactly at r2c7 + r5c4 would cut start→exit

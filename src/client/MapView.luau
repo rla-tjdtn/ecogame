@@ -1,6 +1,8 @@
 --!strict
 -- 지도(Q): 나와 팀원의 음파가 닿은 곳이 그려지고, 그 스테이지가 끝날 때까지 남는다(게임 화면의 선은 그대로 사라진다).
 -- 검은 바탕에 벽 윤곽을 흰 선으로, 내 위치는 빨간 칸, 팀원은 흰 테두리 칸. 출구는 음파가 닿았을 때만 표시.
+-- 2층 건물(스테이지 속성 Rows2, 1층과 같은 크기)은 1층·2층 지도를 따로 그린다: 지금 서 있는 층이 보이고, 위쪽 "1층 / 2층" 버튼으로 바꿔 본다.
+-- 칸 번호: 행*1024 + 열, 2층 칸은 +100000(서버 팀 공유도 같은 번호).
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -18,7 +20,13 @@ local T = 8 -- 맵 한 칸(스터드), StageBuilder 와 같다
 local LINE = 2 -- 선 굵기(픽셀)
 
 local rows: { string } = {}
+local floorRows: { { string } } = { {}, {} } -- [1] 1층, [2] 2층(없으면 빈 표)
+local hasUpper = false
+local viewFloor = 1 -- 지금 보여 주는 층
+local manualFloor = false -- 버튼으로 층을 골랐는가(지도를 다시 열면 내 층으로)
+local exitFloor = 1
 local W, H = 0, 0
+local UPPER_Y = 9 -- 이 높이(스터드)보다 위면 2층(2층 바닥 12)
 local explored: { [number]: boolean } = {}
 local drawn: { [number]: boolean } = {}
 local lineCount = 0
@@ -52,9 +60,13 @@ local aspect = Instance.new("UIAspectRatioConstraint")
 aspect.AspectRatio = 1
 aspect.Parent = canvas
 
-local lines = Instance.new("Folder")
-lines.Name = "Lines"
-lines.Parent = canvas
+local floorLines: { Folder } = {}
+for f = 1, 2 do
+	local fo = Instance.new("Folder")
+	fo.Name = "Lines" .. f
+	fo.Parent = canvas
+	floorLines[f] = fo
+end
 
 local function square(color: Color3, px: number, z: number): Frame
 	local f = Instance.new("Frame")
@@ -136,22 +148,74 @@ title.TextColor3 = Color3.fromRGB(150, 150, 150)
 title.Text = "지도  ·  나와 팀원의 음파가 닿은 곳이 기록됩니다  ·  Q 닫기"
 title.Parent = back
 
+-- 층 버튼(2층 건물일 때만)
+local floorButtons: { TextButton } = {}
+local function setView(f: number)
+	viewFloor = f
+	for k = 1, 2 do
+		floorLines[k].Parent = if k == f then canvas else nil
+		local b = floorButtons[k]
+		if b then
+			b.BackgroundColor3 = if k == f then Color3.fromRGB(230, 230, 230) else Color3.fromRGB(30, 30, 30)
+			b.TextColor3 = if k == f then Color3.new(0, 0, 0) else Color3.fromRGB(170, 170, 170)
+		end
+	end
+end
+for f = 1, 2 do
+	local b = Instance.new("TextButton")
+	b.Name = "Floor" .. f
+	b.AnchorPoint = Vector2.new(1, 0)
+	b.Position = UDim2.new(1, -24 - (2 - f) * 76, 0, 12)
+	b.Size = UDim2.fromOffset(68, 30)
+	b.Font = Enum.Font.GothamMedium
+	b.TextSize = 16
+	b.Text = f .. "층"
+	b.BorderSizePixel = 0
+	b.AutoButtonColor = true
+	b.Visible = false
+	b.Parent = back
+	local cr = Instance.new("UICorner")
+	cr.CornerRadius = UDim.new(0, 6)
+	cr.Parent = b
+	b.Activated:Connect(function()
+		manualFloor = true
+		setView(f)
+	end)
+	floorButtons[f] = b
+end
+local floorLabel = Instance.new("TextLabel")
+floorLabel.BackgroundTransparency = 1
+floorLabel.AnchorPoint = Vector2.new(0.5, 0)
+floorLabel.Position = UDim2.new(0.5, 0, 0, 14)
+floorLabel.Size = UDim2.fromOffset(200, 28)
+floorLabel.Font = Enum.Font.GothamBold
+floorLabel.TextSize = 22
+floorLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+floorLabel.Text = ""
+floorLabel.Parent = back
+local function myFloor(y: number): number
+	return if hasUpper and y > UPPER_Y then 2 else 1
+end
+
 gui.Parent = player:WaitForChild("PlayerGui")
 
 -- ── 격자 ──
-local function at(i: number, j: number): string
-	if j < 1 or j > H or i < 1 or i > W then
+local function at(i: number, j: number, f: number?): string
+	local rs = floorRows[f or 1]
+	if j < 1 or j > H or i < 1 or i > W or not rs[j] then
 		return "#"
 	end
-	return rows[j]:sub(i, i)
+	return rs[j]:sub(i, i)
 end
-local function isWall(i: number, j: number): boolean
-	return at(i, j) == "#"
+-- (2층의 계단 구멍 o 도 지도에서는 벽처럼 윤곽을 친다)
+local function isWall(i: number, j: number, f: number?): boolean
+	local c = at(i, j, f)
+	return c == "#" or c == "o"
 end
 
 -- 격자 꼭짓점 (x1,y1)-(x2,y2) 사이 선(가로 또는 세로 한 칸)
-local function line(x1: number, y1: number, x2: number, y2: number)
-	local key = ((y1 * 1024 + x1) * 2) + (if y1 == y2 then 0 else 1)
+local function line(x1: number, y1: number, x2: number, y2: number, fl: number)
+	local key = ((y1 * 1024 + x1) * 2) + (if y1 == y2 then 0 else 1) + (fl - 1) * 1000000
 	if drawn[key] then
 		return
 	end
@@ -167,44 +231,65 @@ local function line(x1: number, y1: number, x2: number, y2: number)
 		f.Position = UDim2.new(x1 / W, -LINE / 2, y1 / H, -LINE / 2)
 		f.Size = UDim2.new(0, LINE, (y2 - y1) / H, LINE)
 	end
-	f.Parent = lines
+	f.Parent = floorLines[fl]
 end
 
-local function markTile(i: number, j: number): boolean
-	local k = j * 1024 + i
-	if explored[k] or isWall(i, j) or i < 1 or j < 1 or i > W or j > H then
+local function markTile(i: number, j: number, f: number?): boolean
+	local fl = f or 1
+	if fl == 2 and not hasUpper then
+		return false
+	end
+	local k = j * 1024 + i + (fl - 1) * 100000
+	if explored[k] or isWall(i, j, fl) or i < 1 or j < 1 or i > W or j > H then
 		return false
 	end
 	explored[k] = true
 	exploredCount += 1
-	if isWall(i, j - 1) then
-		line(i - 1, j - 1, i, j - 1)
+	if isWall(i, j - 1, fl) then
+		line(i - 1, j - 1, i, j - 1, fl)
 	end
-	if isWall(i, j + 1) then
-		line(i - 1, j, i, j)
+	if isWall(i, j + 1, fl) then
+		line(i - 1, j, i, j, fl)
 	end
-	if isWall(i - 1, j) then
-		line(i - 1, j - 1, i - 1, j)
+	if isWall(i - 1, j, fl) then
+		line(i - 1, j - 1, i - 1, j, fl)
 	end
-	if isWall(i + 1, j) then
-		line(i, j - 1, i, j)
+	if isWall(i + 1, j, fl) then
+		line(i, j - 1, i, j, fl)
 	end
-	if at(i, j) == "E" then
+	if at(i, j, fl) == "E" then
 		exitMark.Position = UDim2.fromScale((i - 0.5) / W, (j - 0.5) / H)
 		exitMark.Visible = true
+		exitFloor = fl
 	end
 	return true
+end
+-- 칸 번호(서버 팀 공유) → 칸 표시
+local function markKey(k: number): boolean
+	local fl = if k >= 100000 then 2 else 1
+	local r = k % 100000
+	return markTile(r % 1024, r // 1024, fl)
 end
 
 -- 새 스테이지: 기록을 지운다
 function Map.load(stage: Instance)
 	local s = stage:GetAttribute("Rows")
 	rows = if type(s) == "string" then string.split(s, "/") else {}
+	local s2 = stage:GetAttribute("Rows2")
+	hasUpper = type(s2) == "string"
+	floorRows = { rows, if type(s2) == "string" then string.split(s2, "/") else {} }
 	H = #rows
 	W = if H > 0 then #rows[1] else 0
 	table.clear(explored)
 	table.clear(drawn)
-	lines:ClearAllChildren()
+	for f = 1, 2 do
+		floorLines[f]:ClearAllChildren()
+		floorButtons[f].Visible = hasUpper
+	end
+	floorLabel.Text = ""
+	exitFloor = 1
+	manualFloor = false
+	setView(1)
 	lineCount = 0
 	exploredCount = 0
 	exitMark.Visible = false
@@ -221,7 +306,7 @@ MapShare.OnClientEvent:Connect(function(data: any)
 	end
 	for _, k in data.tiles do
 		if type(k) == "number" then
-			markTile(k % 1024, k // 1024)
+			markKey(k)
 		end
 	end
 end)
@@ -236,8 +321,9 @@ function Map.onReach(dist: { [number]: number }, radius: number)
 		if d <= radius then
 			local c = World.cellCenter(idx)
 			local i, j = math.floor(c.X / T) + 1, math.floor(c.Z / T) + 1
-			if markTile(i, j) then
-				table.insert(fresh, j * 1024 + i)
+			local fl = myFloor(c.Y)
+			if markTile(i, j, fl) then
+				table.insert(fresh, j * 1024 + i + (fl - 1) * 100000)
 			end
 		end
 	end
@@ -250,6 +336,9 @@ end
 function Map.setOpen(v: boolean)
 	isOpen = v
 	gui.Enabled = v
+	if v then
+		manualFloor = false -- 열 때는 내가 서 있는 층부터
+	end
 end
 
 function Map.toggle()
@@ -263,7 +352,7 @@ function Map.state()
 			shown += 1
 		end
 	end
-	return { open = isOpen, explored = exploredCount, lines = lineCount, exitShown = exitMark.Visible, meShown = me.Visible, matesShown = shown }
+	return { open = isOpen, explored = exploredCount, lines = lineCount, exitShown = exitMark.Visible, meShown = me.Visible, matesShown = shown, floors = if hasUpper then 2 else 1, viewFloor = viewFloor }
 end
 
 UserInputService.InputBegan:Connect(function(input, processed)
@@ -279,16 +368,25 @@ RunService.RenderStepped:Connect(function()
 	if not isOpen or W == 0 then
 		return
 	end
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	-- 보여 줄 층: 버튼으로 고르지 않았으면 내가 서 있는 층
+	if hasUpper and root and not manualFloor then
+		local f = myFloor(root.Position.Y)
+		if f ~= viewFloor then
+			setView(f)
+		end
+	end
+	floorLabel.Text = if hasUpper then viewFloor .. "층" else ""
+	exitMark.BackgroundTransparency = if exitFloor == viewFloor then 0 else 1
 	local kp = ReplicatedStorage:GetAttribute("KeyHintPos")
-	if typeof(kp) == "Vector3" and ReplicatedStorage:GetAttribute("HasKey") ~= true then
+	if typeof(kp) == "Vector3" and ReplicatedStorage:GetAttribute("HasKey") ~= true and myFloor(kp.Y) == viewFloor then
 		keyMark.Position = UDim2.fromScale(kp.X / (W * T), kp.Z / (H * T))
 		keyMark.Visible = true
 	else
 		keyMark.Visible = false
 	end
-	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if root then
+	if root and myFloor(root.Position.Y) == viewFloor then
 		me.Position = UDim2.fromScale(root.Position.X / (W * T), root.Position.Z / (H * T))
 		me.Visible = true
 		-- 바라보는 방향(카메라가 보는 쪽, 지도는 X → 오른쪽, Z → 아래)
@@ -309,7 +407,7 @@ RunService.RenderStepped:Connect(function()
 	for _, p in Players:GetPlayers() do
 		if p ~= player and p:GetAttribute("Status") == "Alive" then
 			local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if r then
+			if r and myFloor(r.Position.Y) == viewFloor then
 				n += 1
 				local f = mateMark(n)
 				f.Position = UDim2.fromScale(r.Position.X / (W * T), r.Position.Z / (H * T))

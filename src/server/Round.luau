@@ -50,7 +50,7 @@ MapShare.OnServerEvent:Connect(function(p: Player, data: any)
 	local info = Round.info
 	if #fresh > 0 and not Round.exitAnnounced and info then
 		local ep = info.exitCFrame.Position
-		local exitKey = (math.floor(ep.Z / 8) + 1) * 1024 + math.floor(ep.X / 8) + 1
+		local exitKey = (math.floor(ep.Z / 8) + 1) * 1024 + math.floor(ep.X / 8) + 1 + (if ep.Y > 9 then 100000 else 0) -- (2층 칸은 +100000)
 		if table.find(fresh, exitKey) then
 			Round.exitAnnounced = true
 			RoundEvent:FireAllClients("ExitFound", { by = p.DisplayName, userId = p.UserId })
@@ -194,6 +194,7 @@ local function buildLayout(layout: any, label: string)
 	Round.lastBuildMs = (os.clock() - b0) * 1000
 	local folder = info.folder
 	folder:SetAttribute("Rows", table.concat(layout.Rows, "/")) -- 클라이언트 지도(Q)용 격자(행을 / 로 구분)
+	folder:SetAttribute("Rows2", if layout.Rows2 then table.concat(layout.Rows2, "/") else nil) -- 겹쳐 쌓은 2층 건물의 2층 격자(같은 크기)
 	-- 안전 구역: 클라이언트 안내용 목록 + 괴물 길찾기가 피해 가도록 PathfindingModifier(SafeZone) 칸
 	Round.safe = computeSafe(layout.Rows)
 	local keys = {}

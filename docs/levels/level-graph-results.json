@@ -1,0 +1,872 @@
+[
+ {
+  "id": 1,
+  "size": "47x43",
+  "monsters": 2,
+  "fails": [],
+  "warn": [
+   "mincut: two monsters standing exactly at r19c26 + r19c20 would cut start→exit"
+  ],
+  "exitLen": 135,
+  "searchSpots": 18,
+  "upperSpots": 0,
+  "singleTests": 5397,
+  "routesSE": {
+   "lens": [
+    135,
+    177
+   ],
+   "routes": 2
+  },
+  "minCutSE": {
+   "k": 2,
+   "at": [
+    "r19c26",
+    "r19c20"
+   ],
+   "raw": [
+    919,
+    913
+   ]
+  },
+  "pairSE": {
+   "rate": 0.004163775156141568,
+   "n": 1441,
+   "examples": [
+    "r28c31+r28c43",
+    "r38c27+r35c32",
+    "r34c16+r39c15",
+    "r28c31+r32c42",
+    "r12c33+r11c43"
+   ]
+  },
+  "pairWorstZ": {
+   "rate": 0.013927576601671309,
+   "n": 359,
+   "examples": [
+    "r34c24+r39c32",
+    "r39c12+r35c19",
+    "r14c43+r9c33",
+    "r29c15+r22c5",
+    "r19c21+r19c27"
+   ],
+   "z": "r5c11"
+  },
+  "dynamic": {
+   "runs": 200,
+   "forcedWaitRuns": 8,
+   "totalWaits": 42,
+   "caught": 75,
+   "unfinished": 0,
+   "avgSteps": 237,
+   "hot": [
+    "r25c18×8",
+    "r29c21×6",
+    "r39c27×5",
+    "r31c16×5",
+    "r24c21×5",
+    "r38c35×5",
+    "r38c38×4",
+    "r36c25×3",
+    "r22c23×1"
+   ]
+  },
+  "monsterUnreach": 0,
+  "zones": {
+   "zones": 24,
+   "doors": 39,
+   "loops": 16,
+   "bridges": 1,
+   "bridgeDoors": [
+    "r21c14"
+   ]
+  },
+  "narrowRatio": 0.18382352941176472,
+  "chokes": []
+ },
+ {
+  "id": 2,
+  "size": "47x43 2층",
+  "monsters": 2,
+  "fails": [],
+  "warn": [
+   "mincut: two monsters standing exactly at r32c7 + r38c7 would cut start→exit"
+  ],
+  "exitLen": 139,
+  "searchSpots": 27,
+  "upperSpots": 10,
+  "singleTests": 8763,
+  "routesSE": {
+   "lens": [
+    139,
+    192,
+    194
+   ],
+   "routes": 3
+  },
+  "minCutSE": {
+   "k": 2,
+   "at": [
+    "r32c7",
+    "r38c7"
+   ],
+   "raw": [
+    1511,
+    1793
+   ]
+  },
+  "pairSE": {
+   "rate": 0.002053388090349076,
+   "n": 1461,
+   "examples": [
+    "r23c29+2F r22c15",
+    "r39c20+r31c19",
+    "r10c25+r14c18"
+   ]
+  },
+  "pairWorstZ": {
+   "rate": 0.0027624309392265192,
+   "n": 362,
+   "examples": [
+    "r23c29+r34c35"
+   ],
+   "z": "r21c27"
+  },
+  "dynamic": {
+   "runs": 200,
+   "forcedWaitRuns": 16,
+   "totalWaits": 88,
+   "caught": 75,
+   "unfinished": 0,
+   "avgSteps": 326,
+   "hot": [
+    "r34c26×8",
+    "r38c7×8",
+    "r22c25×8",
+    "r18c6×8",
+    "2F r36c31×7",
+    "2F r21c13×7",
+    "2F r28c38×7",
+    "2F r22c15×5",
+    "r13c1×5",
+    "r27c19×5",
+    "r41c16×4",
+    "2F r37c33×3",
+    "2F r22c19×3",
+    "r22c18×3",
+    "r9c3×2",
+    "r9c2×2",
+    "r19c4×2",
+    "2F r4c2×1"
+   ]
+  },
+  "monsterUnreach": 0,
+  "withoutUpper": 139,
+  "zones": {
+   "zones": 28,
+   "doors": 44,
+   "loops": 17,
+   "bridges": 4,
+   "bridgeDoors": [
+    "r33c33",
+    "2F r5c18",
+    "r3c30",
+    "r3c15"
+   ]
+  },
+  "narrowRatio": 0.18571428571428572,
+  "chokes": []
+ },
+ {
+  "id": 3,
+  "size": "47x43",
+  "monsters": 2,
+  "fails": [],
+  "warn": [
+   "mincut: two monsters standing exactly at r34c40 + r38c40 would cut start→exit"
+  ],
+  "exitLen": 135,
+  "searchSpots": 18,
+  "upperSpots": 0,
+  "singleTests": 5434,
+  "routesSE": {
+   "lens": [
+    135,
+    171,
+    173
+   ],
+   "routes": 3
+  },
+  "minCutSE": {
+   "k": 2,
+   "at": [
+    "r34c40",
+    "r38c40"
+   ],
+   "raw": [
+    1638,
+    1826
+   ]
+  },
+  "pairSE": {
+   "rate": 0.0027816411682892906,
+   "n": 1438,
+   "examples": [
+    "r27c3+r31c10",
+    "r8c28+r3c26",
+    "r30c10+r33c3",
+    "r37c7+r34c16"
+   ]
+  },
+  "pairWorstZ": {
+   "rate": 0.005509641873278237,
+   "n": 363,
+   "examples": [
+    "r8c42+r15c38",
+    "r38c10+r35c15"
+   ],
+   "z": "r1c25"
+  },
+  "dynamic": {
+   "runs": 200,
+   "forcedWaitRuns": 3,
+   "totalWaits": 12,
+   "caught": 87,
+   "unfinished": 0,
+   "avgSteps": 183,
+   "hot": [
+    "r13c31×4",
+    "r35c39×4",
+    "r40c27×4"
+   ]
+  },
+  "monsterUnreach": 0,
+  "zones": {
+   "zones": 38,
+   "doors": 37,
+   "loops": 0,
+   "bridges": 0,
+   "bridgeDoors": []
+  },
+  "narrowRatio": 0.09558823529411764,
+  "chokes": []
+ },
+ {
+  "id": 4,
+  "size": "47x43 2층",
+  "monsters": 2,
+  "fails": [],
+  "warn": [
+   "mincut: two monsters standing exactly at r3c40 + r5c42 would cut start→exit"
+  ],
+  "exitLen": 121,
+  "searchSpots": 21,
+  "upperSpots": 6,
+  "singleTests": 6064,
+  "routesSE": {
+   "lens": [
+    121,
+    144,
+    161
+   ],
+   "routes": 3
+  },
+  "minCutSE": {
+   "k": 2,
+   "at": [
+    "r3c40",
+    "r5c42"
+   ],
+   "raw": [
+    181,
+    277
+   ]
+  },
+  "pairSE": {
+   "rate": 0,
+   "n": 1471,
+   "examples": []
+  },
+  "pairWorstZ": {
+   "rate": 0.005434782608695652,
+   "n": 368,
+   "examples": [
+    "2F r9c21+r9c33",
+    "r10c33+2F r10c20"
+   ],
+   "z": "r41c13"
+  },
+  "dynamic": {
+   "runs": 200,
+   "forcedWaitRuns": 12,
+   "totalWaits": 103,
+   "caught": 88,
+   "unfinished": 0,
+   "avgSteps": 324,
+   "hot": [
+    "2F r10c40×22",
+    "r12c26×13",
+    "2F r9c38×10",
+    "2F r28c29×8",
+    "2F r22c25×7",
+    "2F r11c24×7",
+    "2F r10c33×7",
+    "r10c7×5",
+    "r7c22×5",
+    "2F r12c24×4",
+    "r7c43×4",
+    "r10c17×3",
+    "2F r31c9×3",
+    "r35c3×2",
+    "2F r29c32×2",
+    "r17c10×1"
+   ]
+  },
+  "monsterUnreach": 0,
+  "withoutUpper": 121,
+  "zones": {
+   "zones": 43,
+   "doors": 58,
+   "loops": 16,
+   "bridges": 20,
+   "bridgeDoors": [
+    "r11c31",
+    "r11c35",
+    "2F r8c18",
+    "2F r8c33",
+    "2F r11c38",
+    "2F r11c44",
+    "r30c36",
+    "r30c43",
+    "2F r30c36",
+    "2F r33c31",
+    "2F r33c38",
+    "r30c9",
+    "r30c16",
+    "2F r8c3",
+    "2F r30c10",
+    "2F r30c15",
+    "2F r33c3",
+    "2F r33c10",
+    "2F r33c16",
+    "2F r33c23"
+   ]
+  },
+  "narrowRatio": 0.13934426229508196,
+  "chokes": []
+ },
+ {
+  "id": 5,
+  "size": "47x43",
+  "monsters": 2,
+  "fails": [],
+  "warn": [
+   "mincut: two monsters standing exactly at r24c24 + r16c24 would cut start→exit"
+  ],
+  "exitLen": 127,
+  "searchSpots": 18,
+  "upperSpots": 0,
+  "singleTests": 5598,
+  "routesSE": {
+   "lens": [
+    127,
+    183
+   ],
+   "routes": 2
+  },
+  "minCutSE": {
+   "k": 2,
+   "at": [
+    "r24c24",
+    "r16c24"
+   ],
+   "raw": [
+    1152,
+    776
+   ]
+  },
+  "pairSE": {
+   "rate": 0.00411240575736806,
+   "n": 1459,
+   "examples": [
+    "r39c43+r32c26",
+    "r1c36+r8c36",
+    "r26c45+r29c40",
+    "r39c30+r33c27",
+    "r2c38+r7c33"
+   ]
+  },
+  "pairWorstZ": {
+   "rate": 0.005681818181818182,
+   "n": 352,
+   "examples": [
+    "r38c44+r32c28",
+    "r2c19+r7c13"
+   ],
+   "z": "r1c12"
+  },
+  "dynamic": {
+   "runs": 200,
+   "forcedWaitRuns": 10,
+   "totalWaits": 60,
+   "caught": 80,
+   "unfinished": 0,
+   "avgSteps": 219,
+   "hot": [
+    "r35c31×7",
+    "r21c41×7",
+    "r21c39×6",
+    "r25c29×5",
+    "r33c13×5",
+    "r33c20×5",
+    "r16c34×5",
+    "r27c42×4",
+    "r8c23×4",
+    "r31c37×4",
+    "r41c44×4",
+    "r35c20×3",
+    "r9c25×1"
+   ]
+  },
+  "monsterUnreach": 0,
+  "zones": {
+   "zones": 12,
+   "doors": 25,
+   "loops": 14,
+   "bridges": 0,
+   "bridgeDoors": []
+  },
+  "narrowRatio": 0.1015625,
+  "chokes": []
+ },
+ {
+  "id": 6,
+  "size": "47x43 2층",
+  "monsters": 3,
+  "fails": [],
+  "warn": [
+   "mincut: two monsters standing exactly at r32c9 + r40c12 would cut start→exit"
+  ],
+  "exitLen": 122,
+  "searchSpots": 20,
+  "upperSpots": 5,
+  "singleTests": 5757,
+  "routesSE": {
+   "lens": [
+    122,
+    161,
+    151
+   ],
+   "routes": 3
+  },
+  "minCutSE": {
+   "k": 2,
+   "at": [
+    "r32c9",
+    "r40c12"
+   ],
+   "raw": [
+    1513,
+    1892
+   ]
+  },
+  "pairSE": {
+   "rate": 0.003436426116838488,
+   "n": 1455,
+   "examples": [
+    "r9c35+r2c45",
+    "r2c32+r9c25",
+    "r10c4+r2c10",
+    "r2c28+r10c24",
+    "r10c25+r2c23"
+   ]
+  },
+  "pairWorstZ": {
+   "rate": 0
+  },
+  "dynamic": {
+   "runs": 200,
+   "forcedWaitRuns": 11,
+   "totalWaits": 61,
+   "caught": 79,
+   "unfinished": 0,
+   "avgSteps": 283,
+   "hot": [
+    "r4c33×12",
+    "2F r11c14×8",
+    "r20c7×8",
+    "r12c24×7",
+    "r9c34×5",
+    "2F r22c14×5",
+    "r9c22×4",
+    "r6c36×4",
+    "r9c28×3",
+    "r25c39×2",
+    "r2c29×1",
+    "r7c37×1",
+    "r4c24×1"
+   ]
+  },
+  "monsterUnreach": 0,
+  "withoutUpper": 122,
+  "zones": {
+   "zones": 38,
+   "doors": 53,
+   "loops": 16,
+   "bridges": 16,
+   "bridgeDoors": [
+    "2F r9c5",
+    "2F r9c11",
+    "2F r9c17",
+    "2F r9c23",
+    "2F r9c29",
+    "2F r9c35",
+    "2F r9c41",
+    "2F r25c28",
+    "2F r34c11",
+    "2F r28c11",
+    "2F r34c17",
+    "2F r28c17",
+    "2F r34c23",
+    "2F r28c23",
+    "2F r34c29",
+    "2F r28c29"
+   ]
+  },
+  "narrowRatio": 0.06504065040650407,
+  "chokes": []
+ },
+ {
+  "id": 7,
+  "size": "47x43 2층",
+  "monsters": 4,
+  "fails": [],
+  "warn": [
+   "mincut: two monsters standing exactly at r5c8 + r5c2 would cut start→exit"
+  ],
+  "exitLen": 120,
+  "searchSpots": 20,
+  "upperSpots": 8,
+  "singleTests": 6023,
+  "routesSE": {
+   "lens": [
+    120,
+    141,
+    149,
+    140
+   ],
+   "routes": 4
+  },
+  "minCutSE": {
+   "k": 2,
+   "at": [
+    "r5c8",
+    "r5c2"
+   ],
+   "raw": [
+    243,
+    237
+   ]
+  },
+  "pairSE": {
+   "rate": 0.001366120218579235,
+   "n": 1464,
+   "examples": [
+    "r6c23+2F r9c34",
+    "r6c23+2F r9c25"
+   ]
+  },
+  "pairWorstZ": {
+   "rate": 0.008174386920980926,
+   "n": 367,
+   "examples": [
+    "2F r9c19+r9c28",
+    "r9c4+r4c9",
+    "r9c41+2F r9c39"
+   ],
+   "z": "r41c9"
+  },
+  "dynamic": {
+   "runs": 200,
+   "forcedWaitRuns": 13,
+   "totalWaits": 61,
+   "caught": 140,
+   "unfinished": 0,
+   "avgSteps": 250,
+   "hot": [
+    "r12c42×9",
+    "r10c39×8",
+    "2F r10c36×5",
+    "2F r41c14×5",
+    "2F r19c42×5",
+    "2F r15c42×5",
+    "r40c18×4",
+    "r39c22×3",
+    "r38c36×3",
+    "2F r27c33×2",
+    "r28c21×2",
+    "r25c21×2",
+    "2F r34c31×2",
+    "r7c24×2",
+    "r1c19×2",
+    "r25c43×1",
+    "r10c44×1"
+   ]
+  },
+  "monsterUnreach": 0,
+  "withoutUpper": 120,
+  "zones": {
+   "zones": 22,
+   "doors": 31,
+   "loops": 10,
+   "bridges": 11,
+   "bridgeDoors": [
+    "r7c29",
+    "r7c43",
+    "r11c39",
+    "r35c27",
+    "r35c43",
+    "2F r7c43",
+    "2F r35c3",
+    "2F r35c34",
+    "2F r35c43",
+    "2F r7c3",
+    "2F r7c13"
+   ]
+  },
+  "narrowRatio": 0.1322314049586777,
+  "chokes": []
+ },
+ {
+  "id": 8,
+  "size": "47x43",
+  "monsters": 4,
+  "fails": [],
+  "warn": [
+   "mincut: two monsters standing exactly at r18c27 + r18c19 would cut start→exit"
+  ],
+  "exitLen": 126,
+  "searchSpots": 27,
+  "upperSpots": 0,
+  "singleTests": 8271,
+  "routesSE": {
+   "lens": [
+    126,
+    158,
+    188
+   ],
+   "routes": 3
+  },
+  "minCutSE": {
+   "k": 2,
+   "at": [
+    "r18c27",
+    "r18c19"
+   ],
+   "raw": [
+    873,
+    865
+   ]
+  },
+  "pairSE": {
+   "rate": 0.0013917884481558804,
+   "n": 1437,
+   "examples": [
+    "r9c20+r2c21",
+    "r34c7+r33c2"
+   ]
+  },
+  "pairWorstZ": {
+   "rate": 0.002840909090909091,
+   "n": 352,
+   "examples": [
+    "r4c37+r9c33"
+   ],
+   "z": "r26c15"
+  },
+  "dynamic": {
+   "runs": 200,
+   "forcedWaitRuns": 14,
+   "totalWaits": 63,
+   "caught": 113,
+   "unfinished": 0,
+   "avgSteps": 227,
+   "hot": [
+    "r2c5×10",
+    "r1c21×9",
+    "r15c21×8",
+    "r30c19×8",
+    "r16c22×7",
+    "r2c3×5",
+    "r24c8×3",
+    "r2c22×3",
+    "r34c26×3",
+    "r4c5×3",
+    "r11c3×2",
+    "r28c14×2"
+   ]
+  },
+  "monsterUnreach": 0,
+  "zones": {
+   "zones": 16,
+   "doors": 30,
+   "loops": 15,
+   "bridges": 0,
+   "bridgeDoors": []
+  },
+  "narrowRatio": 0.06299212598425197,
+  "chokes": []
+ },
+ {
+  "id": 9,
+  "size": "47x43",
+  "monsters": 4,
+  "fails": [],
+  "warn": [
+   "mincut: two monsters standing exactly at r36c36 + r39c38 would cut start→exit"
+  ],
+  "exitLen": 123,
+  "searchSpots": 23,
+  "upperSpots": 0,
+  "singleTests": 6681,
+  "routesSE": {
+   "lens": [
+    123,
+    149,
+    159
+   ],
+   "routes": 3
+  },
+  "minCutSE": {
+   "k": 2,
+   "at": [
+    "r36c36",
+    "r39c38"
+   ],
+   "raw": [
+    1728,
+    1871
+   ]
+  },
+  "pairSE": {
+   "rate": 0,
+   "n": 1449,
+   "examples": []
+  },
+  "pairWorstZ": {
+   "rate": 0
+  },
+  "dynamic": {
+   "runs": 200,
+   "forcedWaitRuns": 7,
+   "totalWaits": 30,
+   "caught": 108,
+   "unfinished": 0,
+   "avgSteps": 189,
+   "hot": [
+    "r39c38×8",
+    "r35c39×7",
+    "r22c16×5",
+    "r28c13×4",
+    "r35c31×3",
+    "r30c4×3"
+   ]
+  },
+  "monsterUnreach": 0,
+  "zones": {
+   "zones": 11,
+   "doors": 19,
+   "loops": 9,
+   "bridges": 1,
+   "bridgeDoors": [
+    "r30c34"
+   ]
+  },
+  "narrowRatio": 0.10483870967741936,
+  "chokes": []
+ },
+ {
+  "id": 10,
+  "size": "47x43 2층",
+  "monsters": 5,
+  "fails": [],
+  "warn": [
+   "mincut: two monsters standing exactly at r2c7 + r5c4 would cut start→exit"
+  ],
+  "exitLen": 131,
+  "searchSpots": 30,
+  "upperSpots": 11,
+  "singleTests": 9422,
+  "routesSE": {
+   "lens": [
+    131,
+    161,
+    177
+   ],
+   "routes": 3
+  },
+  "minCutSE": {
+   "k": 2,
+   "at": [
+    "r2c7",
+    "r5c4"
+   ],
+   "raw": [
+    101,
+    239
+   ]
+  },
+  "pairSE": {
+   "rate": 0,
+   "n": 1455,
+   "examples": []
+  },
+  "pairWorstZ": {
+   "rate": 0.00273224043715847,
+   "n": 366,
+   "examples": [
+    "2F r2c11+r6c24"
+   ],
+   "z": "2F r23c30"
+  },
+  "dynamic": {
+   "runs": 200,
+   "forcedWaitRuns": 3,
+   "totalWaits": 17,
+   "caught": 151,
+   "unfinished": 0,
+   "avgSteps": 204,
+   "hot": [
+    "r29c28×10",
+    "r30c24×4",
+    "r26c21×2",
+    "r30c28×1"
+   ]
+  },
+  "monsterUnreach": 0,
+  "withoutUpper": 131,
+  "zones": {
+   "zones": 25,
+   "doors": 40,
+   "loops": 16,
+   "bridges": 13,
+   "bridgeDoors": [
+    "r4c21",
+    "r4c28",
+    "r4c34",
+    "r4c43",
+    "r35c3",
+    "r35c9",
+    "2F r23c4",
+    "2F r23c37",
+    "2F r4c26",
+    "2F r35c29",
+    "2F r35c6",
+    "2F r35c18",
+    "2F r35c40"
+   ]
+  },
+  "narrowRatio": 0.08333333333333333,
+  "chokes": []
+ }
+]

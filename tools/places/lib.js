@@ -31,10 +31,21 @@ class Grid {
 	markUpper(x0, y0, x1, y1) { this.upper.push([x0, y0, x1, y1]); return this; }
 	isUpper(x, y) { return this.upper.some(([a, b, c, d]) => x >= a && x <= c && y >= b && y <= d); }
 	// 계단: (x, y) 가 1층 쪽 끝 칸 "1", 방향 (dx, dy) 로 한 칸 더 가면 "2", 그다음 칸이 2층
+	// 겹쳐 쌓은 2층(floor2)이 있으면 2층 격자의 그 두 칸은 계단 구멍 "o", 그다음 칸(도착 칸)은 바닥으로 판다
 	stairs(x, y, dx, dy) {
 		this.set(x, y, "1");
 		this.set(x + dx, y + dy, "2");
+		if (this.up) {
+			this.up.set(x, y, "o").set(x + dx, y + dy, "o");
+			if (this.up.get(x + 2 * dx, y + 2 * dy) === "#") this.up.set(x + 2 * dx, y + 2 * dy, ".");
+			this.set(x + 2 * dx, y + 2 * dy, "#"); // (1층에서 계단 꼭대기 앞은 벽: 계단 아래로 들어가지 못하게)
+		}
 		return this;
+	}
+	// 겹쳐 쌓은 2층: 1층과 같은 크기의 격자(스테이지 파일 Rows2). 처음 부르면 만든다
+	floor2() {
+		if (!this.up) { this.up = new Grid(this.W, this.H); this.up.lower = this; }
+		return this.up;
 	}
 	rows() { return this.g.map((r) => r.join("")); }
 }
@@ -126,6 +137,11 @@ function writeStage(file, grid, headerLines) {
 	const body = grid.rows().map((r) => `\t\t"${r}",`).join("\n");
 	src = src.replace(/(\tRows = \{\n)([\s\S]*?)(\n\t\},)/, (_, a, _b, c) => a + body + c);
 	src = src.replace(/\tUpperRects = [^\n]*\n/g, "");
+	src = src.replace(/\tRows2 = \{[^\n]*\n[\s\S]*?\n\t\},\n/, "");
+	if (grid.up) {
+		const body2 = grid.up.rows().map((r) => `\t\t"${r}",`).join("\n");
+		src = src.replace(/(\tRows = \{\n[\s\S]*?\n\t\},\n)/, (m) => m + `\tRows2 = { -- 2층(1층 위에 같은 크기로 겹쳐 쌓는다. o = 계단 구멍)\n${body2}\n\t},\n`);
+	}
 	if (grid.upper.length) {
 		const ur = grid.upper.map(([a, b, c, d]) => `{ ${a + 1}, ${b + 1}, ${c + 1}, ${d + 1} }`).join(", ");
 		src = src.replace(/(\tRows = \{\n)/, `\tUpperRects = { ${ur} }, -- 2층 구역(타일 좌표 i0, j0, i1, j1)\n$1`);
@@ -140,6 +156,14 @@ function writeStage(file, grid, headerLines) {
 }
 
 function report(name, grid, opts) {
+	if (grid.up) {
+		// 겹쳐 쌓은 2층: 그래프 검사기(level-graph)로 잰다
+		const { analyzeStage } = require("../level-graph");
+		const st = { rows: grid.rows(), rows2: grid.up.rows(), upper: [], pits: new Set(["p", "b", "s", "n", ...((opts && opts.pits) || [])]), walk: (opts && opts.walkable) || [] };
+		const R = analyzeStage((opts && opts.id) || 0, { st, quick: true });
+		console.log(`${name}: ${grid.W}x${grid.H} 2층 | 출구까지 ${R.exitLen} 칸 | 목 ${R.chokes.length} | 끊는 데 괴물 ${R.minCutSE.k >= 3 ? "3+" : R.minCutSE.k} | Z ${R.searchSpots}${R.fails.length ? " | " + R.fails.slice(0, 3).join("; ") : ""}`);
+		return { exit: R.exitLen, choke: R.chokes.length };
+	}
 	const r = analyze(grid.rows(), grid.upper, opts);
 	console.log(`${name}: ${grid.W}x${grid.H} | 출구까지 ${r.exit} 칸 | 꼭 지나는 칸 ${r.choke} | 가장 넓은 정사각형 ${r.maxSquare} (${r.maxSquareAt}) | 막다른 칸 ${r.deadEnds}${r.unreachable.length ? " | 못 가는 칸 " + r.unreachable.slice(0, 10).join(" ") : ""}`);
 	return r;
