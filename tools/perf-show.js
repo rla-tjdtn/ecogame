@@ -43,7 +43,7 @@ if (j.info.stress) {
 	console.log("시스템별 ms/초:\n\n" + md(srow, ["phase", ...sysNames]));
 	console.log("spot " + JSON.stringify(j.info.spot) + " animateMsPerFrame=" + j.info.animateMsPerFrame);
 }
-if (j.info.census) console.log("\n" + md(j.info.census, ["stage", "parts", "segs", "cyl", "mesh", "collide", "decorQuery", "touch", "shadow", "unanchored", "inst", "monsters", "monsterParts", "serverBuildMs", "clientBuildSec", "clientBuildCpu", "clientInst", "serverInst", "memMb", "serverMemMb", "small", "smallCollide", "physMs", "primitives", "contacts", "wsOutsideStage", "topNames"]));
+if (j.info.census) console.log("\n" + md(j.info.census, ["stage", "parts", "segs", "viewParts", "cyl", "mesh", "collide", "decorQuery", "touch", "shadow", "unanchored", "inst", "monsters", "monsterParts", "serverBuildMs", "clientBuildSec", "clientBuildCpu", "clientInst", "serverInst", "memMb", "serverMemMb", "small", "smallCollide", "physMs", "primitives", "contacts", "wsOutsideStage", "topNames"]));
 if (j.info.soak) {
 	console.log("\n" + md(j.info.soak, Object.keys(j.info.soak[0] || {})));
 	console.log("end " + JSON.stringify(j.info.soakEnd));
