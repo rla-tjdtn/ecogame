@@ -1,10 +1,10 @@
 Stage1.luau 47x43 | exit: player 137 tiles, monster 137 | ok
 Stage2.luau 47x43 (2층 겹침) | exit: player 134 tiles, monster 134 | ok
-Stage3.luau 47x43 | exit: player 132 tiles, monster 132 | ok
+Stage3.luau 47x43 | exit: player 129 tiles, monster 129 | ok
 Stage4.luau 51x43 (2층 겹침) | exit: player 133 tiles, monster 133 | ok
-Stage5.luau 47x43 | exit: player 130 tiles, monster 130 | ok
+Stage5.luau 47x43 | exit: player 132 tiles, monster 132 | ok
 Stage6.luau 47x43 (2층 겹침) | exit: player 128 tiles, monster 128 | ok
 Stage7.luau 47x43 (2층 겹침) | exit: player 128 tiles, monster 128 | ok
-Stage8.luau 47x43 | exit: player 130 tiles, monster 130 | ok
+Stage8.luau 47x43 | exit: player 128 tiles, monster 128 | ok
 Stage9.luau 47x43 (2층 겹침) | exit: player 133 tiles, monster 133 | ok
-Stage10.luau 47x43 (2층 겹침) | exit: player 128 tiles, monster 128 | ok
+Stage10.luau 47x43 (2층 겹침) | exit: player 130 tiles, monster 130 | ok
