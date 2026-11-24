@@ -1,0 +1,20 @@
+// 시안2 6장 비인간형 — 무도회: 드레스 치마가 전부 사람 다리로 된 귀부인. 다리 스물넷이 발끝으로 종종 돌며 미끄러지듯 흐른다.
+const { V, Frame, Body } = require('./sculpt.js'), A = require('./anat.js');
+module.exports = { id: 'd6n', name: '무도회', kind: '비인간형 · 6장 호텔', H: 9.6, build(p = {}) {
+  const B = new Body(), sp = (p.spin || 0) * 6.283, w = p.walk ?? .1, bow = p.bow ?? 0;
+  // 치마 = 다리 두 겹
+  for (const [N, r0, r1, yk, rr, off] of [[14, .62, 2.35, 2.7, .28, 0], [10, .5, 1.45, 2.6, .25, .3]]) for (let i = 0; i < N; i++) { const a = i / N * 6.283 + sp + off, c = Math.cos(a), s = Math.sin(a), q = Math.sin((w + i * .37) * 6.283), lf = Math.max(0, q) * .28; const d = [c, 0, s]; const h = [c * r0, 4.75, s * r0], k = [c * (r0 + r1) * .58, yk + lf * .5 + .12 * Math.sin(i * 2.3), s * (r0 + r1) * .58], an = [c * r1 + q * .05 * -s, .78 + lf, s * r1 + q * .05 * c]; A.leg(B, h, k, an, rr, { m: .9, front: d }); A.foot(B, new Frame(an, [-s, 0, c], V.norm([c * .72, .7, s * .72]), V.norm([c * .5, -.86, s * .5])), .95, {}); }
+  // 허리 페플럼: 손들이 꽃잎처럼 둘러 치마를 들어 쥠
+  for (let i = 0; i < 9; i++) { const a = i / 9 * 6.283 + sp * .5 + .2, c = Math.cos(a), s = Math.sin(a); const wr = [c * .55, 5.05, s * .55]; A.hand(B, new Frame(wr, [-s, 0, c], V.norm([c * .72, -.68, s * .72]), V.norm([c * .68, .72, s * .68])), 1.05, { curl: 18, spread: 14, thin: .85 }); }
+  // 잘록한 허리·코르셋(갈비가 코르셋처럼 조임)
+  const T = new Frame([0, 5.1, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]).rot(bow * 34, 0, 0), t = v => T.p(v);
+  B.group({ k: .16, kg: .25, amp: .004, freq: 4 }); B.tube([t([0, -.25, 0]), t([0, .5, 0]), t([0, 1.1, 0]), t([0, 1.8, -.02])], [.5, .27, .38, .48]); A.torso(B, T.at([0, 1.75, -.02]), { w: .64, d: .42, h: 1.35, n: 9, r: .042 }); for (let i = 0; i < 6; i++) { const y = .2 + i * .17; B.group({ k: .012, kg: .01 }); B.tube([t([-.14, y, .3]), t([0, y + .05, .36]), t([.14, y + .1, .32])], .02, { per: 3 }); }
+  // 장갑 낀 팔: 한 팔은 춤을 청하듯, 한 팔은 얼굴 앞 부채(갈비뼈 부채)
+  { const s = t([.78, 2.3, 0]), e = t([1.65, 1.75, .45]), wr = t([2.55, 2.2, 1.25]); A.arm(B, s, e, wr, .17, { m: .85 }); A.hand(B, new Frame(wr, V.norm([.2, .6, -.6]), V.norm([.75, -.1, .65]), V.norm([.2, .95, .2])), 1.3, { curl: [4, 12, 18, 26], spread: 12, thin: .78, len: 1.2 }); }
+  { const s = t([-.78, 2.3, 0]), e = t([-1.55, 1.7, .6]), wr = t([-1.55, 2.75, 1.05]); A.arm(B, s, e, wr, .17, { m: .85 }); A.hand(B, new Frame(wr, V.norm([.2, .1, .95]), V.norm([.45, .85, .1]), V.norm([-.85, .4, .1])), 1.1, { curl: 46, spread: 6, thin: .8 }); const fo = t([-1.35, 3.15, 1.15]); for (let i = 0; i < 9; i++) { const a = -.95 + i / 8 * 1.9; const d = V.norm([Math.sin(a) + .28, Math.cos(a), .1]); B.group({ k: .015, kg: .02 }); B.tube([fo, V.add(fo, V.add(V.mul(d, .8), [0, 0, .06])), V.add(fo, V.add(V.mul(d, 1.55), [0, 0, -.04]))], [.05, .06, .02]); if (i < 8) { const a2 = a + .12, d2 = V.norm([Math.sin(a2) + .28, Math.cos(a2), .1]); B.tube([V.add(fo, V.mul(d, .5)), V.add(fo, V.mul(d2, .95)), V.add(fo, V.mul(V.norm(V.add(d2, d2)), 1.3))], [.02, .016, .008], { per: 3 }); } } }
+  // 목·머리: 높이 올린 머리, 가면 같은 매끈한 얼굴에 입만 꿰맴(붉은 실)
+  A.neck(B, t([0, 2.4, 0]), t([0, 3.3, .1]), .17, { adam: false }); const HF = T.at([0, 3.8, .16]).rot(-bow * 30 + 4, p.headYaw || 0, 10); const H = A.head(B, HF, 1.2, { jaw: 0, gaunt: 1.1, eyes: 'hollow', eyeSize: 1.0, eyeH: .05, eyeTilt: 10, nose: 'human', mouth: false, ears: false, w: .92, wrinkle: false });
+  B.group({ mat: 1, k: .006 }); B.tube([H.P([-.13, -.29, .27]), H.P([0, -.285, .365]), H.P([.13, -.29, .27])], .012); for (let i = 0; i < 6; i++) { const u = (i / 5 - .5) * .24; B.tube([H.P([u - .02, -.25, .345 - u * u * 3]), H.P([u, -.29, .375 - u * u * 3]), H.P([u + .02, -.335, .34 - u * u * 3])], .01, { per: 2 }); }
+  { const R = []; for (let i = 0; i < 40; i++) { const a = i / 40 * 6.283, x = Math.cos(a), z = Math.sin(a), j = Math.sin(i * 5.1); R.push([HF.p([x * .34, .12 + (z > 0 ? .16 : 0), z * .38 - .04]), HF.p([x * .42, .55, z * .42 - .08]), HF.p([x * .3 + j * .03, .95, z * .3 - .12]), HF.p([x * .16, 1.2 + .1 * j, z * .16 - .12])]); } A.hair(B, R, { r: [.03, .05, .05, .03] }); B.group({ k: .1, kg: .02 }); B.ball(HF.p([0, 1.2, -.12]), .2); }
+  return B;
+} };

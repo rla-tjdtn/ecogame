@@ -1,0 +1,20 @@
+// 시안2 8장 인간형 — 토끼: 머리에서 팔 두 개가 토끼 귀처럼 자란 아이. 손이 쫑긋거리며 소리를 듣는다. 커다란 앞니, 안아 달라는 듯 벌린 짧은 팔.
+const { V, Frame, Body } = require('./sculpt.js'), A = require('./anat.js');
+module.exports = { id: 'd8h', name: '토끼', kind: '인간형 · 8장 폐유치원', H: 8.6, build(p = {}) {
+  const B = new Body(), w = p.walk, S = w == null ? .4 : Math.sin(w * Math.PI * 2), er = p.ear ?? 0, hug = p.hug ?? .3;
+  for (const m of [-1, 1]) { const st = m * S, h = [m * .4, 2.35, -.1], k = [m * .62, 1.45, .35 + st * .35], an = [m * .5, .36 + Math.max(0, -st) * .15, -.35 + st * .5]; A.leg(B, h, k, an, .36, { m: 1.0, front: [m * .2, 0, 1] }); A.foot(B, new Frame(an, [1, 0, 0], [0, 1, 0], V.norm([m * .2, 0, 1])), 1.55, { toe: .9 }); }
+  // 멜빵바지 몸통: 배가 볼록
+  B.group({ k: .2, kg: .25, amp: .006, freq: 3 }); B.ell(new Frame([0, 2.5, -.05], [1, 0, 0], [0, 1, 0], [0, 0, 1]), [.72, .6, .6]); B.tube([[0, 2.5, 0], [0, 3.2, .1], [0, 3.95, 0]], [.66, .66, .5]); for (const m of [-1, 1]) { B.cone([m * .38, 2.3, -.08], [m * .58, 1.55, .15 + m * S * .2], .42, .4); for (let i = 0; i < 3; i++) B.groove([m * .55, 1.7 + i * .15, .2], [m * .5 * Math.sin(i * 2), 1, .4 - i * .3], .022, .04, .5, { bow: .5, wob: .2, wf: 3 }); } for (let i = 0; i < 5; i++) B.groove([(i - 2) * .22, 2.75, .5], V.norm([1, .3 * Math.sin(i * 2), 0]), .02, .035, .5, { bow: .4, wob: .2, wf: 3 });
+  for (const m of [-1, 1]) A.strap(B, [[m * .3, 3.05, .66], [m * .36, 3.5, .58], [m * .4, 4.0, .3], [m * .36, 4.1, -.1]], .09, .03, [0, .2, 1]); B.group({ k: .04, kg: .02 }); B.box(new Frame([0, 3.05, .62], [1, 0, 0], V.norm([0, 1, -.1]), V.norm([0, .1, 1])), [.42, .3, .06], .05); for (const m of [-1, 1]) B.ball([m * .3, 3.22, .7], .07, { k: .01 });
+  // 짧은 팔: 안아 달라고 벌림 — 손가락은 여섯
+  for (const m of [-1, 1]) { const s = [m * .62, 3.85, .05], e = [m * (1.2 - hug * .1), 3.15 + hug * .3, .55 + hug * .3], wr = [m * (1.25 - hug * .45), 3.25 + hug * .5, 1.45 + hug * .2]; A.arm(B, s, e, wr, .24, { m: .95 }); A.hand(B, new Frame(wr, V.norm([0, 1, 0]), V.norm([m * .15, .1, 1]), V.norm([m, 0, -.15])), 1.15, { curl: [14, 10, 12, 16, 20], fingers: 5, spread: 14, thin: .85, claw: .1 }); }
+  // 큰 머리: 볼이 처진 아이 얼굴, 찢어진 윗입술과 토끼 앞니
+  A.neck(B, [0, 4.0, 0], [0, 4.45, .1], .3, {}); const HF = new Frame([0, 5.15, .2], [1, 0, 0], [0, 1, 0], [0, 0, 1]).rot(p.nod ?? 4, p.headYaw || 0, p.headRoll ?? -8), H = v => HF.p(v);
+  const HH = A.head(B, HF.at([0, .05, 0]), 2.05, { jaw: p.mouth ? 46 : 27, gaunt: .15, w: 1.18, elong: 1.02, eyes: 'pin', pin: .011, eyeSize: .95, eyeH: .05, eyeTilt: -16, nose: 'human', teeth: 0, ears: false, mouthW: 1.35, kg: .3 });
+  B.group({ k: .16, kg: .22 }); for (const m of [-1, 1]) B.ell(HF.at([m * .36, -.4, .42]), [.24, .22, .2]);
+  B.group({ mat: 4, k: .012 }); for (const m of [-1, 1]) B.box(HH.f.at([m * .034, -.29, .325]).rot(-6, 0, m * 3), [.032, .075, .014], .012);
+  B.group({ mat: 1, k: .02 }); B.tube([HH.P([.01, -.19, .42]), HH.P([0, -.225, .405]), HH.P([-.01, -.255, .37])], [.014, .03, .012]);
+  // 꿰맨 정수리 + 귀가 된 팔
+  for (const m of [-1, 1]) { const b = H([m * .34, .86, -.05]), e = H([m * (.62 + .1 * er), 1.95, -.15 + er * .2]), wr = H([m * (.42 + (m > 0 ? er * .8 : 0)), 2.95 - (m > 0 ? er * .7 : 0), .05 + (m > 0 ? er * .9 : 0)]); A.arm(B, b, e, wr, .22, { m: .9 }); const D = V.norm(V.add(V.sub(wr, e), HF.d([m * -.1, .2, m > 0 ? er : 0]))); const F = Frame.along(wr, D, V.mul(HF.z, -1)); A.hand(B, new Frame(wr, F.x, D, F.z), 1.35, { curl: m > 0 && er > .3 ? 46 : [4, 2, 2, 6], spread: 4, thin: .9, len: 1.2, thumbOut: 18 }); B.group({ k: .08, kg: .14, amp: .008, freq: 5 }); for (let i = 0; i < 7; i++) { const a = i / 7 * 6.283; B.tube([H([m * .34 + Math.cos(a) * .3, .72, -.05 + Math.sin(a) * .3]), H([m * .34 + Math.cos(a) * .24, .98, -.05 + Math.sin(a) * .24])], [.11, .05]); } B.group({ k: .01 }); for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; B.tube([H([m * .34 + Math.cos(a) * .36, .74, -.05 + Math.sin(a) * .36]), H([m * .34 + Math.cos(a) * .3, .9, -.05 + Math.sin(a) * .3]), H([m * .34 + Math.cos(a) * .22, 1.0, -.05 + Math.sin(a) * .22])], .018, { per: 2 }); } }
+  return B;
+} };

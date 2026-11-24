@@ -1,0 +1,28 @@
+// 시안2 8장 비인간형 — 흔들말: 흔들목마 받침에 네 팔다리가 못 박힌 사람. 목이 말처럼 길게 휘고, 등에는 안장 모양으로 파인 자리가 있다. 앞뒤로 흔들리며 기어 온다.
+const { V, Frame, Body } = require('./sculpt.js'), A = require('./anat.js');
+module.exports = { id: 'd8n', name: '흔들말', kind: '비인간형 · 8장 폐유치원', H: 6.8, build(p = {}) {
+  const B = new Body(), rk = p.rock ?? 4, C = new Frame([0, 4.6, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]).rot(rk, 0, 0), c = v => C.p([v[0], v[1] - 4.6, v[2]]);
+  // 받침(휘어진 활대 둘 + 가로대)
+  const arc = (x, t) => { const a = (t - .5) * 1.75; return c([x, 4.75 - Math.cos(a) * 4.6, Math.sin(a) * 4.2]); };
+  for (const x of [-1.05, 1.05]) { const pts = []; for (let i = 0; i <= 16; i++) pts.push(arc(x, i / 16)); B.group({ k: .03, kg: .01, amp: .006, freq: 4 }); B.tube(pts, .15, { per: 2 }); for (let i = 1; i < 16; i++) B.groove(arc(x, i / 16 + .02), C.d([.1 * Math.sin(i * 3), 1, .3 * Math.sin(i)]), .012, .02, .3, { wob: .2, wf: 5 }); } B.group({ k: .03 }); for (const t of [.22, .5, .78]) B.cone(arc(-1.2, t), arc(1.2, t), .1, .1);
+  // 몸통: 수평, 안장처럼 파인 등
+  B.group({ k: .25, kg: .3, amp: .008, freq: 3 }); B.tube([c([0, 4.1, -1.7]), c([0, 3.85, -.6]), c([0, 3.95, .5]), c([0, 4.35, 1.4])], [.68, .52, .6, .66]); B.ell(new Frame(c([0, 4.6, -.1]), C.x, C.y, C.z), [.62, .42, .75], { op: 1, k: .2 });
+  A.torso(B, new Frame(c([0, 4.1, 1.0]), C.x, C.d(V.norm([0, .3, 1])), C.d(V.norm([0, -1, .3]))), { w: .74, d: .56, h: 1.6, n: 8, r: .05, scap: true }); A.pelvis(B, new Frame(c([0, 4.15, -1.8]), C.x, C.d(V.norm([0, .2, .98])), C.d(V.norm([0, -.98, .2]))), { w: .56, d: .42 }); A.spine(B, [c([0, 4.5, 1.3]), c([0, 4.0, .4]), c([0, 3.85, -.6]), c([0, 4.4, -1.8])], .12, { n: 15, back: C.y, out: .46, wing: true, k: .03 });
+  // 안장 끈과 배띠
+  { const pts = []; for (let i = 0; i <= 14; i++) { const a = i / 14 * 6.283; pts.push(c([Math.sin(a) * .66, 3.95 + Math.cos(a) * .6, -.15 + .1 * Math.sin(a * 2)])); } A.strap(B, pts, .1, .03, q => V.norm(V.sub(q, c([0, 3.95, -.15])))); }
+  // 네 다리: 앞은 팔, 뒤는 다리 — 손목·발목이 활대에 못 박힘
+  for (const m of [-1, 1]) { { const s = c([m * .85, 4.0, 1.65]), e = c([m * 1.3, 2.75, 1.25]), wr = V.add(arc(m * 1.05, .72), [0, .5, 0]); A.arm(B, s, e, wr, .27, { m: .95 }); A.hand(B, new Frame(wr, V.norm(C.d([-m, 0, .1])), C.d(V.norm([m * .1, -.75, .66])), C.d(V.norm([0, .66, .75]))), 1.15, { curl: 34, spread: 9, thin: .9 }); B.group({ k: .02 }); const q = arc(m * 1.05, .735); B.cone(V.add(q, C.d([m * .3, .42, .1])), V.add(q, C.d([-m * .05, .1, 0])), .045, .03); B.ball(V.add(q, C.d([m * .33, .46, .1])), .09, { k: .02 }); }
+    { const h = c([m * .42, 4.0, -1.9]), k = c([m * .95, 2.75, -1.35]), an = V.add(arc(m * 1.05, .27), C.d([0, .42, 0])); A.leg(B, h, k, an, .32, { m: .95, front: C.d([m * .3, 0, 1]) }); A.foot(B, new Frame(an, C.x, C.d(V.norm([0, .8, -.6])), C.d(V.norm([m * .1, -.6, -.8]))), 1.0, {}); } }
+  // 말 목: 길게 위로 휘었다 앞으로, 갈기는 머리카락
+  const nk = [c([0, 4.45, 1.5]), c([0, 5.4, 2.0]), c([0, 6.25, 2.05]), c([0, 6.6, 2.55])]; B.group({ k: .12, kg: .3, amp: .006, freq: 5 }); B.tube(nk, [.46, .34, .28, .27]); for (const m of [-1, 1]) B.tube([c([m * .32, 4.5, 1.9]), c([m * .26, 5.4, 2.28]), c([m * .22, 6.1, 2.35])], [.1, .09, .08], { k: .06 }); A.rings(B, nk, 7, .026, .045, .7, { tilt: .2 });
+  const HF = new Frame(c([0, 6.5, 2.95]), C.x, C.d(V.norm([0, .97, .25])), C.d(V.norm([0, -.25, .97]))).rot(0, p.headYaw || 0, 0), H = v => HF.p(v);
+  const F2 = V.norm(V.add(V.mul(HF.y, -.62), V.mul(HF.z, .78)));
+  // 머리: 얼굴이 앞으로 길게 늘어난 사람(말처럼) — 재갈이 귀까지 찢음
+  A.head(B, HF.at([0, .25, 0]), 1.3, { jaw: 4, nojaw: true, gaunt: 1.1, eyes: 'pin', pin: .015, eyeSize: 1.1, nose: 'none', mouth: false, ears: true, w: .95 });
+  B.group({ k: .1, kg: .16, amp: .005, freq: 6 }); B.tube([H([0, .12, .3]), H([0, -.28, .82]), H([0, -.68, 1.32])], [.34, .27, .23]); for (let i = 0; i < 4; i++) B.groove(H([0, .0 - i * .16, .55 + i * .2]), V.add(F2, [0, 0, 0]), .02, .035, .45, { bow: -.5, wob: .12, wf: 5 }); for (const m of [-1, 1]) B.ell(HF.at([m * .11, -.58, 1.5]), [.05, .08, .06], { op: 1, k: .04 }); const JF = HF.at([0, -.2, .0]).rot(p.jaw ?? 20, 0, 0); B.tube([JF.p([-.28, .0, .05]), JF.p([-.22, -.42, .55]), JF.p([0, -.82, 1.12]), JF.p([.22, -.42, .55]), JF.p([.28, .0, .05])], [.1, .1, .12, .1, .1], { k: .06 });
+  B.group({ mat: 4, k: .004 }); for (let i = 0; i < 8; i++) { const u = (i / 7 - .5) * .34; B.box(HF.at([u, -.82 + u * u * 1.2, 1.3 - u * u * 2]).rot(8, 0, 0), [.026, .09, .03], .015); B.box(JF.at([u * .8, -.74 + u * u * 1.2, 1.14 - u * u * 2]).rot(8, 0, 0), [.022, .07, .025], .012); }
+  B.group({ mat: 1, k: .02 }); B.cone(H([-.5, -.5, .62]), H([.5, -.5, .62]), .055, .055); B.group({ k: .02 }); for (const m of [-1, 1]) { const pts = []; for (let i = 0; i <= 12; i++) { const a = i / 12 * 6.283; pts.push(H([m * .5, -.5 + Math.cos(a) * .16, .62 + Math.sin(a) * .16])); } B.tube(pts, .035, { per: 2 }); B.tube([H([m * .5, -.4, .58]), H([m * .62, .1, -.3]), c([m * .5, 5.4, 1.6]), c([m * .42, 4.5, .3])], .028); }
+  const R = []; for (let i = 0; i < 46; i++) { const t = i / 45, j = Math.sin(i * 5.3), b = t < .5 ? V.lerp(c([0, 4.9, 1.45]), c([0, 6.0, 1.75]), t * 2) : V.lerp(c([0, 6.0, 1.75]), H([0, .7, -.2]), (t - .5) * 2), sd = i % 2 ? 1 : -1; R.push([b, V.add(b, C.d([sd * .22, .12, -.2])), V.add(b, C.d([sd * .42 + j * .06, -.35, -.3])), V.add(b, C.d([sd * .46 + j * .12, -1.05 - .3 * Math.abs(j), -.25 + j * .1]))]); } A.hair(B, R, { r: [.05, .042, .03, .008] });
+  const T = []; for (let i = 0; i < 18; i++) { const j = Math.sin(i * 4.1), x = (i / 17 - .5) * .3; T.push([c([x, 4.35, -2.25]), c([x * 1.5, 4.3, -2.8]), c([x * 2 + j * .05, 3.5, -3.15]), c([x * 2.5 + j * .12, 2.5 - .4 * Math.abs(j), -3.1 + j * .1])]); } A.hair(B, T, { r: [.05, .05, .038, .008] });
+  return B;
+} };
