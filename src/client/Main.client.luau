@@ -697,6 +697,19 @@ task.spawn(function()
 			local snap = NetStat.snapshot(arg == "reset")
 			snap.live = Audio.live
 			snap.livePeak = Audio.livePeak
+			-- 지금 살아 있는 소리의 나이: Audio.play 는 늦어도 6초에 지우므로 7초보다 오래된 것 = 누수
+			local nowT, old, oldest, names = os.clock(), 0, 0, {}
+			for _, info in Audio.liveSet do
+				local age = nowT - info.t
+				oldest = math.max(oldest, age)
+				if age > 7 then
+					old += 1
+				end
+				table.insert(names, string.format("%s@%.1fs", info.name, age))
+			end
+			snap.liveOld = old
+			snap.liveOldestSec = math.floor(oldest * 10) / 10
+			snap.liveNames = table.concat(names, " ")
 			snap.memMb = Stats:GetTotalMemoryUsageMb()
 			snap.luaKb = gcinfo()
 			snap.instances = Stats.InstanceCount

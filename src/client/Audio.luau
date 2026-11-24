@@ -77,6 +77,7 @@ local CULL_MARGIN = 20 -- (스터드) 짧은 소리가 재생되는 동안 소�
 Audio.steps = 0 -- (테스트) 지금까지 재생한 플레이어 발소리 수
 Audio.live = 0 -- (측정) Audio.play 로 만든, 아직 지우지 않은 소리 수
 Audio.livePeak = 0
+Audio.liveSet = {} :: { [Sound]: { name: string, t: number } } -- (측정) 살아 있는 소리와 만든 시각: 7초보다 오래된 것이 있으면 누수
 
 -- opts.gate = { 켜짐초, 꺼짐초 }: 그 박자로 소리를 끊어 켰다 껐다 한다(끊기는 괴성). opts.sweep = { { 정규화 시간 0~1, 피치 배율 }, ... }, opts.dur = 전체 길이(초): 소리를 반복 재생하면서 피치를 시간에 따라 바꾼다(사이렌·오르내리는 괴성)
 function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?, startAt: number?, cutOverride: number?, opts: { sweep: { { number } }?, dur: number?, gate: { number }? }?)
@@ -132,6 +133,7 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 		return
 	end
 	Audio.live += 1
+	Audio.liveSet[s] = { name = name, t = os.clock() }
 	if Audio.live > Audio.livePeak then
 		Audio.livePeak = Audio.live
 	end
@@ -211,6 +213,7 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 		end
 		gone = true
 		Audio.live -= 1
+		Audio.liveSet[s] = nil
 		s:Destroy()
 		if holder then
 			holder:Destroy()

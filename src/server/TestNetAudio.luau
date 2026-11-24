@@ -270,11 +270,22 @@ return function(ctx)
 	check("left player's sonar table cleared", SM and SM.Sonar.accepted[leaver] == nil)
 	check("round still playing after leave", Round.state == "Playing", Round.state)
 	task.wait(8)
+	-- (1) 아직 라운드 중(괴물이 쫓고 음파에 드러난 채): 지금 나는 소리는 남아 있어도 된다. 누수 = 7초보다 오래 산 소리
+	local rest = {}
 	for _, p in ps do
 		if p.Parent then
-			local z = ask(p, "netaudio", "reset")
-			check(p.Name .. ": sounds released afterwards", z and z.live <= 3, z and z.live)
+			table.insert(rest, p)
+			local z = ask(p, "netaudio")
+			check(p.Name .. ": no sound outlives its 6 s cleanup (mid-round)", z and z.liveOld == 0, z and string.format("live %d, old %d, oldest %.1fs: %s", z.live, z.liveOld, z.liveOldestSec, z.liveNames))
 		end
+	end
+	-- (2) 라운드가 끝나고 새 스테이지(괴물·문·소품이 모두 바뀜) → 8초 뒤 이전 라운드 소리는 하나도 남지 않는다
+	Round.startStage(Round.stageIndex)
+	ctx.readyPlayers(#rest)
+	task.wait(8)
+	for _, p in rest do
+		local z = ask(p, "netaudio", "reset")
+		check(p.Name .. ": sounds released after round end", z and z.live <= 3 and z.liveOld == 0, z and string.format("live %d, old %d, oldest %.1fs: %s", z.live, z.liveOld, z.liveOldestSec, z.liveNames))
 	end
 	for _, c in conns do
 		c:Disconnect()
