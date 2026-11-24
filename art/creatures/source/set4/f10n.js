@@ -1,0 +1,45 @@
+// 시안4 10장 비인간형 — 뒷줄 관객: 긴 외투의 관객이 네 발로 좌석 등받이를 타 넘는다. 엉덩이를 높이 들고 등받이 모서리를 움켜쥔 채, 머리만 반 바퀴 돌아 지나온 줄을 본다. 이 사이에 영화표 한 장.
+const { V, Frame, Body } = require('./sculpt.js'), A = require('./anat.js');
+const I = o => new Frame(o, [1, 0, 0], [0, 1, 0], [0, 0, 1]);
+module.exports = { id: 'f10n', name: '뒷줄 관객', kind: '비인간형 · 10장 폐영화관', H: 5.6, build(p = {}) {
+  const B = new Body(), c = p.crawl, S = c == null ? .3 : Math.sin(c * Math.PI * 2), rear = p.rear ?? 0, tw = p.twist ?? 180, seat = p.seat ?? 1;
+  const hipY = 4.15 + rear * .4, NK = [0, 3.65, 1.75], CH = [0, 3.6, 1.05], WA = [0, 3.85, .0], HP = [0, hipY, -1.0];
+  const sp = u => { const P = [NK, CH, WA, HP], x = Math.max(0, Math.min(.9999, u)) * 3, j = Math.floor(x); return V.lerp(P[j], P[j + 1], x - j); };
+  // ---- 좌석 등받이(극장 의자 두 칸): 손이 움켜쥔 모서리
+  if (seat) { const Z = 3.05; B.group({ k: .04, kg: 0, amp: .003, freq: 5 });
+    for (const m of [-1, 1]) { const C = I([m * .92, 1.85, Z + .12]).rot(-10, 0, 0); B.box(C, [.8, .8, .09], .07); for (let i = 0; i < 5; i++) B.groove(C.p([(i - 2) * .3, -.1, -.09]), [1, 0, 0], .012, .02, .5, { wob: 0 }); B.box(I([m * .92, 1.05, Z + .7]).rot(-80, 0, 0), [.74, .55, .1], .07); }
+    B.group({ k: .03, kg: 0 }); B.tube([[-1.85, 2.72, Z - .02], [0, 2.75, Z - .04], [1.85, 2.72, Z - .02]], .1); for (const x of [-1.8, 0, 1.8]) { B.box(I([x, 1.75, Z + .45]), [.07, .08, .55], .04); B.cone([x, 1.7, Z + .3], [x, 0, Z + .35], .07, .1); B.ell(I([x, .03, Z + .35]), [.18, .03, .3]); } }
+  // ---- 몸통(외투 밑에 읽히는 사람 몸): 갈비통, 허리, 골반
+  B.group({ k: .25, kg: .3, amp: .004, freq: 3 }); B.ell(new Frame(V.lerp(CH, WA, .2), [1, 0, 0], V.norm(V.sub(CH, WA)), [0, -1, 0]), [.78, .85, .45]); B.ell(new Frame(V.lerp(WA, HP, .35), [1, 0, 0], V.norm(V.sub(WA, HP)), [0, -1, 0]), [.6, .6, .4]); B.ell(new Frame(V.add(HP, [0, -.15, 0]), [1, 0, 0], [0, 0, 1], [0, -1, 0]), [.72, .45, .45]); for (const m of [-1, 1]) B.ell(I(V.add(HP, [m * .36, -.1, -.28])), [.36, .4, .36]); // 엉덩이
+  // 외투 등: 몸을 따라 붙은 천 위로 견갑골·등뼈 줄·엉덩이가 드러남
+  B.group({ k: .14, kg: .2, amp: .006, freq: 3 }); for (let i = 0; i <= 6; i++) { const u = i / 6, q = sp(u), w = .86 - .22 * Math.sin(u * Math.PI) + .02 * u; B.ell(I(V.add(q, [0, -.04, 0])), [w, .36, .5]); }
+  for (const m of [-1, 1]) { B.tube([V.add(sp(.05), [m * .25, .4, -.05]), V.add(sp(.12), [m * .62, .38, .05]), V.add(sp(.3), [m * .5, .36, -.05])], [.1, .14, .08], { k: .12 }); B.ell(new Frame(V.add(sp(.14), [m * .48, .33, 0]), [1, 0, 0], [0, 1, 0], [0, 0, 1]).rot(0, m * 20, 0), [.26, .13, .32], { k: .06 }); B.groove(V.add(sp(.14), [m * .2, .45, 0]), [m, .3, 0], .02, .04, .3, { wob: .2 }); } // 견갑골
+  for (let i = 0; i < 7; i++) B.groove(V.add(sp(.15 + i * .11), [(i % 2 ? 1 : -1) * (.3 + .1 * Math.sin(i)), .42, 0]), V.norm([.5 * Math.sin(i * 1.7), .2, 1]), .018, .035, .55, { bow: .7, wob: .3 }); // 당김 주름
+  A.spine(B, [V.add(sp(.05), [0, .33, 0]), V.add(sp(.35), [0, .31, 0]), V.add(sp(.7), [0, .3, 0]), V.add(sp(.95), [0, .3, 0])], .085, { n: 16, back: [0, 1, 0], out: .0, k: .03, kg: .07 }); for (const m of [-1, 1]) B.groove(V.add(sp(.5), [m * .16, .33, 0]), [m, .2, 0], .025, .05, 1.5, { wob: .1 });
+  // 옆으로 처진 자락: 굵기·길이·방향이 제각각, 앞쪽은 팔 쪽으로 끌림
+  const D = [[.1, .55, 2.75, .1], [.2, .62, 2.45, -.05], [.32, .7, 2.2, .12], [.42, .62, 2.55, 0], [.52, .7, 2.05, -.1], [.62, .66, 2.35, .15], [.72, .72, 1.9, -.05], [.83, .62, 2.25, .08], [.93, .7, 2.0, .2]];
+  for (const m of [-1, 1]) { B.group({ k: .06, kg: .12, amp: .006, freq: 3 }); D.forEach(([u, sw, hem, dz], i) => { const q = sp(u + m * .015), w = .86 - .22 * Math.sin(u * Math.PI), j = Math.sin(i * 2.7 + m * 1.3), r = .13 + .07 * Math.abs(Math.sin(i * 1.9 + m)), hm = hem + .25 * j; B.tube([V.add(q, [m * w * .88, .05, 0]), V.add(q, [m * (w + .1), -.2, dz * .5]), [m * (w + .16 + .06 * j), (hm + q[1]) / 2 - .2, q[2] + dz], [m * (w + .2 + .1 * j), hm, q[2] + dz * 1.6 - S * m * .1]], [.15, .18, r, r * .7]); }); }
+  // 뒷자락: 엉덩이를 덮고 가운데 트임으로 갈라져 늘어짐
+  B.group({ k: .07, kg: .14, amp: .006, freq: 3 }); for (let i = 0; i < 8; i++) { const u = i / 7 * 2 - 1, x = u * .78, gap = Math.sign(u) * .12, j = Math.sin(i * 2.3); if (Math.abs(u) < .1) continue; B.tube([[x * .85, hipY + .05, -1.05], [x + gap * .3, hipY - .1, -1.45], [x * 1.08 + gap, 3.25 + .15 * j, -1.7], [x * 1.12 + gap * 1.8 + .08 * j, 2.6 + .45 * Math.abs(Math.sin(i * 1.7)), -1.82 + S * .1 + .06 * j]], [.17, .17, .12 + .05 * Math.abs(j), .07 + .06 * Math.abs(j)]); }
+  B.group({ k: .02, kg: .03 }); for (const m of [-1, 1]) B.tube([V.add(sp(.0), [m * .3, .45, .05]), V.add(sp(.0), [m * .8, .2, 0]), [m * .95, 3.05, 1.55]], .02); // 어깨 솔기
+  B.group({ k: .06, kg: .16 }); { const c1 = [], c2 = []; for (let i = 0; i <= 18; i++) { const a = -2.4 + i / 18 * 4.8; c1.push([Math.sin(a) * .48, 3.9 + Math.cos(a) * .12, 1.7 - Math.cos(a) * .4]); c2.push([Math.sin(a) * .55, 4.22 + Math.cos(a) * .1, 1.74 - Math.cos(a) * .46]); } B.tube(c1, .07, { per: 1 }); B.tube(c2, .05, { per: 1 }); B.tube(c1.map((q, i) => V.lerp(q, c2[i], .5)), .08, { per: 1 }); } // 세운 깃
+  // ---- 다리: 무릎을 굽혀 배 밑으로 당김, 발끝으로 딛음 — 바지 + 구두
+  for (const m of [-1, 1]) { const st = m * S, h = [m * .44, hipY - .35, -1.1], k = [m * .7, 1.95, -.3 + st * .35], an = [m * .55, .62 + Math.max(0, st) * .2, -1.6 + st * .5];
+    B.group({ k: .1, kg: .18, amp: .005, freq: 4 }); B.tube([h, V.lerp(h, k, .5), k, V.lerp(k, an, .5), an], [.36, .31, .27, .25, .25]); B.ball(V.add(k, [m * .02, -.05, .18]), .2, { k: .12 }); A.rings(B, [V.lerp(h, k, .75), k, V.lerp(k, an, .3)], 4, .016, .03, .34, { bow: 1.2, tilt: .7, wob: .35 }); B.groove(V.lerp(k, an, .6), V.sub(an, k), .016, .03, .36, { bow: .9, wob: .3 });
+    const fd = V.norm([m * .08, -.62, 1]), fx = V.norm(V.cross([0, 1, 0], fd)), F = new Frame(an, fx, V.cross(fd, fx), fd);
+    B.group({ k: .05, kg: .06 }); B.ell(F.at([0, -.06, .22]), [.2, .15, .48]); B.ell(F.at([0, -.1, .6]), [.16, .1, .2]); B.ell(F.at([0, -.02, -.12]), [.19, .19, .21]); B.box(F.at([0, -.21, .28]), [.18, .03, .52], .03); B.box(F.at([0, -.2, -.14]), [.15, .06, .12], .025); B.groove(F.p([0, -.08, .5]), F.z, .01, .016, .24, { wob: 0 }); B.tube([F.p([-.08, .06, .2]), F.p([0, .09, .26]), F.p([.08, .06, .2])], .016, { k: .01 }); }
+  // ---- 팔: 등받이 모서리를 움켜쥠(팔꿈치는 밖으로), 외투 소매 + 맨손
+  for (const m of [-1, 1]) { const st = -m * S * .2, s = [m * .82, 3.55, 1.5], e = [m * 1.55, 3.05, 1.85 + st], wr = [m * 1.05, 2.98, 2.72];
+    B.group({ k: .1, kg: .18, amp: .005, freq: 4 }); B.tube([s, V.lerp(s, e, .5), e, V.lerp(e, wr, .55), wr], [.31, .28, .25, .23, .25]); A.rings(B, [V.lerp(s, e, .6), e, V.lerp(e, wr, .4)], 5, .016, .032, .36, { bow: 1.1, tilt: .7, wob: .35 }); B.groove(V.lerp(s, e, .35), V.sub(e, s), .016, .03, .4, { bow: -.8, wob: .3 });
+    const d = V.norm(V.sub(wr, e)); B.group({ k: .02, kg: .04 }); { const sd = V.norm(V.cross(d, [0, 1, 0])), up = V.cross(sd, d), cu = []; for (let i = 0; i <= 16; i++) { const a = i / 16 * 6.283; cu.push(V.add(V.add(wr, V.mul(d, -.05)), V.add(V.mul(sd, Math.cos(a) * .26), V.mul(up, Math.sin(a) * .26)))); } B.tube(cu, .03, { per: 1 }); }
+    B.group({ k: .05, kg: .08 }); const hw = [m * .98, 2.95, 2.86]; B.tube([V.add(wr, V.mul(d, -.1)), hw], [.13, .12]);
+    const y = V.norm([-m * .1, .05, 1]), z = V.norm([m * .1, 1, -.05]), x0 = V.norm(V.cross(y, z)), x = m > 0 ? x0 : V.mul(x0, -1); A.hand(B, new Frame(hw, x, y, V.mul(V.cross(x, y), m > 0 ? 1 : -1)), 1.35, { curl: [70, 74, 72, 78], spread: 9, thin: .76, len: 1.3, thumbOut: 30 }); }
+  // ---- 목: 반 바퀴 비틀린 살 주름 → 머리는 뒤를 봄
+  const HF = I([0, 5.05 + rear * .2, 1.8]).rot(p.nod ?? 14, tw + (p.headYaw || 0), p.tilt ?? 12), s = 1.38;
+  A.neck(B, [0, 3.55, 1.65], HF.p([0, -.4, -.05]), .25, { front: [0, -.3, 1], adam: false }); B.group({ k: .02, kg: .04 }); for (let i = 0; i < 7; i++) { const y = 3.95 + i * .11, a0 = i * .5; B.groove([.2 * Math.cos(a0), y, 1.78 + .2 * Math.sin(a0)], V.norm([Math.sin(a0) * .6, 1, -Math.cos(a0) * .6]), .014, .03, .3, { bow: .8, wob: .2 }); }
+  const H = A.face(B, HF, s, { jaw: p.jaw ?? 18, eyes: 'real', iris: .017, open: 1.2, gaunt: 1.15, teeth: 10, age: .9, w: .95, gaze: [0, .006] });
+  { const R = []; for (let i = 0; i < 34; i++) { const a = (-150 + i / 33 * 300) * Math.PI / 180, j = Math.sin(i * 3.7), j2 = Math.sin(i * 2.3), sa = Math.sin(a), ca = Math.cos(a), P = v => HF.p(V.mul(v, s)); if (ca > .55) R.push([P([sa * .05, .47, ca * .05 - .04]), P([sa * .24, .4, ca * .26]), P([sa * .27 + j * .02, .26, ca * .32]), P([sa * .28 + j * .03, .13 + .03 * j2, ca * .34])]); else R.push([P([sa * .05, .47, ca * .05 - .06]), P([sa * .22, .4, ca * .22 - .07]), P([sa * .31, .28, ca * .31 - .08]), P([sa * .36 + j * .02, .02, ca * .36 - .1]), P([sa * .38 + j * .05, -.3 - .1 * Math.abs(j2), ca * .37 - .1]), P([sa * .39 + j * .1, -.6 - .25 * Math.abs(Math.sin(i * 1.9)), ca * .36 - .08 + j2 * .05])]); } A.hair(B, R, { r: [.02, .03, .028, .022, .018, .006] }); }
+  // 이 사이에 문 영화표
+  { const c0 = H.J([.03, -.27, .33]); B.group({ mat: 1, k: .004 }); B.box(new Frame(c0, HF.x, HF.y, HF.z).rot(10, 0, -14).at([.06, 0, .06]), [.15, .065, .006], .005); }
+  return B;
+} };

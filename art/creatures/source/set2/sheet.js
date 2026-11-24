@@ -1,5 +1,5 @@
 // node sheet.js id... — 괴물별 최종 디자인 시트(대표·4방향·얼굴·동작·음파·목업) + 대표 그림 단독
-const { render } = require('./sculpt.js'), M = Object.assign({}, require('./meta.js'), (() => { try { return require('./meta2.js'); } catch (e) { return {}; } })()), path = require('path');
+const { render } = require('./sculpt.js'), M = Object.assign({}, require('../set1/meta.js'), (() => { try { return require('./meta2.js'); } catch (e) { return {}; } })()), path = require('path');
 const OUTD = id => { const d = path.join(__dirname, '..', '..', '시안_' + (id.endsWith('h') ? '인간형' : '비인간형') + (id[0] === 'd' ? '2' : '1')); require('fs').mkdirSync(d, { recursive: true }); return d; };
 const LOW = { c3n: 20, c4n: 13, c9n: 22, c5n: 10, c10n: 10, c1n: 8 };
 function fit(b, w, h, yaw, pitch = 0, m = .9) { // 투영한 상자 기준 배율·중심
