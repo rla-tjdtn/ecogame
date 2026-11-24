@@ -126,7 +126,8 @@ function Kit.pipe(parent: Instance, a: Vector3, b: Vector3, r: number, flangeAt:
 			for i = 0, 5 do
 				local ang = i / 6 * math.pi * 2 + 0.3
 				local bp = c + (u * math.cos(ang) + w * math.sin(ang)) * (fr - 0.17)
-				Kit.cylinder(m, bp - dir * 0.3, bp + dir * 0.3, 0.09, { blocks = false, collide = false })
+				-- (지름 0.18 볼트: 음파 실루엣 2줄이 거의 겹치므로 정적 선 1줄 — 음파 한 발마다 다시 계산하는 viewParts 에서 빠진다)
+				Kit.cylinder(m, bp - dir * 0.3, bp + dir * 0.3, 0.09, { blocks = false, collide = false, shape = "Line" })
 			end
 		end
 		local _ = fl
