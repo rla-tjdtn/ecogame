@@ -239,7 +239,23 @@ local function monsterTests(p)
 			end
 		end
 	end
-	check("monster strokes draw as single lines (Line/Disc)", cyl > 10 and ok == cyl, ok .. "/" .. cyl)
+	if m.model:GetAttribute("Rig") == 4 then
+		-- 3D 시안 괴물: 선 막대 대신 뼈 메시(시안 선 정점 색) + 음파에 드러날 때 흰 윤곽선. 메시·뼈·스킨이 붙어 있는가
+		local meshes, bones, skinned = 0, 0, 0
+		for _, d in m.model:GetDescendants() do
+			if d:IsA("MeshPart") then
+				meshes += 1
+				if d.HasSkinnedMesh then
+					skinned += 1
+				end
+			elseif d:IsA("Bone") then
+				bones += 1
+			end
+		end
+		check("monster body is a skinned 3D mesh (chapter creature)", meshes > 0 and bones > 10 and skinned > 0, string.format("%s meshes %d bones %d skinned %d", tostring(m.model:GetAttribute("Creature")), meshes, bones, skinned))
+	else
+		check("monster strokes draw as single lines (Line/Disc)", cyl > 10 and ok == cyl, ok .. "/" .. cyl)
+	end
 	local visible = 0
 	for _, d in m.model:GetDescendants() do
 		if d:IsA("BasePart") and d.Transparency < 1 then
@@ -281,7 +297,13 @@ local function monsterTests(p)
 	local goal = m.goal
 	local pr = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local gd = if goal and pr then (goal - pr.Position).Magnitude else -1
-	check("wandering monster drifts toward a player now and then", goal ~= nil and gd >= 0 and gd <= Config.Monster.HuntRadius + 8, string.format("%.0f studs", gd))
+	-- (구역을 맡은 괴물은 자기 구역 안의 플레이어에게만 다가간다: 플레이어가 구역 밖이면 다가가지 않는 게 맞다)
+	local inZone = pr == nil or (m :: any).territory == nil or m:inTerritory(pr.Position)
+	if inZone then
+		check("wandering monster drifts toward a player now and then", goal ~= nil and gd >= 0 and gd <= Config.Monster.HuntRadius + 8, string.format("%.0f studs", gd))
+	else
+		check("wandering monster stays in its own zone (player is outside it)", goal == nil or m:inTerritory(goal), string.format("goal %s", tostring(goal)))
+	end
 	m.startAt = 1e9
 	m.waypoints = {}
 end
@@ -1079,6 +1101,175 @@ local function load()
 	R.info.load = all
 end
 
+-- ─────────────────────────────── aibench (괴물 AI·몸 움직임 비용) ───────────────────────────────
+-- env STAGE=n(없으면 6~10). 챕터마다 두 구간을 잰다:
+--   wander: 플레이어는 시작 방(안전 구역), 괴물은 배회·사냥 / chase: 3초마다 플레이어를 괴물 10~18스터드 앞 배회 지점으로 옮긴다(추격·문·계단)
+-- 서버: 괴물 tick CPU(경로 계산 대기 제외), 경로 계산 수·평균, 프레임마다 잡기·animate, 시야 레이 수, 서버 Heartbeat 시간
+-- 클라이언트: MonsterAnim(Perf "monsterAnim") 프레임당 ms, 프레임 시간. 잡혀도 측정이 끊기지 않게 onCatch 는 세기만 한다
+local function aibench()
+	local Stats = game:GetService("Stats")
+	local function r2(v)
+		return math.floor((v or 0) * 100 + 0.5) / 100
+	end
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local only = tonumber(args.Stage) or 0
+	local secs = if args.Quick then 10 else 20
+	local acc = { tick = 0, ticks = 0, catch = 0, anim = 0, hbN = 0, los = 0, hbMs = 0 }
+	local origTick, origCatch, origAnim, origLos = Monster.tick, Monster.checkCatch, Monster.animate, Monster.lineOfSight
+	Monster.tick = function(self)
+		local t = os.clock()
+		local w0 = Monster.stats.pathWall
+		origTick(self)
+		acc.tick += (os.clock() - t) - (Monster.stats.pathWall - w0)
+		acc.ticks += 1
+	end
+	Monster.checkCatch = function(self)
+		local t = os.clock()
+		origCatch(self)
+		acc.catch += os.clock() - t
+	end
+	Monster.animate = function(self, dt)
+		local t = os.clock()
+		origAnim(self, dt)
+		acc.anim += os.clock() - t
+	end
+	Monster.lineOfSight = function(self, pos)
+		acc.los += 1
+		return origLos(self, pos)
+	end
+	local hbConn = RunService.Heartbeat:Connect(function()
+		acc.hbN += 1
+		acc.hbMs += Stats.HeartbeatTimeMs
+	end)
+	local rows = {}
+	for i = 6, #Config.Stages do
+		if only > 0 and i ~= only then
+			continue
+		end
+		Round.startStage(i)
+		task.wait(1)
+		ps = readyPlayers(1)
+		if not ps then
+			check("stage " .. i .. " ready", false)
+			continue
+		end
+		local all = {}
+		local catches = 0
+		for _, list in { Round.monsters, Round.doppels, Round.flowers } do
+			for _, m in list do
+				m.startAt = 0
+				m.onCatch = function()
+					catches += 1
+				end
+				table.insert(all, m)
+			end
+		end
+		local function phase(name, chase)
+			if not chase then
+				place(p, Round.info.spawns[1].Position)
+			end
+			task.wait(2)
+			for k in acc do
+				acc[k] = 0
+			end
+			catches = 0
+			local s0 = { calls = Monster.stats.pathCalls, wall = Monster.stats.pathWall }
+			local pos0, stuck0 = {}, {}
+			for k, m in all do
+				pos0[k] = m.root.Position
+				stuck0[k] = 0
+				m.log = {}
+			end
+			ask(p, "perfx", "reset")
+			local t0 = os.clock()
+			local chases, moved = 0, 0
+			local lastMove = 0
+			local travel = {}
+			for k in all do
+				travel[k] = 0
+			end
+			local prev = table.clone(pos0)
+			while os.clock() - t0 < secs do
+				if chase and os.clock() - lastMove >= 3 then
+					lastMove = os.clock()
+					-- 한 괴물(돌아가며) 앞 10~18스터드의 배회 지점(같은 층)으로
+					local m = all[(moved % #all) + 1]
+					moved += 1
+					if m and m.root then
+						local mp = m.root.Position
+						for _, n in Round.info.nodes do
+							local d = (n - mp).Magnitude
+							if d > 10 and d < 18 and math.abs(n.Y - mp.Y) < 4 and not Round.inSafe(n) then
+								place(p, n + Vector3.new(0, 0.5, 0))
+								break
+							end
+						end
+					end
+				end
+				task.wait(0.5)
+				for k, m in all do
+					if m.state == "Chase" then
+						chases += 1
+					end
+					travel[k] += (m.root.Position - prev[k]).Magnitude
+					prev[k] = m.root.Position
+				end
+			end
+			local dur = os.clock() - t0
+			local x = ask(p, "perfx", "reset") or {}
+			local sys = x.sys or {}
+			local ma = sys.monsterAnim or {}
+			local calls = Monster.stats.pathCalls - s0.calls
+			local stuckN, trav, states = 0, {}, {}
+			for k, m in all do
+				for _, l in m.log do
+					if l:find("stuck") then
+						stuckN += 1
+					end
+				end
+				table.insert(trav, math.floor(travel[k]))
+				table.insert(states, m.state)
+			end
+			local row = {
+				stage = i,
+				phase = name,
+				monsters = #all,
+				tickMsPerSec = r2(acc.tick / dur * 1000),
+				tickAvgUs = r2(acc.tick / math.max(1, acc.ticks) * 1e6),
+				ticksPerSec = r2(acc.ticks / dur),
+				pathPerSec = r2(calls / dur),
+				pathAvgMs = if calls > 0 then r2((Monster.stats.pathWall - s0.wall) / calls * 1000) else 0,
+				catchUsPerFrame = r2(acc.catch / math.max(1, acc.hbN) * 1e6),
+				animUsPerFrame = r2(acc.anim / math.max(1, acc.hbN) * 1e6),
+				losPerSec = r2(acc.los / dur),
+				serverHbMs = r2(acc.hbMs / math.max(1, acc.hbN)),
+				clientAnimMsPerFrame = math.floor((ma.perFrameMs or 0) * 1000 + 0.5) / 1000,
+				clientAnimWorstMs = r2(ma.worstMs or 0),
+				clientFrameMs = r2(x.avgMs),
+				clientP99Ms = r2(x.p99Ms),
+				chaseSamples = chases,
+				stuckEvents = stuckN,
+				catches = catches,
+				travel = table.concat(trav, ","),
+				states = table.concat(states, ","),
+			}
+			table.insert(rows, row)
+			log(HttpService:JSONEncode(row))
+		end
+		phase("wander", false)
+		phase("chase", true)
+	end
+	hbConn:Disconnect()
+	Monster.tick, Monster.checkCatch, Monster.animate, Monster.lineOfSight = origTick, origCatch, origAnim, origLos
+	check("aibench rows", #rows > 0, #rows)
+	R.info.aibench = rows
+end
+
 -- ─────────────────────────────── lobby (2인) ───────────────────────────────
 -- 로비에서 시작 → 음파로 로비가 보인다 → P1 방 만들기(버튼) → P2 참가(버튼)·나가기·재참가 → 방장만 시작 →
 -- 두 사람 모두 1스테이지 → 함께 탈출해 2스테이지 → 마지막 스테이지를 깨면 로비로 돌아온다
@@ -1384,6 +1575,13 @@ local function chaseMotion()
 		m.startAt = 0
 		task.wait(0.3)
 		ask(p, "anim", "all")
+		local rig4 = m.model:GetAttribute("Rig") == 4
+		local cid = m.model:GetAttribute("Creature")
+		if rig4 then
+			-- 3D 시안 괴물은 음파에 드러난 동안만 뼈를 움직인다: 쫓기 직전에 음파
+			ask(p, "creature", "reset")
+			ask(p, "pulseAt", root.Position + Vector3.new(0, 1.5, 0))
+		end
 		m:startChase(p, root.Position)
 		local d0 = (m.root.Position - root.Position).Magnitude
 		local armMax, legMax, sMin, sMax = 0, 0, math.huge, 0
@@ -1407,6 +1605,14 @@ local function chaseMotion()
 		local r2 = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		local d1 = if r2 then (m.root.Position - r2.Position).Magnitude else 0
 		check(string.format("stage %d: chasing monster closes in (%s)", i, m.state), caught or d1 < d0 - 6, string.format("%.0f -> %.0f studs%s", d0, d1, if caught then ", caught" else ""))
+		if rig4 then
+			-- 3D 시안 괴물: 디자인의 추격 자세로 뼈가 움직이고(추격 비율), 실제 이동 거리로 걸음이 나며, 디자인별 추격 속도로 꾸준히 쫓는다
+			local st = ask(p, "creature", cid) or {}
+			check(string.format("stage %d: %s chases with its own 3D chase pose", i, tostring(cid)), (st.frames or 0) > 10 and (st.chaseMax or 0) > 0.5 and (st.steps or 0) >= 2, string.format("frames %s chaseW %.2f steps %s bones %s", tostring(st.frames), st.chaseMax or 0, tostring(st.steps), tostring(st.bones)))
+			local cs = m.cfg.ChaseSpeed
+			check(string.format("stage %d: %s chase speed steady at its own %.0f", i, tostring(cid), cs), math.abs(sMax - cs) < 0.01, string.format("%.1f ~ %.1f", sMin, sMax))
+			continue
+		end
 		-- 전신 동작(클라이언트 측정): 1 팔을 머리 위로, 2 줄에 당겨지듯 몸이 크게 오르내림, 3·5 상체를 숙이고 손으로 땅을 짚음, 4 무릎을 높이 듦
 		local a = ask(p, "anim") or {}
 		local own = if i == 1 then (a.arm or 0) > 1.6
@@ -1503,7 +1709,14 @@ local function stages()
 		local errBefore = #R.errors
 		Round.startStage(i)
 		local ok = readyPlayers(1)
-		check(string.format("stage %d built and player spawned", i), ok ~= nil and #R.errors == errBefore, Config.Stages[i].Name)
+		-- (아바타 애니메이션 로드 실패는 도플갱어가 친구 아바타를 입을 때 나는 로블록스 쪽 오류: 빌드 실패로 세지 않는다)
+		local buildErrs = {}
+		for k = errBefore + 1, #R.errors do
+			if not string.find(R.errors[k], "animation", 1, true) then
+				table.insert(buildErrs, R.errors[k])
+			end
+		end
+		check(string.format("stage %d built and player spawned", i), ok ~= nil and #buildErrs == 0, Config.Stages[i].Name .. (if #buildErrs > 0 then " | " .. buildErrs[1] else ""))
 		if ok then
 			local st = ask(p, "stats")
 			local paths = {}
@@ -1512,7 +1725,10 @@ local function stages()
 				table.insert(paths, status)
 			end
 			check(string.format("stage %d: start -> exit walkable (player, monster)", i), paths[1] == "Success" and paths[2] == "Success", table.concat(paths, ","))
-			check(string.format("stage %d: %d monster(s)", i, Config.Stages[i].Monsters), #Round.monsters == Config.Stages[i].Monsters, #Round.monsters)
+			-- 시안 괴물 챕터는 메인 + 서브 전부, 아니면 예전 메인 괴물 수
+			local cl = Round.chapterCreatures()
+			local wantM = if cl then #cl else Config.Stages[i].Monsters
+			check(string.format("stage %d: %d monster(s)%s", i, wantM, if cl then " (chapter creatures)" else ""), #Round.monsters == wantM, #Round.monsters)
 			ask(p, "resetCooldown")
 			ask(p, "fire")
 			task.wait(1.2)
@@ -1659,7 +1875,10 @@ local function doppelTest()
 			end
 		end
 		local dist = d and (d.root.Position - Round.info.spawns[1].Position).Magnitude or -1
-		check(string.format("stage %d: one doppelganger in player form (main monsters still %d)", i, Config.Stages[i].Monsters), #Round.doppels == D.PerStage and d ~= nil and d.form == "Disguise" and boxes >= 6 and #Round.monsters == Config.Stages[i].Monsters and CollectionService:HasTag(d.model, Config.Tags.Doppel), string.format("doppels=%d form=%s boxes=%d monsters=%d", #Round.doppels, d and d.form or "-", boxes, #Round.monsters))
+		-- (괴물 수: 시안 괴물 챕터는 메인 + 서브 전부, 아니면 예전 메인 괴물 수)
+		local cl = Round.chapterCreatures()
+		local wantM = if cl then #cl else Config.Stages[i].Monsters
+		check(string.format("stage %d: one doppelganger in player form (other monsters still %d)", i, wantM), #Round.doppels == D.PerStage and d ~= nil and d.form == "Disguise" and boxes >= 6 and #Round.monsters == wantM and CollectionService:HasTag(d.model, Config.Tags.Doppel), string.format("doppels=%d form=%s boxes=%d monsters=%d", #Round.doppels, d and d.form or "-", boxes, #Round.monsters))
 		check(string.format("stage %d: doppelganger spawns %d~%d studs from the start", i, D.SpawnDistance[1], D.SpawnDistance[2]), dist >= D.SpawnDistance[1] - 6 and dist <= D.SpawnDistance[2] + 6, string.format("%.0f", dist))
 	end
 	-- 진짜 사람(친구 또는 플레이어)의 아바타로 갈아입는다
@@ -1717,7 +1936,10 @@ local function doppelTest()
 	check(string.format("transforms %d~%d s after being discovered", D.TransformDelay[1], D.TransformDelay[2]), wait0 > D.TransformDelay[1] - 1.5 and wait0 <= D.TransformDelay[2] + 0.1, string.format("%.1f s", wait0))
 	task.wait(1.2)
 	local shownNow = ask(p, "reveal")
-	check("sonar hit: the player-shaped doppelganger stays visible as it is (no frozen afterimage)", shownNow and shownNow >= 1, shownNow)
+	-- (진짜 친구 아바타를 입은 도플갱어는 팀원처럼 늘 윤곽선으로 보인다(Reveal.disguised): 음파 목록 대신 몸이 실제로 보이는지)
+	local rv = ask(p, "revealedModel", d.model)
+	local avatar = d.model:GetAttribute("AvatarOf") ~= nil
+	check("sonar hit: the player-shaped doppelganger stays visible as it is (no frozen afterimage)", (shownNow and shownNow >= 1) or (avatar and rv ~= nil and rv.visible > 0), string.format("shown %s avatar %s visibleParts %s", tostring(shownNow), tostring(avatar), tostring(rv and rv.visible)))
 	local fx0 = ask(p, "doppelFx")
 	-- 변신: 사람 모습이 터지고(조각) 괴물 몸으로
 	local turned = waitFor(function()
@@ -2197,26 +2419,24 @@ local function flowerSpot()
 	end
 end
 
--- 챕터 괴물 하나(env CREATURE=id)를 켜고 그 챕터에서 나오게 해 본다: 생성·선 수·움직임·애니메이션·잡기
+-- 챕터 시안 괴물(env CREATURE=챕터 번호): 전원 생성 · 구역 나눔 · 음파에 그림이 보임 · 움직임/걸음 · 서브 기믹
 local function creatureTest()
-	local id = args.Creature
-	check("creature id given", typeof(id) == "string" and id ~= "", tostring(id))
-	local chapter = nil
-	for ch, list in Config.Creatures.Chapters do
-		if table.find(list, id) then
-			chapter = ch
-		end
-	end
-	check("creature belongs to a chapter", chapter ~= nil, tostring(chapter))
-	local Monster = require(script.Parent.Monster)
-	check("creature module loads", Monster.creatureModule(id) ~= nil, id)
-	if not chapter then
+	local chapter = tonumber(args.Creature)
+	local def = chapter and Config.Creatures.Chapters[chapter]
+	check("chapter given", def ~= nil, tostring(args.Creature))
+	if not def or not chapter then
 		return
 	end
-	Config.Creatures.On[id] = true
+	local Monster = require(script.Parent.Monster)
+	for _, id in def.main do
+		check("module " .. id, Monster.creatureModule(id) ~= nil)
+	end
+	for _, id in def.sub do
+		check("module " .. id, Monster.creatureModule(id) ~= nil)
+	end
 	local stageIdx = nil
-	for i, s in Config.Stages do
-		if s.Id == chapter then
+	for i, st in Config.Stages do
+		if st.Id == chapter then
 			stageIdx = i
 		end
 	end
@@ -2228,48 +2448,631 @@ local function creatureTest()
 	local p = ps[1]
 	Round.startStage(stageIdx)
 	readyPlayers(1)
-	local m = nil
-	waitFor(function()
-		for _, mm in Round.monsters do
-			if mm.model:GetAttribute("Creature") == id then
-				m = mm
-			end
-		end
-		return m ~= nil
-	end, 15)
-	check("creature spawned in its chapter", m ~= nil, "stage " .. tostring(stageIdx))
-	if not m then
+	local ready = Round.chapterCreatures()
+	check("chapter has ready (uploaded) creatures", ready ~= nil, if ready then #ready .. " ready" else "none ready (fallback to old monsters)")
+	if not ready then
 		return
 	end
-	local lines, balls = 0, 0
-	for _, d in m.model:GetDescendants() do
-		if d.Name == "Line" then
-			lines += 1
-		elseif d.Name == "Ball" then
-			balls += 1
+	local want = #ready
+	local found: { [string]: any } = {}
+	waitFor(function()
+		table.clear(found)
+		local n = 0
+		for _, mm in Round.monsters do
+			-- (개체 이름: 같은 디자인 여러 마리(10장 뜬눈 3마리)도 따로 센다)
+			local id = mm.model:GetAttribute("CreatureId") or mm.model:GetAttribute("Creature")
+			if typeof(id) == "string" then
+				found[id] = mm
+				n += 1
+			end
+		end
+		return n >= want
+	end, 20)
+	local n = 0
+	local zones: { [number]: boolean } = {}
+	local zoneDup = false
+	for id, mm in found do
+		n += 1
+		local z = mm.model:GetAttribute("Zone")
+		if zones[z] then
+			zoneDup = true
+		end
+		zones[z] = true
+		check(id .. " Rig 4 + starts in own zone", mm.model:GetAttribute("Rig") == 4 and mm:inTerritory(mm.root.Position), tostring(mm.root.Position))
+	end
+	check("all chapter creatures spawned", n == want, n .. "/" .. want)
+	check("one zone each", not zoneDup)
+	-- 각 괴물 앞에서 음파 → 그 괴물 그림이 보이고 걷는다
+	ask(p, "creature", "reset")
+	local results = {}
+	for id, mm in found do
+		mm.startAt = os.clock() + 1e6 -- (테스트 동안 스스로 생각하지 않게: 아래에서 직접 걷게 한다)
+		local at = mm.root.Position
+		-- 플레이어 자리: 괴물에서 6~16 스터드, 벽에 가리지 않는 이동 지점(벽 속·벽 너머에 세우지 않는다)
+		local spot, walkTo = nil, nil
+		local info = Round.info :: any
+		for _, n in info.nodes do
+			local d = (n - at).Magnitude
+			if d >= 6 and d <= 16 and math.abs(n.Y - at.Y) < 6 and mm:lineOfSight(n + Vector3.new(0, 1, 0)) then
+				if not spot then
+					spot = n
+				elseif not walkTo and (n - spot).Magnitude > 8 then
+					walkTo = n
+				end
+			end
+		end
+		place(p, (spot or (at + mm.root.CFrame.LookVector * 8)) + Vector3.new(0, 3, 0))
+		task.wait(0.6)
+		ask(p, "pulseAt", root(p).Position + Vector3.new(0, 1.5, 0))
+		-- 괴물을 길찾기로 근처 다른 지점까지 걷게 한다
+		mm.hum.WalkSpeed = 8
+		local goal = walkTo or spot or (at - mm.root.CFrame.LookVector * 8)
+		local okPath = mm:pathTo(goal)
+		local t1 = os.clock()
+		while os.clock() - t1 < 3.5 do
+			if okPath then
+				mm:follow()
+			else
+				mm.hum:MoveTo(goal)
+			end
+			task.wait(0.1)
+		end
+		local st = ask(p, "creature", mm.model:GetAttribute("Creature"))
+		local rv = ask(p, "revealedModel", mm.model)
+		local ok = st ~= nil and st.frames > 10 and rv ~= nil and rv.active and rv.visible > 0
+		table.insert(results, id .. (if ok then " ok" else " FAIL"))
+		check(id .. " 3D body shown on sonar and animated", ok, string.format("frames %s bones %s visible parts %s err %s", st and st.frames or "-", st and st.bones or "-", rv and rv.visible or "-", st and st.err or "-"))
+		check(id .. " walks with footsteps", st ~= nil and st.steps > 0, if st then "steps " .. st.steps else "")
+		mm.hum:MoveTo(mm.root.Position)
+	end
+	-- 점프스케어만 내는 서브 괴물: 잡혀도 목숨이 그대로
+	for _, id in def.sub do
+		local mm = found[id]
+		if mm and mm.model:GetAttribute("Gimmick") == "scare" then
+			local lives = p:GetAttribute("Lives")
+			mm.onCatch(p, mm)
+			task.wait(1)
+			check(id .. " scare-only catch keeps the player alive", p:GetAttribute("Status") == "Alive" and p:GetAttribute("Lives") == lives, tostring(p:GetAttribute("Status")) .. " lives " .. tostring(p:GetAttribute("Lives")))
 		end
 	end
-	check("sonar line budget 30..140", lines + balls >= 30 and lines + balls <= 140, lines .. " lines + " .. balls .. " balls")
-	check("own rig (Rig=3)", m.model:GetAttribute("Rig") == 3)
-	ask(p, "creature", "reset")
-	local start = m.root.Position
-	-- 플레이어 근처로 불러 쫓게 한다
-	place(p, start + Vector3.new(14, 3, 0))
-	task.wait(1)
-	m.startAt = 0
-	m:hear(p.Character and p.Character.PrimaryPart and p.Character.PrimaryPart.Position or start, 60, p, "Sonar")
+	for _, mm in found do
+		check("stays in map", mm.root.Position.Y > -50)
+	end
+end
+
+-- 모든 챕터: 괴물마다 바로 앞에서 음파 → 그 괴물이 실제로 보이는가(보이는 몸이 있고 Reveal 이 켜짐)
+local function revealAll()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local catch0 = Config.Monster.CatchDistance
+	Config.Monster.CatchDistance = -1
+	for i = 1, #Config.Stages do
+		Round.startStage(i)
+		readyPlayers(1)
+		task.wait(1)
+		local shown, total, bodyless = 0, 0, {}
+		for _, m in Round.monsters do
+			if m.alive and m.model.Parent then
+				total += 1
+				m.startAt = os.clock() + 1e6 -- (테스트 동안 가만히)
+				-- 보일 몸: 예전 괴물 = 음파 대상 파트, 시안 괴물 = 3D 메시
+				local body = 0
+				for _, d in m.model:GetDescendants() do
+					if d:IsA("BasePart") and (CollectionService:HasTag(d, Config.Tags.Renderable) or d:IsA("MeshPart")) then
+						body += 1
+					end
+				end
+				if body == 0 then
+					table.insert(bodyless, m.model.Name)
+				end
+				place(p, m.root.Position + m.root.CFrame.LookVector * 8 + Vector3.new(0, 3, 0))
+				task.wait(0.5)
+				ask(p, "pulseAt", root(p).Position + Vector3.new(0, 1.5, 0))
+				local ok = waitFor(function()
+					local r = ask(p, "revealedModel", m.model)
+					return r ~= nil and r.active and r.visible > 0
+				end, 3)
+				if ok then
+					shown += 1
+				end
+			end
+		end
+		check(string.format("stage %d: every monster has a visible body", i), #bodyless == 0, table.concat(bodyless, ","))
+		check(string.format("stage %d: every monster revealed by sonar (%d)", i, total), total > 0 and shown == total, shown .. "/" .. total)
+	end
+	Config.Monster.CatchDistance = catch0
+end
+
+-- ─────────────────────────────── 성능: stress / census ───────────────────────────────
+--   stress (env STAGE=n, QUICK=1 이면 짧게): 한 클라이언트에서 음파 부하를 단계별로 만들고 구간마다 수치를 잰다.
+--     팀원 음파는 서버가 실제 팀원 음파와 똑같은 SonarPulse 이벤트로 보낸다(음파·소리·지도·괴물 드러남 경로가 모두 실제와 같다).
+--   census (env STAGE=n 이면 그 챕터만, 아니면 전부): 부품 수·속성 집계, 서버·클라이언트 빌드 시간, 챕터를 이어서 바꿀 때 남는 인스턴스·메모리
+local Stats = game:GetService("Stats")
+local function r2(x)
+	return math.floor((x or 0) * 100 + 0.5) / 100
+end
+-- 주변에 윤곽선 부품이 가장 많은 배회 지점(가장 무거운 곳)과 그 수
+local function heaviestNode()
+	local cells: { [number]: number } = {}
+	local function key(x, z)
+		return x * 4096 + z
+	end
+	for _, inst in CollectionService:GetTagged(Config.Tags.Renderable) do
+		if inst:IsA("BasePart") and inst:IsDescendantOf(stageFolder()) then
+			local k = key(inst.Position.X // 8, inst.Position.Z // 8)
+			cells[k] = (cells[k] or 0) + 1
+		end
+	end
+	local best, bestN = Round.info.nodes[1], -1
+	for _, n in Round.info.nodes do
+		local cx, cz = n.X // 8, n.Z // 8
+		local sum = 0
+		for dx = -4, 4 do
+			for dz = -4, 4 do
+				if dx * dx + dz * dz <= 18 then
+					sum += cells[key(cx + dx, cz + dz)] or 0
+				end
+			end
+		end
+		if sum > bestN then
+			best, bestN = n, sum
+		end
+	end
+	return best, bestN
+end
+
+local function stress()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local stageNo = tonumber(args.Stage) or 0
+	if stageNo > 0 and stageNo ~= Round.stageIndex then
+		Round.startStage(stageNo)
+		task.wait(1)
+		ps = readyPlayers(1)
+		check("stage ready", ps ~= nil)
+		if not ps then
+			return
+		end
+	end
+	local seconds = if args.Quick then 5 else 9
+	local SonarPulse = ReplicatedStorage.Remotes.SonarPulse
+	local spot, spotParts = heaviestNode()
+	place(p, spot + Vector3.new(0, 0.5, 0))
+	task.wait(3)
+	-- 괴물은 잡지 않게(측정이 끊기지 않게)
+	local all = {}
+	for _, list in { Round.monsters, Round.doppels, Round.flowers } do
+		for _, m in list do
+			rawset(m, "checkCatch", function() end)
+			table.insert(all, m)
+		end
+	end
+	-- 팀원 세 명이 서 있을 자리: 가까운 배회 지점 중 서로 다른 세 곳(8~28스터드)
+	local near = {}
+	for _, n in Round.info.nodes do
+		local d = (n - spot).Magnitude
+		if d > 7 and d < 30 and math.abs(n.Y - spot.Y) < 6 then
+			table.insert(near, n)
+		end
+	end
+	table.sort(near, function(a, b)
+		return (a - spot).Magnitude < (b - spot).Magnitude
+	end)
+	local mates = {}
+	for k = 1, 3 do
+		mates[k] = (near[math.max(1, math.floor(#near * k / 3.2))] or spot) + Vector3.new(0, 1.5, 0)
+	end
+	local out = {}
+	-- 한 구간: shooters 명이 gap 초마다 동시에 쏜다(0명이면 가만히)
+	local function phase(name, shooters, gap, opts)
+		opts = opts or {}
+		task.wait(Config.Sonar.Hold + 0.5) -- 앞 구간의 선이 다 사라진 뒤
+		ask(p, "perfx", "reset")
+		local hb, hbN, hbMax, hbTime, physT, physMax = 0, 0, 0, 0, 0, 0
+		local conn = RunService.Heartbeat:Connect(function(dt)
+			hb += dt
+			hbN += 1
+			hbMax = math.max(hbMax, dt)
+			hbTime += Stats.HeartbeatTimeMs
+			local ph = Stats.PhysicsStepTimeMs
+			physT += ph
+			physMax = math.max(physMax, ph)
+		end)
+		local t = os.clock()
+		local emitCpu, emits, fired, calls = 0, 0, 0, 0
+		while os.clock() - t < seconds do
+			local tick0 = os.clock()
+			if opts.monsters then
+				local pos = root(p) and root(p).Position
+				for i, m in all do
+					if pos and m.alive and m.kind ~= "flower" and m.form == "Beast" then
+						if (m.root.Position - pos).Magnitude > 45 and i <= 5 and #near > 0 then
+							m.model:PivotTo(CFrame.new(near[(i * 7) % #near + 1] + Vector3.new(0, 2, 0)))
+						end
+						m.startAt = 0
+						m:startChase(p, pos)
+					end
+				end
+			end
+			if shooters > 0 then
+				for s = 1, shooters do
+					if s == 1 then
+						ask(p, "resetCooldown")
+						calls += 1
+						if ask(p, "fire") then
+							fired += 1
+						end
+					else
+						local at = if opts.overlap then spot + Vector3.new(s * 0.6, 1.5, 0) else mates[(s - 2) % 3 + 1]
+						SonarPulse:FireClient(p, 900000 + s, at)
+						fired += 1
+						local e0 = os.clock()
+						SoundBus.emit(at, Config.Noise.Sonar, nil, "Sonar")
+						emitCpu += os.clock() - e0
+						emits += 1
+					end
+				end
+				local rest = gap - (os.clock() - tick0)
+				if rest > 0 then
+					task.wait(rest)
+				end
+			else
+				task.wait(0.5)
+			end
+		end
+		conn:Disconnect()
+		local dur = os.clock() - t
+		local x = ask(p, "perfx", "reset")
+		if not x then
+			check(name .. ": perfx", false)
+			return
+		end
+		local sys = {}
+		for n, v in x.sys do
+			sys[n] = string.format("%.2f ms/s, avg %.3f, worst %.2f ms, calls %d", v.avgMs * v.calls / dur, v.avgMs, v.worstMs, v.calls)
+		end
+		local row = {
+			phase = name,
+			fired = fired,
+			sec = r2(dur),
+			fps = r2(x.fps),
+			low1 = r2(x.low1Fps),
+			avgMs = r2(x.avgMs),
+			p95 = r2(x.p95Ms),
+			p99 = r2(x.p99Ms),
+			worst = r2(x.worstMs),
+			luaAvg = r2(x.luaAvgMs),
+			luaP95 = r2(x.luaP95Ms),
+			luaP99 = r2(x.luaP99Ms),
+			luaWorst = r2(x.luaWorstMs),
+			pulseAvg = r2(x.pulseCost.avgMs),
+			pulseMax = r2(x.pulseCost.maxMs),
+			startAvg = r2(x.pulseCost.startAvgMs),
+			startMax = r2(x.pulseCost.startMaxMs),
+			cut = x.pulseCost.cut,
+			maxActive = x.pulseMaxActive,
+			finished = x.pulseCost.finished,
+			linesActive = x.lineStats.active,
+			created = x.lineStats.created,
+			dropped = x.lineStats.dropped,
+			stolen = x.lineStats.stolen,
+			shown = x.lineStats.shown,
+			sounds = x.sounds,
+			soundsPeak = x.soundsPeak,
+			memMb = r2(x.memMb),
+			instances = x.instances,
+			recvKbps = r2(x.recvKbps),
+			sendKbps = r2(x.sendKbps),
+			srvFrame = r2(hb / math.max(1, hbN) * 1000),
+			srvWorst = r2(hbMax * 1000),
+			srvHeartbeatMs = r2(hbTime / math.max(1, hbN)),
+			emitMs = if emits > 0 then math.floor(emitCpu / emits * 1e5) / 100 else 0,
+			physMs = r2(physT / math.max(1, hbN)),
+			physMax = r2(physMax),
+			contacts = Stats.ContactsCount,
+			counters = x.counters,
+			sys = sys,
+		}
+		out[#out + 1] = row
+		log(HttpService:JSONEncode(row))
+	end
+	phase("idle", 0, 0)
+	phase("solo", 1, Config.Sonar.Cooldown)
+	phase("two", 2, Config.Sonar.Cooldown)
+	phase("four", 4, Config.Sonar.Cooldown)
+	phase("four-overlap", 4, Config.Sonar.Cooldown, { overlap = true })
+	phase("four-chase", 4, Config.Sonar.Cooldown, { monsters = true })
+	phase("flood-12", 12, Config.Sonar.Cooldown)
+	-- 다 끝난 뒤 남는 것(누수)
 	task.wait(8)
-	local moved = (m.root.Position - start).Magnitude
-	check("creature moves", moved > 3, string.format("moved %.1f", moved))
-	local st = ask(p, "creature", id)
-	check("client animates its own rig", st ~= nil and st.frames > 30 and st.maxAngle > 0.05, st and string.format("frames %d maxAngle %.2f steps %d", st.frames, st.maxAngle, st.steps) or "no stats")
-	check("creature stays in the map (not fallen through)", m.root.Position.Y > -50, tostring(m.root.Position) .. (if m.alive then "" else " (caught the player, round reset)"))
-	Config.Creatures.On[id] = nil
+	local z = ask(p, "perfx", "reset")
+	check("all sonar lines released after stress", z and z.lineStats.active == 0, z and z.lineStats.active)
+	check("no pulse left running", z and z.pulses == 0, z and z.pulses)
+	check("no sound left over", z and z.sounds <= 3, z and z.sounds)
+	R.info.stress = out
+	R.info.spot = { parts = spotParts, at = tostring(spot), monsters = #all, after = z and { instances = z.instances, memMb = r2(z.memMb), sounds = z.sounds, lines = z.lineStats } }
+	-- 서버 괴물 움직임 비용(한 프레임, 괴물 전부)
+	local c0 = os.clock()
+	for _ = 1, 100 do
+		for _, m in all do
+			m:animate(0.016)
+		end
+	end
+	R.info.animateMsPerFrame = math.floor((os.clock() - c0) / 100 * 1e6) / 1000
+end
+
+-- soak (env STAGE, WATCH_SECONDS): 4명 분량 음파를 걸으며(자리 옮김) 계속 → 20초마다 Lua 메모리·인스턴스·선 큐·소리(누수·오래 할수록 느려지는지)
+local function soak()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local stageNo = tonumber(args.Stage) or 0
+	if stageNo > 0 and stageNo ~= Round.stageIndex then
+		Round.startStage(stageNo)
+		task.wait(1)
+		readyPlayers(1)
+	end
+	for _, list in { Round.monsters, Round.doppels, Round.flowers } do
+		for _, m in list do
+			rawset(m, "checkCatch", function() end)
+		end
+	end
+	local nodes = Round.info.nodes
+	local rows = {}
+	local t = os.clock()
+	local nextAt, i = 0, 0
+	ask(p, "perfx", "reset")
+	while os.clock() - t < (tonumber(args.Seconds) or 150) do
+		local c = os.clock()
+		i += 1
+		local n = nodes[(i * 37) % #nodes + 1]
+		place(p, n + Vector3.new(0, 0.5, 0))
+		task.wait(0.05)
+		ask(p, "resetCooldown")
+		ask(p, "fire")
+		for k = 1, 3 do
+			ReplicatedStorage.Remotes.SonarPulse:FireClient(p, 900000 + k, n + Vector3.new(k * 2, 1.5, k))
+		end
+		if os.clock() - t >= nextAt then
+			nextAt += 20
+			local x = ask(p, "perfx", "reset")
+			if x then
+				local row = { t = math.floor(os.clock() - t), luaMb = r2((x.luaKb or 0) / 1024), order = x.lineStats.order, instances = x.instances, sounds = x.sounds, fps = r2(x.fps), luaAvg = r2(x.luaAvgMs), luaWorst = r2(x.luaWorstMs), worst = r2(x.worstMs), active = x.lineStats.active, memMb = r2(x.memMb) }
+				rows[#rows + 1] = row
+				log(HttpService:JSONEncode(row))
+			end
+		end
+		task.wait(math.max(0, Config.Sonar.Cooldown - (os.clock() - c)))
+	end
+	task.wait(8)
+	local z = ask(p, "perfx", "reset")
+	check("soak: everything released", z and z.lineStats.active == 0 and z.pulses == 0 and z.sounds <= 3, z and (z.lineStats.active .. " lines, " .. z.pulses .. " pulses, " .. z.sounds .. " sounds"))
+	R.info.soak = rows
+	R.info.soakEnd = z and { luaMb = r2((z.luaKb or 0) / 1024), order = z.lineStats.order, instances = z.instances, sounds = z.sounds }
+end
+
+-- pbench (env STAGE=n, 없으면 전부): 음파 1·4개의 비용을 가짜 시계로 여러 번 재서 최소·중앙값(그 챕터에서 가장 무거운 곳)
+local function pbench()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local only = tonumber(args.Stage) or 0
+	local rows = {}
+	for i = 1, #Config.Stages do
+		if only > 0 and i ~= only then
+			continue
+		end
+		Round.startStage(i)
+		task.wait(1)
+		readyPlayers(1)
+		local spot = heaviestNode()
+		place(p, spot + Vector3.new(0, 0.5, 0))
+		for _, list in { Round.monsters, Round.doppels, Round.flowers } do
+			for _, m in list do
+				rawset(m, "checkCatch", function() end)
+			end
+		end
+		task.wait(2)
+		local at = { spot + Vector3.new(0, 1.5, 0) }
+		for _, n in Round.info.nodes do
+			local d = (n - spot).Magnitude
+			if #at < 4 and d > 14 * #at - 6 and d < 30 and math.abs(n.Y - spot.Y) < 6 then
+				table.insert(at, n + Vector3.new(0, 1.5, 0))
+			end
+		end
+		for _, n in { 1, 4 } do
+			local res
+			task.spawn(function()
+				res = ReplicatedStorage.TestProbe:InvokeClient(p, "pulseBench", { at = at, n = n, reps = if args.Quick then 5 else 9 })
+			end)
+			waitFor(function()
+				return res
+			end, 90)
+			if res then
+				local row = { stage = i, n = n, shown = res.shown }
+				for _, k in { "start", "wave", "total", "peak" } do
+					row[k .. "Min"] = r2(res[k].min)
+					row[k .. "Med"] = r2(res[k].med)
+				end
+				rows[#rows + 1] = row
+				log(HttpService:JSONEncode(row))
+			end
+		end
+	end
+	check("bench rows", #rows > 0, #rows)
+	R.info.pbench = rows
+end
+
+local function census()
+	local ps = readyPlayers(1)
+	check("player ready", ps ~= nil)
+	if not ps then
+		return
+	end
+	local p = ps[1]
+	local only = tonumber(args.Stage) or 0
+	local rows = {}
+	local list = {}
+	if only > 0 then
+		list = { only }
+	else
+		for i = 1, #Config.Stages do
+			list[i] = i
+		end
+		table.insert(list, 1) -- (처음 챕터로 돌아왔을 때 처음과 같은가 = 누수 확인)
+	end
+	for _, i in list do
+		local okBuild, err = pcall(Round.startStage, i)
+		check("stage " .. i .. " builds", okBuild, err)
+		if not okBuild then
+			continue
+		end
+		readyPlayers(1)
+		local st = waitFor(function()
+			local s = ask(p, "stats")
+			return s and s.ready and s.buildId == stageFolder():GetAttribute("BuildId") and s
+		end, 40)
+		check("stage " .. i .. " client ready", st ~= nil)
+		task.wait(2)
+		local c = { stage = i, parts = 0, mesh = 0, invisible = 0, collide = 0, query = 0, touch = 0, shadow = 0, tagged = 0, decorQuery = 0, unanchored = 0, models = 0, inst = 0, prompts = 0, sounds = 0, lights = 0, cyl = 0 }
+		for _, d in stageFolder():GetDescendants() do
+			c.inst += 1
+			if d:IsA("BasePart") then
+				c.parts += 1
+				if d:IsA("MeshPart") then
+					c.mesh += 1
+				elseif d:IsA("Part") and d.Shape == Enum.PartType.Cylinder then
+					c.cyl += 1
+				end
+				if d.Transparency >= 1 then
+					c.invisible += 1
+				end
+				if d.CanCollide then
+					c.collide += 1
+				elseif d.CanQuery then
+					c.decorQuery += 1
+				end
+				if d.CanQuery then
+					c.query += 1
+				end
+				if d.CanTouch then
+					c.touch += 1
+				end
+				if d.CastShadow then
+					c.shadow += 1
+				end
+				if not d.Anchored then
+					c.unanchored += 1
+				end
+				if CollectionService:HasTag(d, Config.Tags.Renderable) then
+					c.tagged += 1
+				end
+			elseif d:IsA("Model") then
+				c.models += 1
+			elseif d:IsA("ProximityPrompt") then
+				c.prompts += 1
+			elseif d:IsA("Sound") then
+				c.sounds += 1
+			elseif d:IsA("Light") then
+				c.lights += 1
+			end
+		end
+		c.serverBuildMs = math.floor(Round.lastBuildMs)
+		c.segs = st and st.segs
+		c.clientBuildSec = st and r2(st.build.seconds)
+		c.clientBuildCpu = st and r2(st.build.cpu)
+		c.grid = st and table.concat(st.grid, "x")
+		local mp, mb, mm = 0, 0, 0
+		for _, l in { Round.monsters, Round.doppels, Round.flowers } do
+			for _, m in l do
+				mm += 1
+				for _, d in m.model:GetDescendants() do
+					if d:IsA("BasePart") then
+						mp += 1
+					elseif d:IsA("Bone") then
+						mb += 1
+					end
+				end
+			end
+		end
+		c.monsters, c.monsterParts, c.monsterBones = mm, mp, mb
+		local x = ask(p, "perfx", "reset")
+		if x then
+			c.clientInst, c.memMb, c.lines, c.recvKbps = x.instances, r2(x.memMb), x.lineStats.created, r2(x.recvKbps)
+		end
+		-- 이름별 파트 수 상위 12개(과분할 찾기: Haunch·Pipe·Pilaster·볼트 등), 1스터드보다 작은 장식, 부딪히는 장식(음파 윤곽 대상인데 충돌)
+		local byName: { [string]: number } = {}
+		local small, smallCollide = 0, 0
+		for _, d in stageFolder():GetDescendants() do
+			if d:IsA("BasePart") then
+				local k = d.Name .. (if d:IsA("Part") and d.Shape == Enum.PartType.Cylinder then "(cyl)" else "")
+				byName[k] = (byName[k] or 0) + 1
+				local sz = d.Size
+				if math.max(sz.X, sz.Y, sz.Z) < 1 then
+					small += 1
+					if d.CanCollide then
+						smallCollide += 1
+					end
+				end
+			end
+		end
+		local top = {}
+		for k, v in byName do
+			table.insert(top, { k, v })
+		end
+		table.sort(top, function(a, b)
+			return a[2] > b[2]
+		end)
+		local s = {}
+		for n = 1, math.min(12, #top) do
+			s[n] = top[n][1] .. "=" .. top[n][2]
+		end
+		c.topNames = table.concat(s, " ")
+		c.small, c.smallCollide = small, smallCollide
+		-- 서버 물리(Studio 플레이는 서버·클라이언트가 한 프로세스)
+		c.physMs = r2(Stats.PhysicsStepTimeMs)
+		c.primitives = Stats.PrimitivesCount
+		c.contacts = Stats.ContactsCount
+		-- 지난 챕터에서 남은 것: Stage 폴더 밖 workspace 인스턴스(캐릭터·카메라·지형 제외)
+		local loose = 0
+		for _, ch in workspace:GetChildren() do
+			if ch ~= stageFolder() and not ch:IsA("Terrain") and not ch:IsA("Camera") and not Players:GetPlayerFromCharacter(ch) then
+				loose += 1 + #ch:GetDescendants()
+			end
+		end
+		c.wsOutsideStage = loose
+		c.serverInst, c.serverMemMb = Stats.InstanceCount, r2(Stats:GetTotalMemoryUsageMb())
+		rows[#rows + 1] = c
+		log(HttpService:JSONEncode(c))
+	end
+	R.info.census = rows
 end
 
 task.spawn(function()
 	local ok, err = pcall(function()
-		if args.Test == "dense" then
+		if args.Test == "stress" then
+			stress()
+		elseif args.Test == "soak" then
+			soak()
+		elseif args.Test == "pbench" then
+			pbench()
+		elseif args.Test == "census" then
+			census()
+		elseif args.Test == "dense" then
 			dense()
 		elseif args.Test == "lobby" then
 			lobbyTest()
@@ -2277,6 +3080,8 @@ task.spawn(function()
 			walk()
 		elseif args.Test == "load" then
 			load()
+		elseif args.Test == "aibench" then
+			aibench()
 		elseif args.Test == "probe" then
 			probe()
 		elseif args.Test == "multi" then
@@ -2301,8 +3106,35 @@ task.spawn(function()
 			chaseMotion()
 		elseif args.Test == "lives" then
 			livesTest()
+		elseif args.Test == "meshcheck" then
+			-- 올린 3D 메시 에셋 구조 확인(env CREATURE=에셋 번호)
+			local ok, asset = pcall(function()
+				return game:GetService("InsertService"):LoadAsset(tonumber(args.Creature) :: number)
+			end)
+			check("mesh asset loads", ok and asset ~= nil, tostring(asset))
+			if ok and asset then
+				local meshes, bones, skinned, verts = 0, 0, 0, ""
+				for _, d in asset:GetDescendants() do
+					if d:IsA("MeshPart") then
+						meshes += 1
+						if d.HasSkinnedMesh then
+							skinned += 1
+						end
+						verts ..= string.format("%s size=%s ", d.Name, tostring(d.Size))
+					elseif d:IsA("Bone") then
+						bones += 1
+					end
+				end
+				check("has mesh part", meshes > 0, meshes .. " " .. verts)
+				check("has bones", bones > 10, tostring(bones))
+				check("skinned", skinned > 0, tostring(skinned))
+			end
+		elseif args.Test == "revealall" then
+			revealAll()
 		elseif args.Test == "reveal" then
 			revealTest()
+		elseif args.Test == "netaudio" or args.Test == "netflood" then
+			require(script.Parent.TestNetAudio)({ ask = ask, check = check, log = log, place = place, readyPlayers = readyPlayers, R = R, args = args })
 		elseif args.Test == "mobile" then
 			mobileTest()
 		else

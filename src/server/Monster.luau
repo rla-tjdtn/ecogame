@@ -1145,7 +1145,13 @@ function Monster.new(parent: Instance, spawnPos: Vector3, nodes: { Vector3 }, ge
 			Costs = { SafeZone = math.huge }, -- (안전 구역 칸은 지나가지 않는다)
 		}),
 		rayParams = rp,
-		onCatch = onCatch,
+		onCatch = if cmod and cmod.catch
+			then function(p: Player, m: any)
+				if not cmod.catch(m, p) then
+					onCatch(p, m)
+				end
+			end
+			else onCatch,
 		log = {},
 		geometry = geometry,
 		startAt = os.clock() + cfg.StartDelay,
@@ -1366,6 +1372,10 @@ function Monster.inTerritory(self: Monster, pos: Vector3): boolean
 	if not t then
 		return true
 	end
+	if t.x0 then
+		-- 사각 구역(메인 괴물: 맵을 나눈 한 칸, 서브 괴물: 자기 방 + 둘레). y0·y1 이 있으면 그 층만
+		return pos.X >= t.x0 and pos.X <= t.x1 and pos.Z >= t.z0 and pos.Z <= t.z1 and (t.y0 == nil or (pos.Y >= t.y0 - 6 and pos.Y <= t.y1 + 6))
+	end
 	local v = if t.axis == "X" then pos.X else pos.Z
 	return (v - t.mid) * t.side >= 0
 end
@@ -1419,8 +1429,20 @@ function Monster.lineOfSight(self: Monster, p: Vector3): boolean
 	return hit == nil
 end
 
+-- 살아 있고 숨지 않은, 안전 구역 밖 플레이어. 같은 프레임 안에서는 한 번만 모은다(괴물 수 × 매 프레임 잡기 판정·감각이 같은 목록을 쓴다)
+-- (목록을 받은 쪽은 고치지 않는다. 같은 프레임에 누가 잡혔을 수 있으니 잡기 직전에 Status 를 다시 본다)
+local apFrame, apList = -1, {} :: { { player: Player, root: BasePart, char: Model } }
+local frameNo = 0
+game:GetService("RunService").Heartbeat:Connect(function()
+	frameNo += 1
+end)
 local function alivePlayers(): { { player: Player, root: BasePart, char: Model } }
+	if apFrame == frameNo then
+		return apList
+	end
+	apFrame = frameNo
 	local out = {}
+	apList = out
 	for _, p in Players:GetPlayers() do
 		if p:GetAttribute("Status") == "Alive" and not p:GetAttribute("Hidden") then
 			local char = p.Character
@@ -1545,8 +1567,15 @@ function Monster.sense(self: Monster)
 		local d = (p - my).Magnitude
 		local crouch = e.char:GetAttribute("MoveMode") == "Crouch"
 		local range = if crouch then MC.SightRangeCrouch else MC.SightRange
-		if d < bestD and math.abs(p.Y - my.Y) < 9 then
-			if d <= MC.SenseRange or (d <= range and self:lineOfSight(p + Vector3.new(0, 1, 0))) then
+		local limit = (self.cfg :: any).SightLimit -- (서브 괴물 기믹: 이 거리 안에서만 알아챈다)
+		local senseR = MC.SenseRange
+		if limit then
+			range = math.min(range, limit)
+			senseR = math.min(senseR, limit)
+		end
+		local outside = (self.cfg :: any).SenseInTerritory and self.state ~= "Chase" and not self:inTerritory(p) -- (서브 괴물: 자기 영역 밖의 사람은 모른 척)
+		if d < bestD and math.abs(p.Y - my.Y) < 9 and not outside then
+			if d <= senseR or (d <= range and self:lineOfSight(p + Vector3.new(0, 1, 0))) then
 				best = e
 				bestD = d
 			end
@@ -1685,7 +1714,8 @@ function Monster.tick(self: Monster)
 		if not hidden then
 			self.pullSpot = nil
 		end
-		local los = not hidden and d < 40 and self:lineOfSight(tp)
+		local losR = if (self.cfg :: any).SightLimit then math.max((self.cfg :: any).SightLimit + 6, 10) else 40
+		local los = not hidden and d < losR and self:lineOfSight(tp)
 		if los then
 			self.lastSeen = now
 			self.lastKnown = tp
@@ -1705,10 +1735,17 @@ function Monster.tick(self: Monster)
 			self.hum:MoveTo(tp)
 			Doors.openNear(self.root.Position + self.root.CFrame.LookVector * 2, 6, self.root.Position)
 		else
-			if #self.waypoints == 0 or now - self.lastRepath > MC.RepathChase then
-				local goal = self.lastKnown or tp
+			local goal = self.lastKnown or tp
+			-- 다시 계산: 경로가 없을 때, 또는 RepathChase 가 지났고 목표가 움직였을 때(가만히 있는 목표면 2초마다만).
+			-- (예전엔 0.5초마다 무조건 다시 계산했다. 목표가 그대로면 같은 경로가 나온다)
+			local og = self.goal
+			local goalMoved = og == nil or Vector2.new(goal.X - og.X, goal.Z - og.Z).Magnitude > 2 or math.abs(goal.Y - og.Y) > 6
+			-- (길을 못 찾았으면 0.4초 동안은 다시 계산하지 않는다: 예전엔 실패하면 0.1초 tick 마다 최대 4번씩 계산했다)
+			local failWait = now - ((self :: any).pathFailAt or 0) < 0.4
+			if (#self.waypoints == 0 and not failWait) or (now - self.lastRepath > MC.RepathChase and (goalMoved or now - self.lastRepath > 2)) then
 				if not self:pathTo(goal) then
 					self.lastRepath = now
+					;(self :: any).pathFailAt = now
 				end
 			end
 			self:follow()
@@ -2377,6 +2414,11 @@ function Monster.checkCatch(self: Monster)
 		local p = e.root.Position
 		local flat = Vector3.new(p.X - my.X, 0, p.Z - my.Z).Magnitude
 		if flat <= self.cfg.CatchDistance and math.abs(p.Y - (my.Y - 1.5)) < 5 then
+			-- (목록은 프레임 캐시: 같은 프레임에 다른 괴물이 잡았거나 방금 숨었거나 안전 구역에 들어갔으면 건너뛴다)
+			local pl = e.player
+			if pl:GetAttribute("Status") ~= "Alive" or pl:GetAttribute("Hidden") or Monster.isSafe(p) then
+				continue
+			end
 			self:note("caught " .. e.player.Name)
 			self.onCatch(e.player, self)
 			-- 잡은 뒤에는 그 자리를 잠깐 뒤진다
@@ -2391,6 +2433,8 @@ end
 
 function Monster.run(self: Monster)
 	task.spawn(function()
+		-- 괴물마다 0.1초 주기 안의 다른 시점에 생각하게 흩뿌린다(같은 프레임에 전부 몰려 경로 계산·레이가 겹치지 않게)
+		task.wait(math.random() * 0.1)
 		while self.alive and self.model.Parent do
 			local ok, err = pcall(self.tick, self)
 			Monster.stats.ticks += 1

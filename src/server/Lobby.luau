@@ -15,6 +15,7 @@ local TeleportService = game:GetService("TeleportService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Round = require(script.Parent.Round)
 local Rejoin = require(script.Parent.Rejoin)
+local RateLimit = require(script.Parent.RateLimit)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoomAction = Remotes:WaitForChild("RoomAction") :: RemoteEvent
@@ -175,6 +176,10 @@ end
 
 function Lobby.act(p: Player, action: any, arg: any)
 	if Round.state ~= "Lobby" or type(action) ~= "string" then
+		return
+	end
+	-- (방 목록 변경은 모두에게 복제된다: 만들기·나가기를 빠르게 되풀이해도 초당 몇 번만)
+	if not RateLimit.allow(p, "RoomAction", 4, 8) then
 		return
 	end
 	if action == "create" then

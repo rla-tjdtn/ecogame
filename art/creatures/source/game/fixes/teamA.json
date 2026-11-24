@@ -1,0 +1,30 @@
+{
+ "k4s4": {
+  "chase": {
+   "lean": 0.5
+  },
+  "attack": {
+   "lean": 0.9,
+   "walk": 0.5
+  }
+ },
+ "k7h3": {
+  "phaseAmp": 0.12,
+  "phaseBase": 0
+ },
+ "k8h1": {
+  "walk": {
+   "ear": 0.3
+  },
+  "chase": {
+   "ear": 1
+  },
+  "attack": {
+   "walk": 0.6,
+   "hug": 1,
+   "mouth": 1,
+   "ear": 0.3
+  },
+  "sigma": 0.03
+ }
+}

@@ -1,0 +1,1545 @@
+{
+ "k1h1": {
+  "name": "흉문",
+  "scream": {
+   "q": [
+    "monster roar distorted",
+    "creature growl low",
+    "demon roar"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "heavy boots concrete footstep",
+    "boot step concrete hall"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "rib cage crack bones",
+    "bone snap crunch",
+    "chest cracking"
+   ],
+   "cut": "short"
+  }
+ },
+ "k1h2": {
+  "name": "척수",
+  "scream": {
+   "q": [
+    "long wailing moan ghost",
+    "eerie female wail",
+    "ghost moan"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "barefoot step concrete slow",
+    "bare foot walking stone"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "spine crack back",
+    "chiropractor crack",
+    "vertebrae crack"
+   ],
+   "cut": "short"
+  }
+ },
+ "k1s1": {
+  "name": "양두",
+  "scream": {
+   "q": [
+    "two voices growl overlapping",
+    "double voice demon",
+    "dual pitch snarl"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "crab scuttle floor",
+    "insect legs skitter floor"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "whispering voices creepy",
+    "overlapping whisper"
+   ],
+   "cut": "short"
+  }
+ },
+ "k1s2": {
+  "name": "나무",
+  "scream": {
+   "q": [
+    "tree groan creak wood",
+    "large tree creaking",
+    "wood groan"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "wooden stick tap floor",
+    "wood knock single"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "branch snap breaking",
+    "twig snap",
+    "tree branch break"
+   ],
+   "cut": "short"
+  }
+ },
+ "k2h1": {
+  "name": "갈고리",
+  "scream": {
+   "q": [
+    "rasping gasp scream",
+    "hoarse screech",
+    "raspy monster scream"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "hand slap concrete",
+    "palm slap floor"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "hook chain swing metal",
+    "chain hook clink",
+    "cargo hook clang"
+   ],
+   "cut": "short"
+  }
+ },
+ "k2h2": {
+  "name": "진열장",
+  "scream": {
+   "q": [
+    "whispering crowd chorus",
+    "many voices whisper horror",
+    "murmur crowd eerie"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "wooden cabinet creak step",
+    "furniture creak knock"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "cash register ding",
+    "price tag gun",
+    "store scanner beep"
+   ],
+   "cut": "short"
+  }
+ },
+ "k2s1": {
+  "name": "다섯 손가락",
+  "scream": {
+   "q": [
+    "hissing squeal small",
+    "thin hiss scream"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "fingers tapping table",
+    "finger tap wood"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "fingernails scratching wood",
+    "nails scratch surface",
+    "finger snap"
+   ],
+   "cut": "short"
+  }
+ },
+ "k2s2": {
+  "name": "가위",
+  "scream": {
+   "q": [
+    "metal screech scraping",
+    "high metal scream",
+    "metal grind squeal"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "metal tip tap floor",
+    "scissors tap metal"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "scissors snip",
+    "scissors cutting",
+    "shears cut"
+   ],
+   "cut": "short"
+  }
+ },
+ "k3h1": {
+  "name": "부은 자",
+  "scream": {
+   "q": [
+    "gurgling water scream",
+    "drowning gurgle roar",
+    "water gurgle groan"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "wet slap sewage squelch",
+    "wet footstep puddle",
+    "mud squelch step"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "water belch bubbling",
+    "bubbles water gurgle",
+    "swamp bubble burp"
+   ],
+   "cut": "short"
+  }
+ },
+ "k3h2": {
+  "name": "수초",
+  "scream": {
+   "q": [
+    "hissing breath long",
+    "snake hiss",
+    "steam hiss scream"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "wet hair drag floor",
+    "seaweed slap wet",
+    "wet cloth slap"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "hair squeeze water wring",
+    "wet hair squish",
+    "sponge squeeze water"
+   ],
+   "cut": "short"
+  }
+ },
+ "k3s1": {
+  "name": "아가리",
+  "scream": {
+   "q": [
+    "jaw snap growl",
+    "crocodile growl",
+    "beast growl snarl"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "flesh slap crawl wet",
+    "wet crawl slap"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "teeth chattering",
+    "teeth clack",
+    "jaw clack"
+   ],
+   "cut": "short"
+  }
+ },
+ "k3s2": {
+  "name": "칠성",
+  "scream": {
+   "q": [
+    "suction slurp scream",
+    "lamprey suck",
+    "wet sucking groan"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "boots drag mud",
+    "dragging footsteps mud"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "gills wheeze wet breathing",
+    "wet rattling breath",
+    "slimy breath"
+   ],
+   "cut": "long"
+  }
+ },
+ "k4h1": {
+  "name": "수간호사",
+  "scream": {
+   "q": [
+    "woman shriek horror",
+    "female scream angry",
+    "banshee shriek"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "nurse shoes squeak linoleum",
+    "rubber sole squeak floor",
+    "shoe squeak hospital"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "syringe squirt",
+    "syringe plunger",
+    "medical injection squirt"
+   ],
+   "cut": "short"
+  }
+ },
+ "k4h2": {
+  "name": "무영등",
+  "scream": {
+   "q": [
+    "electric buzz scream",
+    "electrical arc zap roar",
+    "power surge buzz"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "heavy metal robot footstep",
+    "metal heavy step"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "surgical light flicker buzz",
+    "fluorescent light buzz flicker",
+    "light bulb flicker"
+   ],
+   "cut": "short"
+  }
+ },
+ "k4h3": {
+  "name": "폐",
+  "scream": {
+   "q": [
+    "wheezing cough rattle",
+    "lung rasp wheeze",
+    "asthma wheeze"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "wet balloon slap",
+    "wet slap flesh heavy"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "ventilator breathing machine",
+    "respirator pump",
+    "breathing machine"
+   ],
+   "cut": "long"
+  }
+ },
+ "k4s1": {
+  "name": "바퀴",
+  "scream": {
+   "q": [
+    "child scream distant",
+    "kid shriek",
+    "creepy child cry"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "wheelchair squeak",
+    "wheelchair rolling",
+    "wheel squeak"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "wheel spinning",
+    "bicycle wheel spin",
+    "wheel spin rattle"
+   ],
+   "cut": "short"
+  }
+ },
+ "k4s2": {
+  "name": "거꾸로 기는 환자",
+  "scream": {
+   "q": [
+    "choking gasp hoarse",
+    "strangled scream",
+    "hoarse breath scream"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "crawling hands floor",
+    "hand crawl step tile"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "bone crack joint",
+    "knuckle crack",
+    "joint pop crack"
+   ],
+   "cut": "short"
+  }
+ },
+ "k4s3": {
+  "name": "뒤집힌 환자",
+  "scream": {
+   "q": [
+    "reversed scream",
+    "backwards voice scream",
+    "reverse demon voice"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "bone tap floor",
+    "knuckle tap hard floor"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "heart monitor flatline",
+    "ecg beep",
+    "medical monitor beep"
+   ],
+   "cut": "long"
+  }
+ },
+ "k4s4": {
+  "name": "합본",
+  "scream": {
+   "q": [
+    "two screams overlapping",
+    "chorus of screams",
+    "double scream"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "cloth drag hospital floor",
+    "fabric drag slide",
+    "body drag cloth"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "stretcher gurney rolling",
+    "hospital gurney wheels",
+    "cart rolling metal"
+   ],
+   "cut": "short"
+  }
+ },
+ "k5h1": {
+  "name": "길잡이",
+  "scream": {
+   "q": [
+    "low horn moan",
+    "deep horn drone",
+    "foghorn low"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "heavy stone footstep cave",
+    "stone step echo",
+    "boots on stone floor"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "whoosh swish arm",
+    "air swoosh sweep",
+    "fast swoosh"
+   ],
+   "cut": "short"
+  }
+ },
+ "k5h2": {
+  "name": "나선",
+  "scream": {
+   "q": [
+    "twisting creak moan",
+    "wringing creak groan",
+    "rope twist creak"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "bone step knock hollow",
+    "hollow bone clack"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "wring wet towel twist",
+    "cloth twist wring",
+    "rag twist squeeze"
+   ],
+   "cut": "short"
+  }
+ },
+ "k5s1": {
+  "name": "웅크린 것",
+  "scream": {
+   "q": [
+    "spider hiss",
+    "arachnid hiss screech",
+    "giant insect hiss"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "spider legs scuttle",
+    "scuttling legs wood",
+    "insect crawl scratch"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "jaw drop crack",
+    "jaw dislocate pop",
+    "mouth open crack"
+   ],
+   "cut": "short"
+  }
+ },
+ "k5s2": {
+  "name": "끼인 것",
+  "scream": {
+   "q": [
+    "muffled squeal",
+    "pressed squeal",
+    "squeak scream muffled"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "rubber squeak wall",
+    "rubber rub squeak"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "stone scrape wall",
+    "concrete scrape",
+    "rock scraping"
+   ],
+   "cut": "short"
+  }
+ },
+ "k5s3": {
+  "name": "청음귀",
+  "scream": {
+   "q": [
+    "low frequency drone moan",
+    "whale low moan",
+    "sub bass growl"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "soft finger tap stone",
+    "light tap floor"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "tinnitus ringing",
+    "ear ringing tone",
+    "high ring tone"
+   ],
+   "cut": "long"
+  }
+ },
+ "k6h1": {
+  "name": "무도회",
+  "scream": {
+   "q": [
+    "opera soprano scream",
+    "soprano vocal high",
+    "female operatic wail"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "tiptoe tap dance",
+    "ballet shoes tap floor",
+    "heel click tap"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "gramophone record scratch waltz",
+    "vinyl crackle waltz",
+    "old waltz record"
+   ],
+   "cut": "long"
+  }
+ },
+ "k6h2": {
+  "name": "벨보이",
+  "scream": {
+   "q": [
+    "creepy laughter",
+    "insane giggle",
+    "cackle man"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "leather shoes marble floor",
+    "dress shoes marble step"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "hotel service bell ding",
+    "desk bell ding",
+    "bell ring single"
+   ],
+   "cut": "short"
+  }
+ },
+ "k6h3": {
+  "name": "지배인",
+  "scream": {
+   "q": [
+    "cockroach hiss screech",
+    "insect screech",
+    "chittering screech"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "dress shoe tap wooden floor",
+    "formal shoe step wood"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "insect wings buzz flutter",
+    "cockroach wings",
+    "wings fluttering fast"
+   ],
+   "cut": "short"
+  }
+ },
+ "k6s1": {
+  "name": "여행가방",
+  "scream": {
+   "q": [
+    "muffled scream in box",
+    "muffled screaming",
+    "scream inside closet"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "suitcase hop thump",
+    "luggage thump floor",
+    "box bump floor"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "zipper open",
+    "zip fast",
+    "suitcase latch click"
+   ],
+   "cut": "short"
+  }
+ },
+ "k6s2": {
+  "name": "반쪽",
+  "scream": {
+   "q": [
+    "double voice split growl",
+    "pitched voices dual scream",
+    "two tone scream"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "sticky footsteps",
+    "velcro peel step",
+    "wet sticky step"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "sticky stretch peel",
+    "slime stretch",
+    "glue stretch sticky"
+   ],
+   "cut": "short"
+  }
+ },
+ "k6s3": {
+  "name": "욕조",
+  "scream": {
+   "q": [
+    "bubbling underwater scream",
+    "underwater scream",
+    "gurgle underwater roar"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "heavy bathtub scrape tile",
+    "ceramic scrape drag",
+    "heavy scrape tile"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "bath water slosh",
+    "water slosh large",
+    "bathtub splash"
+   ],
+   "cut": "short"
+  }
+ },
+ "k6s4": {
+  "name": "젖은 투숙객",
+  "scream": {
+   "q": [
+    "choking water cough",
+    "gagging water cough",
+    "drowned gasp"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "wet hands crawl floor",
+    "wet palm slap tile"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "shower water running",
+    "shower drain gurgle",
+    "water faucet running"
+   ],
+   "cut": "long"
+  }
+ },
+ "k7h1": {
+  "name": "복도 끝 그 애",
+  "scream": {
+   "q": [
+    "girl creepy giggle",
+    "child ghost laugh",
+    "creepy little girl laugh"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "slipper shuffle",
+    "indoor shoes shuffle school",
+    "shoe shuffle floor"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "school bell ring",
+    "old school bell",
+    "bell school hallway"
+   ],
+   "cut": "short"
+  }
+ },
+ "k7h2": {
+  "name": "걸상",
+  "scream": {
+   "q": [
+    "chair scraping screech",
+    "chair drag floor scream",
+    "metal chair scrape"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "wooden chair legs knock",
+    "chair leg knock floor",
+    "wood stool step"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "desk lid slam",
+    "wooden desk slam",
+    "wood slam"
+   ],
+   "cut": "short"
+  }
+ },
+ "k7h3": {
+  "name": "저요",
+  "scream": {
+   "q": [
+    "children crowd shout",
+    "kids yelling crowd",
+    "crowd of kids scream"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "ball bounce gym",
+    "rubber ball bounce",
+    "basketball bounce"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "crowd cheering kids",
+    "children cheer",
+    "kids clapping"
+   ],
+   "cut": "long"
+  }
+ },
+ "k7h4": {
+  "name": "술래",
+  "scream": {
+   "q": [
+    "child counting whisper",
+    "kid counting one two three",
+    "child whisper count"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "small bare feet running",
+    "kids feet running wood",
+    "barefoot child run"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "hand clap single",
+    "clap echo",
+    "clapping hands"
+   ],
+   "cut": "short"
+  }
+ },
+ "k7s1": {
+  "name": "인체모형",
+  "scream": {
+   "q": [
+    "plastic crack scream",
+    "hollow plastic scream",
+    "mannequin creak"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "plastic skeleton clatter",
+    "plastic rattle step",
+    "hollow plastic step"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "plastic parts snap click",
+    "plastic click",
+    "toy snap"
+   ],
+   "cut": "short"
+  }
+ },
+ "k7s2": {
+  "name": "판서",
+  "scream": {
+   "q": [
+    "chalk screech",
+    "chalk squeak board",
+    "nails chalkboard screech"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "heavy stomp wood floor",
+    "heavy footstep wood",
+    "wood floor stomp"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "chalk writing blackboard",
+    "chalk board writing",
+    "chalk scrape"
+   ],
+   "cut": "short"
+  }
+ },
+ "k7s3": {
+  "name": "풍금",
+  "scream": {
+   "q": [
+    "pipe organ chord",
+    "church organ chord",
+    "organ cluster dissonant"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "wood creak crawl",
+    "wood floor creak",
+    "floor creak slow"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "harmonium wheeze",
+    "pump organ bellows",
+    "accordion wheeze"
+   ],
+   "cut": "long"
+  }
+ },
+ "k8h1": {
+  "name": "토끼",
+  "scream": {
+   "q": [
+    "rabbit scream",
+    "bunny scream",
+    "animal shriek rabbit"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "soft plush thump",
+    "soft thump carpet",
+    "muffled thud carpet"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "squeaky toy",
+    "rubber squeak toy",
+    "toy squeak"
+   ],
+   "cut": "short"
+  }
+ },
+ "k8h2": {
+  "name": "토끼 선생님",
+  "scream": {
+   "q": [
+    "muffled voice mask",
+    "mask muffled shout",
+    "muffled yelling"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "rope dragging floor",
+    "leash drag floor",
+    "rope drag"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "whistle blow",
+    "coach whistle",
+    "whistle short"
+   ],
+   "cut": "short"
+  }
+ },
+ "k8h3": {
+  "name": "미끄럼틀",
+  "scream": {
+   "q": [
+    "metal resonant scream",
+    "metal pipe resonance",
+    "metal ring eerie"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "metal pole clang",
+    "metal ladder clang",
+    "playground metal clang"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "playground slide sliding",
+    "plastic slide",
+    "slide sliding down"
+   ],
+   "cut": "short"
+  }
+ },
+ "k8s1": {
+  "name": "누더기",
+  "scream": {
+   "q": [
+    "child crying",
+    "kid sobbing",
+    "sad child cry"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "barefoot flesh slap",
+    "bare feet slap floor",
+    "foot slap wet"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "needle thread stitching",
+    "sewing thread pull",
+    "fabric stitch"
+   ],
+   "cut": "short"
+  }
+ },
+ "k8s2": {
+  "name": "흔들말",
+  "scream": {
+   "q": [
+    "horse neigh",
+    "horse whinny",
+    "horse scream"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "rocking horse creak",
+    "rocking chair creak",
+    "wood rocking creak"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "wood knock hollow",
+    "hollow wood block",
+    "wooden block knock"
+   ],
+   "cut": "short"
+  }
+ },
+ "k8s3": {
+  "name": "모빌",
+  "scream": {
+   "q": [
+    "steam hiss release",
+    "air hiss long",
+    "gas leak hiss"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "wind chimes tinkle",
+    "small chimes",
+    "glass chime tinkle"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "music box lullaby",
+    "music box melody",
+    "music box wind"
+   ],
+   "cut": "long"
+  }
+ },
+ "k8s4": {
+  "name": "큰 인형",
+  "scream": {
+   "q": [
+    "porcelain crack",
+    "ceramic crack",
+    "china break crack"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "porcelain tap ceramic",
+    "ceramic click step",
+    "porcelain click"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "doll voice pull string",
+    "talking doll mama",
+    "doll eye click"
+   ],
+   "cut": "short"
+  }
+ },
+ "k9h1": {
+  "name": "키다리",
+  "scream": {
+   "q": [
+    "deep distorted roar",
+    "giant monster roar",
+    "low monster roar"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "long stride heavy footstep echo",
+    "large footstep echo garage",
+    "giant footstep"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "ceiling pipe bang",
+    "metal pipe hit echo",
+    "pipe clang"
+   ],
+   "cut": "short"
+  }
+ },
+ "k9h2": {
+  "name": "치인 자",
+  "scream": {
+   "q": [
+    "tire screech",
+    "car skid screech",
+    "tire skid"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "limp dragging footsteps",
+    "dragging foot limp",
+    "foot drag gravel"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "car crash impact",
+    "car collision",
+    "car crash"
+   ],
+   "cut": "short"
+  }
+ },
+ "k9h3": {
+  "name": "압축",
+  "scream": {
+   "q": [
+    "hydraulic press hiss",
+    "hydraulic groan",
+    "hydraulic machine"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "heavy thump rolling",
+    "heavy box tumble",
+    "block roll thud"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "metal crush",
+    "car crusher",
+    "metal crunch crushing"
+   ],
+   "cut": "long"
+  }
+ },
+ "k9s1": {
+  "name": "차밑",
+  "scream": {
+   "q": [
+    "whisper hiss",
+    "whispering hiss creepy",
+    "hiss whisper"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "crawling belly concrete",
+    "body crawl concrete",
+    "military crawl"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "car alarm",
+    "car alarm chirp",
+    "car remote lock beep"
+   ],
+   "cut": "short"
+  }
+ },
+ "k9s2": {
+  "name": "덮개",
+  "scream": {
+   "q": [
+    "bat screech",
+    "bat squeal",
+    "bird screech high"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "wing flap",
+    "wings flap large",
+    "flapping wing"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "tarp flap",
+    "tarpaulin flap",
+    "fabric flap wind"
+   ],
+   "cut": "short"
+  }
+ },
+ "k9s3": {
+  "name": "전조등",
+  "scream": {
+   "q": [
+    "engine rev growl",
+    "car engine rev",
+    "engine growl"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "tire rolling gravel",
+    "car tire crawl",
+    "slow car roll gravel"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "car horn honk",
+    "car horn",
+    "horn beep"
+   ],
+   "cut": "short"
+  }
+ },
+ "k9s4": {
+  "name": "보닛",
+  "scream": {
+   "q": [
+    "engine rattle steam hiss",
+    "engine steam hiss",
+    "radiator steam"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "metal clatter step",
+    "metal scrap clatter",
+    "sheet metal rattle"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "car hood slam",
+    "hood close",
+    "car door slam"
+   ],
+   "cut": "short"
+  }
+ },
+ "k10h1a": {
+  "name": "뜬눈 A",
+  "scream": {
+   "q": [
+    "high pitched ringing screech",
+    "high shriek",
+    "piercing scream"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "heavy boots theater carpet",
+    "boots carpet step"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "wet eyelid squelch",
+    "eyeball squish",
+    "wet squish"
+   ],
+   "cut": "short"
+  }
+ },
+ "k10h1b": {
+  "name": "뜬눈 B",
+  "scream": {
+   "q": [
+    "deep groan moan",
+    "low groan monster",
+    "deep moan"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "dragging hook metal floor",
+    "metal hook drag",
+    "chain drag floor"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "camera shutter",
+    "camera shutter click",
+    "old camera shutter"
+   ],
+   "cut": "short"
+  }
+ },
+ "k10h1c": {
+  "name": "뜬눈 C",
+  "scream": {
+   "q": [
+    "gasp rasp breath",
+    "raspy gasp",
+    "rasping breath"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "bone clack wooden floor",
+    "knock wood floor",
+    "wood tap hollow"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "eye pop suction",
+    "suction pop",
+    "plunger pop"
+   ],
+   "cut": "short"
+  }
+ },
+ "k10s1": {
+  "name": "잔상",
+  "scream": {
+   "q": [
+    "film static hiss",
+    "static noise burst",
+    "analog static"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "paper fan flutter",
+    "paper flutter flap",
+    "fan flutter"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "tv static glitch",
+    "glitch noise",
+    "vhs glitch"
+   ],
+   "cut": "short"
+  }
+ },
+ "k10s2": {
+  "name": "만석",
+  "scream": {
+   "q": [
+    "theater seat chorus creak",
+    "cinema chatter murmur",
+    "audience murmur"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "theater seat flip up creak",
+    "seat flip creak",
+    "folding seat"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "popcorn crunch",
+    "popcorn eating",
+    "crunching snack"
+   ],
+   "cut": "short"
+  }
+ },
+ "k10s3": {
+  "name": "영사기사",
+  "scream": {
+   "q": [
+    "film reel whine",
+    "projector motor whine",
+    "tape rewind whine"
+   ],
+   "cut": "long"
+  },
+  "steps": {
+   "q": [
+    "metal reel clatter",
+    "film reel clank",
+    "metal canister clatter"
+   ],
+   "cut": "onset"
+  },
+  "special": {
+   "q": [
+    "film projector running",
+    "movie projector",
+    "projector 16mm"
+   ],
+   "cut": "long"
+  }
+ }
+}

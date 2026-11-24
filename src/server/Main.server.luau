@@ -11,6 +11,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local SoundBus = require(script.Parent.SoundBus)
 local Round = require(script.Parent.Round)
+local RateLimit = require(script.Parent.RateLimit)
+local RateLimit = require(script.Parent.RateLimit)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local SonarFire = Remotes:WaitForChild("SonarFire") :: RemoteEvent
@@ -41,11 +43,23 @@ Sonar.accepted = accepted
 -- ── 시선 공유(관전용): 각 플레이어가 보내는 카메라 방향(좌우 yaw·위아래 pitch, 라디안)을 속성으로 퍼뜨린다 ──
 local LookShare = Remotes:WaitForChild("LookShare") :: RemoteEvent
 LookShare.OnServerEvent:Connect(function(player: Player, yaw: any, pitch: any)
+	if not RateLimit.allow(player, "LookShare", 15, 20) then
+		return -- (클라이언트는 초당 최대 10번 보낸다)
+	end
+	if not RateLimit.allow(player, "LookShare", 15, 20) then
+		return -- (클라이언트는 초당 최대 10번 보낸다)
+	end
 	if type(yaw) ~= "number" or type(pitch) ~= "number" or yaw ~= yaw or pitch ~= pitch then
 		return
 	end
-	player:SetAttribute("LookYaw", math.clamp(yaw, -10, 10))
-	player:SetAttribute("LookPitch", math.clamp(pitch, -1.5, 1.5))
+	-- (같은 값이면 속성을 다시 쓰지 않는다: 복제 트래픽)
+	local y, p = math.clamp(yaw, -10, 10), math.clamp(pitch, -1.5, 1.5)
+	if player:GetAttribute("LookYaw") ~= y then
+		player:SetAttribute("LookYaw", y)
+	end
+	if player:GetAttribute("LookPitch") ~= p then
+		player:SetAttribute("LookPitch", p)
+	end
 end)
 
 SonarFire.OnServerEvent:Connect(function(player: Player)
@@ -79,6 +93,12 @@ end)
 -- ── 이동 모드(소리·시점 표시용 속성. 실제 소음 크기는 서버가 속도로 판정) ──
 local MODES = { Walk = Config.Move.Walk, Run = Config.Move.Run, Crouch = Config.Move.Crouch }
 SetMoveMode.OnServerEvent:Connect(function(player: Player, mode: any)
+	if not RateLimit.allow(player, "SetMoveMode", 8, 12) then
+		return
+	end
+	if not RateLimit.allow(player, "SetMoveMode", 8, 12) then
+		return
+	end
 	if type(mode) ~= "string" or not MODES[mode] then
 		return
 	end

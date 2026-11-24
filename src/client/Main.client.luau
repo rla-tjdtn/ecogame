@@ -40,19 +40,53 @@ local CreatureAnim = require(script.Parent:WaitForChild("CreatureAnim"))
 CreatureAnim.onStep = function(model: Model, at: Vector3, hit: number)
 	Audio.monsterFoot(model, at, hit)
 end
+require(script.Parent:WaitForChild("SpriteAnim")).onStep = function(model: Model, at: Vector3, hit: number)
+	Audio.monsterFoot(model, at, hit)
+end
 local Reveal = require(script.Parent:WaitForChild("Reveal"))
 local MobileUI = require(script.Parent:WaitForChild("MobileUI"))
-Pulses.onReach = MapView.onReach
+local Perf = require(script.Parent:WaitForChild("Perf"))
+local NetStat = require(script.Parent:WaitForChild("NetStat"))
+Pulses.onReach = Perf.wrap("map.onReach", MapView.onReach)
 -- 음파가 시작될 때(내 것·팀원 것): 도플갱어 눈 빛 + 맞은 괴물은 10초 동안 지금 모습 그대로 보이게(굳은 잔상 선은 그리지 않는다)
 -- (사람 모습 도플갱어는 팀원처럼 윤곽선으로 늘 보이므로 음파 선을 그리지 않는다)
 World.skipMonster = function(m: Model): boolean
 	return Reveal.has(m) or Reveal.disguised(m) or m:GetAttribute("SonarVeil") == true -- (5장 지움: 첫 음파엔 잔상도 남기지 않음)
 end
 Audio.stepAudible = Reveal.active -- (괴물 발소리는 음파에 걸린 동안만)
-Pulses.onStart = function(origin: Vector3)
-	DoppelFx.onPulse(origin)
-	Reveal.onPulse(origin)
+local SpriteAnim = require(script.Parent:WaitForChild("SpriteAnim"))
+SpriteAnim.visible = Reveal.active -- (시안 그림 괴물은 음파에 드러난 동안만 보인다)
+local RigAnim = require(script.Parent:WaitForChild("RigAnim"))
+RigAnim.visible = Reveal.active
+RigAnim.onStep = function(model: Model, at: Vector3, hit: number)
+	Audio.monsterFoot(model, at, hit)
 end
+-- 점프스케어: 잡은 괴물의 자기 괴성 + (시안 그림 괴물이면) 그 괴물의 덮침 그림
+local function playScare(data: any)
+	local sprite = nil
+	if typeof(data.creature) == "string" then
+		local url, off, size = SpriteAnim.attackFrame(data.creature)
+		if url and off and size then
+			sprite = { url = url, offset = off, size = size }
+		end
+	end
+	JumpScare.play(function()
+		local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
+		local voice = if typeof(data.voice) == "string" then data.voice
+			elseif data.why == "doppel" then "Doppel"
+			elseif data.why == "flower" then "Flower"
+			else tostring((math.max(1, si) - 1) % 5 + 1)
+		Audio.play(Audio.voiceName(voice, "Scream") or "MonsterAlert", nil, 0.03, 0.8)
+	end, data.why, sprite)
+end
+Pulses.onStart = Perf.wrap("pulse.onStart", function(origin: Vector3)
+	local t0 = os.clock()
+	DoppelFx.onPulse(origin)
+	local t1 = os.clock()
+	Reveal.onPulse(origin)
+	Perf.add("pulse.onStart.doppel", t1 - t0)
+	Perf.add("pulse.onStart.reveal", os.clock() - t1)
+end)
 
 local player = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -140,6 +174,7 @@ local function fire(): boolean
 	lastFire = now
 	Pulses.start(head.Position, char, true)
 	SonarFire:FireServer()
+	NetStat.count("send.SonarFire")
 	Audio.sonar(true, head.Position)
 	return true
 end
@@ -150,6 +185,8 @@ local function charOf(userId: number): Model?
 end
 
 SonarPulse.OnClientEvent:Connect(function(userId: number, origin: Vector3, fromModel: Model?)
+	Perf.count("net.SonarPulse")
+	NetStat.count("recv.SonarPulse")
 	if typeof(origin) ~= "Vector3" then
 		return
 	end
@@ -220,12 +257,27 @@ ProximityPromptService.PromptShown:Connect(function(prompt)
 		end
 		local conn = prompt:GetPropertyChangedSignal("ActionText"):Connect(refresh)
 		local conn2 = player:GetAttributeChangedSignal("Hidden"):Connect(refresh)
-		prompt.PromptHidden:Once(function()
+		local conn3: RBXScriptConnection? = nil
+		local hiddenConn: RBXScriptConnection? = nil
+		local function gone()
 			conn:Disconnect()
 			conn2:Disconnect()
+			if conn3 then
+				conn3:Disconnect()
+			end
+			if hiddenConn then
+				hiddenConn:Disconnect()
+			end
 			if shownPrompt == prompt then
 				shownPrompt = nil
 				UI.setPrompt(nil)
+			end
+		end
+		hiddenConn = prompt.PromptHidden:Once(gone)
+		-- (안내가 떠 있는 채로 스테이지가 지워지면 PromptHidden 이 오지 않는다: 연결이 남지 않게)
+		conn3 = prompt.AncestryChanged:Connect(function()
+			if not prompt:IsDescendantOf(workspace) then
+				gone()
 			end
 		end)
 	end
@@ -287,6 +339,8 @@ player.CharacterAdded:Connect(function()
 end)
 
 RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
+	NetStat.count("recv.RoundEvent")
+	NetStat.count("recv.RoundEvent." .. tostring(kind))
 	if kind == "Start" then
 		UI.hideOverlay(false)
 		UI.setStage(data.name)
@@ -298,16 +352,15 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		-- 도플갱어의 사람 모습이 터진다(조각이 흩날림)
 		DoppelFx.burst(data)
 		Audio.doppelBurst(data.at)
+	elseif kind == "Scare" then
+		-- 서브 괴물(잡혀도 죽지 않는 기믹): 점프스케어만
+		playScare({ why = "monster", creature = data.creature, voice = data.voice })
+		UI.hint("…놓아줬다. 아직 살아 있다", 3)
 	elseif kind == "LifeLost" then
 		-- 잡혔지만 목숨이 남았다: 점프스케어 → 잠깐 검은 화면 → 시작 방에서 다시(캐릭터가 생기면 화면이 걷힌다)
 		if data.userId == player.UserId then
 			if data.why == "monster" or data.why == "doppel" or data.why == "flower" then
-				JumpScare.play(function()
-					-- 잡은 괴물의 자기 괴성(도플갱어 / 그 스테이지 메인 괴물)
-					local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
-					local voice = if data.why == "doppel" then "Doppel" elseif data.why == "flower" then "Flower" else tostring((math.max(1, si) - 1) % 5 + 1)
-					Audio.play(Audio.voiceName(voice, "Scream") or "MonsterAlert", nil, 0.03, 0.8)
-				end, data.why)
+				playScare(data)
 				task.wait(JumpScare.Duration)
 			end
 			if player:GetAttribute("Status") == "Respawning" then
@@ -320,12 +373,7 @@ RoundEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	elseif kind == "Died" then
 		if data.userId == player.UserId and (data.why == "monster" or data.why == "doppel" or data.why == "flower") then
 			-- 점프스케어: 괴물 얼굴이 확 뜬 뒤 YOU DIED (도플갱어는 머리~배가 세로로 벌어진 입)
-			JumpScare.play(function()
-				-- 잡은 괴물의 자기 괴성(도플갱어 / 그 스테이지 메인 괴물)
-				local si = (ReplicatedStorage:GetAttribute("StageIndex") :: number?) or 1
-				local voice = if data.why == "doppel" then "Doppel" elseif data.why == "flower" then "Flower" else tostring((math.max(1, si) - 1) % 5 + 1)
-				Audio.play(Audio.voiceName(voice, "Scream") or "MonsterAlert", nil, 0.03, 0.8)
-			end, data.why)
+			playScare(data)
 			task.wait(JumpScare.Duration)
 		end
 		if data.userId == player.UserId then
@@ -391,12 +439,41 @@ end)
 -- 관전 카메라 보간 상태
 local specCF: CFrame? = nil
 local specTarget: Player? = nil
--- 내 시선(카메라 방향)을 초당 최대 10번, 바뀌었을 때만 서버로 보낸다(관전하는 사람이 내 시점 그대로 본다)
+-- 내 시선(카메라 방향)을 초당 최대 10번, 바뀌었을 때만 서버로 보낸다(관전하는 사람이 내 시점 그대로 본다).
+-- 관전 중인 사람(죽었거나 탈출한 다른 플레이어)이 있을 때만 보낸다: 아무도 관전하지 않으면 보낼 이유가 없다.
+-- (관전이 시작되면 마지막으로 보낸 값과 다르면 바로 다시 보낸다)
 local LookShare = Remotes:WaitForChild("LookShare") :: RemoteEvent
 local lookSentAt, lookYaw, lookPitch = 0, 99, 99
+local watchers = 0 -- 관전 중인 다른 플레이어 수(Status 속성 변화로 센다)
+local function countWatchers()
+	local n = 0
+	for _, p in Players:GetPlayers() do
+		local st = p:GetAttribute("Status")
+		if p ~= player and (st == "Dead" or st == "Escaped") then
+			n += 1
+		end
+	end
+	watchers = n
+end
+local function watchStatus(p: Player)
+	if p ~= player then
+		p:GetAttributeChangedSignal("Status"):Connect(countWatchers)
+	end
+end
+for _, p in Players:GetPlayers() do
+	watchStatus(p)
+end
+Players.PlayerAdded:Connect(function(p)
+	watchStatus(p)
+	countWatchers()
+end)
+Players.PlayerRemoving:Connect(function()
+	task.defer(countWatchers)
+end)
+countWatchers()
 local function shareLook(now: number)
 	local cam = workspace.CurrentCamera
-	if not cam or now - lookSentAt < 0.1 or player:GetAttribute("Status") ~= "Alive" then
+	if watchers == 0 or not cam or now - lookSentAt < 0.1 or player:GetAttribute("Status") ~= "Alive" then
 		return
 	end
 	local lv = cam.CFrame.LookVector
@@ -408,26 +485,54 @@ local function shareLook(now: number)
 	end
 	lookSentAt, lookYaw, lookPitch = now, yaw, pitch
 	LookShare:FireServer(yaw, pitch)
+	NetStat.count("send.LookShare")
 end
+-- (측정) 복제되어 들어오는 속성 변경 수(플레이어·ReplicatedStorage)
+local function watchAttrs(inst: Instance, prefix: string)
+	inst.AttributeChanged:Connect(function(name)
+		NetStat.count(prefix .. name)
+	end)
+end
+watchAttrs(ReplicatedStorage, "attr.RS.")
+for _, p in Players:GetPlayers() do
+	watchAttrs(p, if p == player then "attr.me." else "attr.other.")
+end
+Players.PlayerAdded:Connect(function(p)
+	watchAttrs(p, "attr.other.")
+end)
 RunService.RenderStepped:Connect(function(dt)
 	local now = os.clock()
 	-- 마우스 커서: 1인칭에서는 숨긴다(조준점만). 로비 메뉴(Tab)를 열었을 때만 보인다
-	UserInputService.MouseIconEnabled = LobbyUI.mouseFree()
+	local free = LobbyUI.mouseFree()
+	if UserInputService.MouseIconEnabled ~= free then
+		UserInputService.MouseIconEnabled = free
+	end
 	table.insert(frameTimes, dt)
 	if #frameTimes > 240 then
 		table.remove(frameTimes, 1)
 	end
 	Movement.update(dt)
+	local tp = os.clock()
+	debug.profilebegin("sonar.pulses")
 	Pulses.update(now)
+	debug.profileend()
 	local tl = os.clock()
+	debug.profilebegin("sonar.lines")
 	Lines.update(now)
+	debug.profileend()
+	local te = os.clock()
 	prof.pulses += tl - now
-	prof.lines += os.clock() - tl
+	prof.lines += te - tl
 	prof.frames += 1
-	table.insert(luaTimes, os.clock() - now)
+	Perf.add("move.update", tp - now)
+	Perf.add("pulses.update", tl - tp)
+	Perf.add("lines.update", te - tl)
+	Perf.frame(dt, te - now)
+	table.insert(luaTimes, te - now)
 	if #luaTimes > 240 then
 		table.remove(luaTimes, 1)
 	end
+	local tu = os.clock()
 	UI.setCooldown((now - lastFire) / Config.Sonar.Cooldown)
 	shareLook(now)
 	-- 관전 카메라: 살아 있는 동료의 1인칭 시점
@@ -460,9 +565,15 @@ RunService.RenderStepped:Connect(function(dt)
 			UI.setSpectate("관전할 생존자가 없습니다")
 		end
 	end
+	NetStat.count("ui.frameUs", (os.clock() - tu) * 1e6)
+	NetStat.count("ui.frames")
 end)
 RunService.Heartbeat:Connect(function()
+	debug.profilebegin("audio.update")
+	local t = os.clock()
 	Audio.update()
+	Perf.add("audio.update", os.clock() - t)
+	debug.profileend()
 end)
 
 -- ── 자동 테스트 응답(Studio 테스트 하네스가 만든 TestProbe 가 있을 때만) ──
@@ -515,6 +626,127 @@ task.spawn(function()
 					outdoor = game:GetService("Lighting").OutdoorAmbient,
 				},
 			}
+		elseif cmd == "perfx" then
+			-- (성능 측정) 프레임 분포·시스템별 비용·메모리·네트워크·선·음파·소리. arg == "reset" 이면 읽은 뒤 비운다
+			local Stats = game:GetService("Stats")
+			local out = Perf.summary()
+			out.lineStats = Lines.stats()
+			out.pulses = Pulses.active()
+			out.pulsesStarted = Pulses.started
+			out.pulseMaxActive = Pulses.maxActive
+			out.pulseCost = Pulses.costStats()
+			out.memMb = Stats:GetTotalMemoryUsageMb()
+			out.luaKb = gcinfo()
+			out.instances = Stats.InstanceCount
+			out.sounds = Audio.live
+			out.soundsPeak = Audio.livePeak
+			out.recvKbps = Stats.DataReceiveKbps
+			out.sendKbps = Stats.DataSendKbps
+			if arg == "reset" then
+				Perf.reset()
+				Pulses.resetCost()
+				Audio.livePeak = Audio.live
+				Lines.maxColor, Lines.maxPlace = 0, 0
+			end
+			return out
+		elseif cmd == "pulseBench" then
+			-- (성능 측정) 가짜 시계로 음파 n 개를 동시에 끝까지 돌린 비용(ms): 여러 번 되풀이해 최소·중앙값 → 다른 프로그램 부하에 덜 흔들린다
+			local at, n, reps = arg.at, arg.n, arg.reps
+			local starts, totals, peaks, waves, shown = {}, {}, {}, {}, 0
+			for _ = 1, reps do
+				Pulses.clear()
+				Lines.clear()
+				task.wait(0.15)
+				local s0 = Lines.shownTotal
+				local c0 = os.clock()
+				for k = 1, n do
+					Pulses.start(at[(k - 1) % #at + 1], player.Character, k == 1)
+				end
+				local c1 = os.clock()
+				local now, peak, wave = c1, 0, 0
+				for f = 1, 300 do
+					now += 1 / 60
+					local a = os.clock()
+					Pulses.update(now)
+					Lines.update(now)
+					local d = os.clock() - a
+					peak = math.max(peak, if f == 1 then d + (c1 - c0) else d)
+					if Pulses.active() > 0 then
+						wave += d
+					end
+					if Pulses.active() == 0 and Lines.stats().active == 0 then
+						break
+					end
+				end
+				table.insert(starts, (c1 - c0) * 1000)
+				table.insert(waves, wave * 1000)
+				table.insert(totals, (os.clock() - c0) * 1000)
+				table.insert(peaks, peak * 1000)
+				shown = Lines.shownTotal - s0
+			end
+			Pulses.clear()
+			Lines.clear()
+			local function mm(t)
+				table.sort(t)
+				return { min = t[1], med = t[(#t + 1) // 2] }
+			end
+			return { start = mm(starts), wave = mm(waves), total = mm(totals), peak = mm(peaks), shown = shown }
+		elseif cmd == "netaudio" then
+			-- (측정) 리모트·속성·소리 통계. arg == "reset" 이면 읽은 뒤 비운다
+			local Stats = game:GetService("Stats")
+			local snap = NetStat.snapshot(arg == "reset")
+			snap.live = Audio.live
+			snap.livePeak = Audio.livePeak
+			snap.memMb = Stats:GetTotalMemoryUsageMb()
+			snap.luaKb = gcinfo()
+			snap.instances = Stats.InstanceCount
+			snap.recvKbps = Stats.DataReceiveKbps
+			snap.sendKbps = Stats.DataSendKbps
+			local n = 0
+			for _, d in workspace:GetDescendants() do
+				if d:IsA("Sound") then
+					n += 1
+				end
+			end
+			snap.soundsInWorkspace = n
+			snap.soundsInSoundService = #game:GetService("SoundService"):GetChildren()
+			if arg == "reset" then
+				Audio.livePeak = Audio.live
+			end
+			return snap
+		elseif cmd == "flood" then
+			-- (측정) 리모트를 한 번에 많이 보낸다(서버 과부하 방어 시험). arg = { remote = 이름, n = 횟수 }
+			local ev = Remotes:FindFirstChild(arg.remote) :: RemoteEvent?
+			if not ev then
+				return false
+			end
+			for k = 1, arg.n do
+				if arg.remote == "LookShare" then
+					ev:FireServer(math.random() * 6 - 3, math.random() - 0.5)
+				elseif arg.remote == "MapShare" then
+					ev:FireServer("sync")
+				elseif arg.remote == "SetMoveMode" then
+					ev:FireServer(if k % 2 == 0 then "Run" else "Walk")
+				elseif arg.remote == "RoomAction" then
+					ev:FireServer(if k % 2 == 0 then "leave" else "create")
+				else
+					ev:FireServer()
+				end
+			end
+			return true
+		elseif cmd == "spin" then
+			-- (측정) 카메라를 계속 돌린다(시선 공유 송신량 측정). arg = 초당 라디안, 0 이면 멈춤
+			local rate = tonumber(arg) or 0
+			RunService:UnbindFromRenderStep("SonarTestSpin")
+			if rate ~= 0 then
+				RunService:BindToRenderStep("SonarTestSpin", Enum.RenderPriority.Camera.Value + 1, function(dt)
+					local cam = workspace.CurrentCamera
+					if cam then
+						cam.CFrame = cam.CFrame * CFrame.Angles(0, rate * dt, 0)
+					end
+				end)
+			end
+			return true
 		elseif cmd == "fire" then
 			return fire()
 		elseif cmd == "lastFail" then
@@ -617,14 +849,25 @@ task.spawn(function()
 			return MobileUI.state()
 		elseif cmd == "reveal" then
 			return Reveal.count()
+		elseif cmd == "revealedModel" then
+			-- (테스트) 이 괴물이 지금 음파에 드러나 보이는가 + 보이는 부품 수
+			local mdl = arg :: Model
+			local vis = 0
+			for _, d in mdl:GetDescendants() do
+				if d:IsA("BasePart") and d.Transparency < 1 and d.Name ~= "HumanoidRootPart" then
+					vis += 1
+				end
+			end
+			return { active = Reveal.active(mdl), visible = vis }
 		elseif cmd == "creature" then
 			-- (테스트) 챕터 괴물 애니메이션 측정: 프레임 수, 최대 관절 각, 착지(소리) 수
 			if arg == "reset" then
 				CreatureAnim.range = 1e9
 				CreatureAnim.reset()
+				RigAnim.reset()
 				return true
 			end
-			return CreatureAnim.stats[arg]
+			return CreatureAnim.stats[arg] or RigAnim.stats[arg] or require(script.Parent:WaitForChild("SpriteAnim")).stats[arg]
 		elseif cmd == "anim" then
 			-- (테스트) 괴물 몸 움직임 측정: 디딘 발 미끄러짐, 걸음 수, 골반 오르내림, 척추 비틀림, 머리 지연, 실제 발소리 수
 			local s = MonsterAnim.summary()

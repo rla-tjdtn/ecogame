@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Builder = require(script.Parent.StageBuilder)
+local HomeProps = require(script.Parent.HomeProps)
 local Doors = require(script.Parent.Doors)
 local SoundBus = require(script.Parent.SoundBus)
 local Monster = require(script.Parent.Monster)
@@ -19,6 +20,7 @@ local Search = require(script.Parent.Search)
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
 local MapShare = Remotes:WaitForChild("MapShare") :: RemoteEvent
+local RateLimit = require(script.Parent.RateLimit)
 
 local Round = {}
 
@@ -27,6 +29,10 @@ Round.explored = {} :: { [number]: boolean }
 MapShare.OnServerEvent:Connect(function(p: Player, data: any)
 	local build = Round.roundId
 	if data == "sync" then
+		-- (팀 기록 전부를 돌려주는 큰 응답: 스테이지를 받을 때 한 번이면 된다)
+		if not RateLimit.allow(p, "MapSync", 0.5, 3) then
+			return
+		end
 		-- 이 사람 지도에 지금까지 팀 기록 전부
 		local all = {}
 		for k in Round.explored do
@@ -37,6 +43,9 @@ MapShare.OnServerEvent:Connect(function(p: Player, data: any)
 	end
 	if type(data) ~= "table" or data.build ~= build or type(data.tiles) ~= "table" then
 		return
+	end
+	if not RateLimit.allow(p, "MapTiles", 4, 10) then
+		return -- (음파가 끝날 때마다 한 번: 1.5초에 한 번 정도)
 	end
 	local fresh = {}
 	for i = 1, math.min(#data.tiles, 800) do
@@ -238,6 +247,24 @@ local function buildLayout(layout: any, label: string)
 	folder:SetAttribute("BuildId", Round.roundId)
 	folder:SetAttribute("BoundsMin", info.bounds.min)
 	folder:SetAttribute("BoundsMax", info.bounds.max)
+	-- 서브 괴물 자리에 맵에 없던 소품(욕조·칠판·풍금·모빌·천장 봉)
+	if label ~= "lobby" then
+		local cl = Round.chapterCreatures()
+		local hm = ReplicatedStorage.Shared:FindFirstChild("CreatureHomes")
+		if cl and hm then
+			local ids = {}
+			for _, e in cl do
+				if e.sub then
+					table.insert(ids, e.id)
+				end
+			end
+			local props = folder:FindFirstChild("Props") or folder
+			local n = HomeProps.place(info, require(hm) :: any, ids, props)
+			if n > 0 then
+				note("home props " .. n)
+			end
+		end
+	end
 	folder.Parent = workspace
 	stageFolder = folder
 	Round.info = info
@@ -301,7 +328,10 @@ function Round.spawnPlayer(p: Player)
 	end)
 end
 
-function Round.kill(p: Player, why: string?)
+function Round.kill(p: Player, why: string?, by: any?)
+	-- by = 잡은 괴물(Monster): 점프스케어에 그 괴물의 그림·괴성
+	local byVoice = by and by.model and by.model:GetAttribute("Voice")
+	local byCreature = by and by.creature
 	if Round.status(p) ~= "Alive" then
 		return
 	end
@@ -320,7 +350,7 @@ function Round.kill(p: Player, why: string?)
 	if lives > 0 and Round.state == "Playing" then
 		setStatus(p, "Respawning")
 		note("life lost " .. p.Name .. " " .. (why or "") .. " left " .. lives)
-		RoundEvent:FireAllClients("LifeLost", { userId = p.UserId, lives = lives, why = why, seconds = Config.Lives.RespawnDelay })
+		RoundEvent:FireAllClients("LifeLost", { userId = p.UserId, lives = lives, why = why, seconds = Config.Lives.RespawnDelay, voice = byVoice, creature = byCreature })
 		local char0 = p.Character
 		if char0 then
 			local root0 = char0:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -346,7 +376,7 @@ function Round.kill(p: Player, why: string?)
 	setStatus(p, "Dead")
 	note("dead " .. p.Name .. " " .. (why or ""))
 	local others = #Round.alivePlayers()
-	RoundEvent:FireAllClients("Died", { userId = p.UserId, solo = #Round.participants() == 1, othersAlive = others, why = why })
+	RoundEvent:FireAllClients("Died", { userId = p.UserId, solo = #Round.participants() == 1, othersAlive = others, why = why, voice = byVoice, creature = byCreature })
 	local char = p.Character
 	if char then
 		local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -475,23 +505,159 @@ local function spreadPick(list: { Vector3 }, placed: { Vector3 }, minD: number):
 end
 local MONSTER_GAP = 70 -- 괴물끼리 처음 자리 사이 최소 거리(스터드)
 
--- 이 챕터에서 켜진 새 괴물들(Config.Creatures): k 번째 메인 괴물 자리를 번갈아 채운다. 없으면 nil(기존 메인 괴물)
-function Round.creatureFor(k: number): string?
+-- 이 챕터의 시안 괴물(Config.Creatures.Chapters): { {id, sub}... } 또는 nil(기존 메인 괴물)
+function Round.chapterCreatures(): { { id: string, sub: boolean } }?
 	local def = Config.Stages[Round.stageIndex]
-	local list = def and (Config.Creatures.Chapters :: any)[def.Id]
-	if not list then
+	local ch = def and Config.Creatures.On and Config.Creatures.Chapters[def.Id]
+	if not ch then
 		return nil
 	end
-	local on = {}
-	for _, id in list do
-		if Config.Creatures.On[id] and Monster.creatureModule(id) then
-			table.insert(on, id)
+	local out = {}
+	-- 3D 메시까지 준비된(ready) 괴물만. 메인 괴물이 하나도 준비되지 않았으면 이 챕터는 예전 괴물 그대로
+	local function ok(id: string): boolean
+		local mod = Monster.creatureModule(id)
+		return mod ~= nil and (mod.ready == nil or mod.ready())
+	end
+	local mains = 0
+	for _, id in ch.main do
+		if ok(id) then
+			table.insert(out, { id = id, sub = false })
+			mains += 1
 		end
 	end
-	if #on == 0 then
+	if mains == 0 then
 		return nil
 	end
-	return on[(k - 1) % #on + 1]
+	for _, id in ch.sub do
+		if ok(id) then
+			table.insert(out, { id = id, sub = true })
+		end
+	end
+	return out
+end
+function Round.creatureFor(_k: number): string?
+	return nil -- (예전 방식: 메인 괴물 자리를 번갈아 채움. 이제 chapterCreatures 가 따로 띄운다)
+end
+
+-- 메인 괴물 구역: 맵을 긴 변 쪽으로 n 등분(4마리면 2×2), 이웃 구역과 살짝(Overlap) 겹치게
+type Zone = { x0: number, x1: number, z0: number, z1: number, y0: number?, y1: number? }
+local function mainZones(nodes: { Vector3 }, n: number): { Zone }
+	local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
+	for _, p in nodes do
+		x0, x1 = math.min(x0, p.X), math.max(x1, p.X)
+		z0, z1 = math.min(z0, p.Z), math.max(z1, p.Z)
+	end
+	local cols, rows = n, 1
+	if n == 4 then
+		cols, rows = 2, 2
+	end
+	if z1 - z0 > x1 - x0 then
+		cols, rows = rows, cols
+	end
+	local cw, rd = (x1 - x0) / cols, (z1 - z0) / rows
+	local ox, oz = cw * Config.Creatures.Overlap, rd * Config.Creatures.Overlap
+	local out = {}
+	for rr = 0, rows - 1 do
+		for c = 0, cols - 1 do
+			table.insert(out, { x0 = x0 + c * cw - ox, x1 = x0 + (c + 1) * cw + ox, z0 = z0 + rr * rd - oz, z1 = z0 + (rr + 1) * rd + oz })
+		end
+	end
+	return out
+end
+
+-- 서브 괴물 자기 방(Shared/CreatureHomes: 칸 좌표 사각형 + 층): 방 + 둘레 HomeMargin 칸
+local function homeZone(id: string, nodes: { Vector3 }): Zone?
+	local ok, H = pcall(require, ReplicatedStorage.Shared:FindFirstChild("CreatureHomes") :: ModuleScript)
+	local h = ok and (H :: any)[id]
+	if not h then
+		return nil
+	end
+	local T, m = Builder.Tile, Config.Creatures.HomeMargin
+	local z: Zone = { x0 = (h.rect[1] - 1 - m) * T, x1 = (h.rect[3] + m) * T, z0 = (h.rect[2] - 1 - m) * T, z1 = (h.rect[4] + m) * T }
+	-- 층: 맵에서 가장 낮은 배회 지점 + 8 스터드를 경계로 위층(upper) / 아래층(lower). 없으면 층 구분 없음
+	local low = math.huge
+	for _, p in nodes do
+		low = math.min(low, p.Y)
+	end
+	if h.band == "upper" then
+		z.y0, z.y1 = low + 8, math.huge
+	elseif h.band == "lower" then
+		z.y0, z.y1 = -math.huge, low + 8
+	end
+	return z
+end
+
+local function nodesIn(nodes: { Vector3 }, z: Zone): { Vector3 }
+	local out = {}
+	for _, n in nodes do
+		if n.X >= z.x0 and n.X <= z.x1 and n.Z >= z.z0 and n.Z <= z.z1 and (not z.y0 or (n.Y >= z.y0 and n.Y <= (z.y1 :: number))) and not Round.inSafe(n) then
+			table.insert(out, n)
+		end
+	end
+	return out
+end
+
+-- 시안 괴물: 메인은 맵을 나눈 구역 하나씩(시작점이 든 구역은 늦게 채운다), 서브는 생김새에 맞는 자기 방
+function Round.spawnCreatures(list: { { id: string, sub: boolean } }, placed: { Vector3 })
+	local info = Round.info :: Builder.StageInfo
+	local spawnPos = info.spawns[1].Position
+	local mains, subs = {}, {}
+	for _, e in list do
+		table.insert(if e.sub then subs else mains, e)
+	end
+	local zones = mainZones(info.nodes, math.max(1, #mains))
+	-- 시작점에서 먼 구역부터 메인 괴물에게
+	table.sort(zones, function(a, b)
+		local ca = Vector3.new((a.x0 + a.x1) / 2, 0, (a.z0 + a.z1) / 2)
+		local cb = Vector3.new((b.x0 + b.x1) / 2, 0, (b.z0 + b.z1) / 2)
+		local s = Vector3.new(spawnPos.X, 0, spawnPos.Z)
+		return (ca - s).Magnitude > (cb - s).Magnitude
+	end)
+	local function spawnOne(e: { id: string, sub: boolean }, z: Zone, label: string)
+		local inZ = nodesIn(info.nodes, z)
+		local far = {}
+		for _, n in inZ do
+			if (n - spawnPos).Magnitude >= Config.Monster.MinSpawnDistance * 0.6 then
+				table.insert(far, n)
+			end
+		end
+		local pool = if #far > 0 then far elseif #inZ > 0 then inZ else info.nodes
+		local pick = spreadPick(pool, placed, if e.sub then 12 else 40)
+		if e.sub and #inZ > 0 then
+			-- 서브 괴물: 자기 자리 한가운데에서 시작
+			local c = Vector3.new((z.x0 + z.x1) / 2, 0, (z.z0 + z.z1) / 2)
+			local bd = math.huge
+			for _, n in inZ do
+				local d = (Vector3.new(n.X, 0, n.Z) - c).Magnitude
+				if d < bd then
+					pick, bd = n, d
+				end
+			end
+		end
+		local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player, by)
+			Round.kill(player, "monster", by)
+		end, Round.stageIndex, nil, e.id)
+		m.route = info.route
+		;(m :: any).territory = if #inZ > 0 then z else nil
+		m.model:SetAttribute("Zone", label)
+		m.model:SetAttribute("Sub", e.sub)
+		table.insert(placed, pick)
+		table.insert(Round.monsters, m)
+		m:run()
+	end
+	for k, e in mains do
+		spawnOne(e, zones[k], "main" .. k)
+	end
+	for _, e in subs do
+		local z = homeZone(e.id, info.nodes)
+		if z then
+			spawnOne(e, z, "home " .. e.id)
+		else
+			-- (방이 정해지지 않았으면 맵 아무 곳)
+			spawnOne(e, { x0 = -math.huge, x1 = math.huge, z0 = -math.huge, z1 = math.huge }, "free " .. e.id)
+		end
+	end
+	note("creatures " .. #mains .. " mains (zones) + " .. #subs .. " subs (homes)")
 end
 
 function Round.spawnMonsters(count: number)
@@ -521,6 +687,11 @@ function Round.spawnMonsters(count: number)
 		local axis = if x1 - x0 >= z1 - z0 then "X" else "Z"
 		local mid = if axis == "X" then (x0 + x1) / 2 else (z0 + z1) / 2
 		halves = { { axis = axis, mid = mid, side = -1 }, { axis = axis, mid = mid, side = 1 } }
+	end
+	local cl = Round.chapterCreatures()
+	if cl then
+		Round.spawnCreatures(cl, placed)
+		count = 0
 	end
 	for k = 1, count do
 		-- 멀리 있는 지점들 중 서로 떨어진 곳
@@ -552,8 +723,8 @@ function Round.spawnMonsters(count: number)
 				pick = spreadPick(far, placed, MONSTER_GAP)
 			end
 		end
-		local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player)
-			Round.kill(player, "monster")
+		local m = Monster.new(monsterFolder, pick, info.nodes, info.folder, function(player, by)
+			Round.kill(player, "monster", by)
 		end, Round.stageIndex, nil, Round.creatureFor(k))
 		m.route = info.route
 		;(m :: any).territory = half
@@ -605,7 +776,7 @@ function Round.spawnMonsters(count: number)
 	-- 꽃괴물: 늘 맵 한가운데쯤(안전 구역 밖, 시작점에서 떨어진 곳)에 가만히 서 있게
 	local F = Config.Flower
 	local stageDef = Config.Stages[Round.stageIndex]
-	if F.Enabled and stageDef and table.find(F.Stages, stageDef.Id) then
+	if F.Enabled and stageDef and table.find(F.Stages, stageDef.Id) and not Round.chapterCreatures() then -- (시안 괴물이 나오는 챕터는 꽃괴물 대신 서브 괴물)
 		local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
 		for _, n in info.nodes do
 			x0, x1 = math.min(x0, n.X), math.max(x1, n.X)

@@ -6,6 +6,9 @@
 --   u 세면대 + 거울                             Y 엑스선 촬영대           F 시신 냉장고(3단 문, 벽 줄)
 --   H 약장·차트 선반(양면)                      j 화장실 칸(변기 + 칸막이)  e 엘리베이터 문(벽, 지나감)
 --   M 감시 모니터 벽 / 마취 모니터 대
+--   U CT 촬영기(고리 갠트리 + 환자 테이블)      Q 멈춘 회전문(원통 몸체 + 날개 넷)  g 유리 바람막이·칸막이(틀 + 판)
+--   B 방화 셔터(내려온 철제 셔터, 가로 살)      P 평행봉(재활 보행 훈련)    d 협탁 + 오버베드 테이블
+--   a 약품 카트(서랍 + 바퀴)
 
 local Kit = require(script.Parent.Parent.MapKit)
 
@@ -271,6 +274,144 @@ function P.Monitor(ctx, i: number, j: number)
 	end
 	Kit.cylinder(m, (cf * CFrame.new(1.2, 4.6, 0.2)).Position, (cf * CFrame.new(1.9, 0.6, 0.6)).Position, 0.08, LINE)
 	solid(m, cf, Vector3.new(3.4, 6, 2.2))
+end
+
+-- U CT 촬영기: 여덟 조각 고리(갠트리, 음파에 둥근 고리로 보인다) + 고리를 지나는 환자 테이블 + 받침
+function P.CTScanner(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local cf = CFrame.new(p) -- 고리 면 = YZ, 테이블 = X 방향
+	local m = model(ctx, "CTScanner")
+	local cy, R = 3.6, 2.7
+	for k = 0, 7 do
+		local a = k * math.pi / 4
+		local c = cf * CFrame.new(1.2, cy + math.sin(a) * R, math.cos(a) * R) * CFrame.Angles(a, 0, 0)
+		Kit.box(m, c, Vector3.new(1.6, 1.0, 2.35), SOFT)
+	end
+	Kit.box(m, cf * CFrame.new(1.2, 0.5, 0), Vector3.new(1.8, 1.0, 4.4), SOFT) -- 고리 받침
+	Kit.box(m, cf * CFrame.new(-1.0, 2.9, 0), Vector3.new(6.8, 0.35, 1.5), SOFT) -- 테이블 판(고리 안으로 들어간다)
+	Kit.box(m, cf * CFrame.new(-2.6, 1.35, 0), Vector3.new(2.4, 2.7, 1.2), SOFT) -- 테이블 받침
+	Kit.box(m, cf * CFrame.new(-3.4, 3.2, 0), Vector3.new(0.6, 0.25, 1.2), LINE) -- 머리 받침
+	solid(m, cf, Vector3.new(7.2, 6.6, 6.4))
+end
+
+-- Q 멈춘 회전문: 지붕·바닥 원판, 양옆 곡면 유리(판 셋씩), 가운데 기둥과 날개 넷. 지나갈 수 없다(옆 여닫이문 E 가 출구)
+function P.RevolvingDoor(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "RevolvingDoor")
+	local top = math.min(9.5, ctx.H - 1)
+	local R = 3.6
+	Kit.cylinder(m, p + Vector3.new(0, top, 0), p + Vector3.new(0, top + 0.6, 0), R + 0.3, SOFT) -- 지붕 원판
+	Kit.cylinder(m, p + Vector3.new(0, 0.02, 0), p + Vector3.new(0, 0.18, 0), R, LINE) -- 바닥 원판
+	Kit.cylinder(m, p + Vector3.new(0, 0, 0), p + Vector3.new(0, top, 0), 0.25, SOFT) -- 가운데 기둥
+	for _, s in { 0, 1 } do -- 동·서 곡면 유리(바깥 쪽 반원)
+		for k = -1, 1 do
+			local a = s * math.pi + k * 0.55
+			local c = CFrame.new(p + Vector3.new(math.cos(a) * R, top / 2, math.sin(a) * R)) * CFrame.Angles(0, -a, 0)
+			Kit.box(m, c, Vector3.new(0.12, top, 2.0), LINE)
+		end
+	end
+	local yaw = 0.35 -- 멈춘 날개 각도
+	for k = 0, 3 do
+		local a = yaw + k * math.pi / 2
+		local d = Vector3.new(math.cos(a), 0, math.sin(a))
+		local c = CFrame.lookAt(p + d * (R / 2) + Vector3.new(0, top / 2, 0), p + d * R + Vector3.new(0, top / 2, 0))
+		Kit.box(m, c, Vector3.new(0.12, top - 0.6, R - 0.3), LINE)
+		Kit.box(m, c * CFrame.new(0, 0, 0), Vector3.new(0.3, 0.25, R - 0.3), SOFT) -- 날개 손잡이 가로대
+	end
+	solid(m, CFrame.new(p), Vector3.new(R * 2, top, R * 2))
+end
+
+-- g 유리 바람막이·칸막이: 금속 틀(기둥 둘·위아래 가로대·가운데 띠) + 얇은 판. 이어진 방향으로 한 칸 길이, 막힌다
+function P.GlassScreen(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local axis = runAxis(ctx, i, j, "g")
+	local cf = CFrame.lookAt(p, p + axis) -- 로컬 Z = 이어진 방향
+	local m = model(ctx, "GlassScreen")
+	local L = ctx.T
+	local h = math.min(9, ctx.H - 1)
+	Kit.box(m, cf * CFrame.new(0, h / 2, 0), Vector3.new(0.08, h - 0.4, L - 0.4), LINE) -- 유리판
+	for _, s in { -1, 1 } do
+		Kit.box(m, cf * CFrame.new(0, h / 2, s * (L / 2 - 0.15)), Vector3.new(0.35, h, 0.3), SOFT) -- 기둥
+	end
+	Kit.box(m, cf * CFrame.new(0, h, 0), Vector3.new(0.4, 0.35, L), SOFT)
+	Kit.box(m, cf * CFrame.new(0, 0.2, 0), Vector3.new(0.4, 0.4, L), SOFT)
+	Kit.box(m, cf * CFrame.new(0, 3.4, 0), Vector3.new(0.3, 0.15, L), LINE) -- 손 닿는 높이 띠(부딪힘 방지 표시)
+	solid(m, cf, Vector3.new(0.6, h, L))
+end
+
+-- B 방화 셔터: 천장 셔터 박스에서 바닥까지 내려온 철판 + 가로 살 줄 + 아래 막대. 줄 끝(벽 쪽)에 안내 레일
+function P.FireShutter(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local axis = runAxis(ctx, i, j, "B")
+	local cf = CFrame.lookAt(p, p + axis) -- 로컬 Z = 셔터 줄 방향
+	local m = model(ctx, "FireShutter")
+	local L = ctx.T
+	local h = ctx.H
+	Kit.box(m, cf * CFrame.new(0, h / 2, 0), Vector3.new(0.35, h, L)) -- 철판(음파·소리를 막는다)
+	for k = 1, 7 do -- 가로 살(앞뒤 면에 선이 보이게 살짝 튀어나온 띠)
+		Kit.box(m, cf * CFrame.new(0, k * (h - 1.6) / 8, 0), Vector3.new(0.55, 0.12, L), LINE)
+	end
+	Kit.box(m, cf * CFrame.new(0, h - 0.8, 0), Vector3.new(1.6, 1.6, L), SOFT) -- 셔터 박스
+	Kit.box(m, cf * CFrame.new(0, 0.25, 0), Vector3.new(0.7, 0.5, L), SOFT) -- 아래 막대
+	for _, s in { -1, 1 } do
+		local ni, nj = i + math.round(axis.X) * s, j + math.round(axis.Z) * s
+		if ctx.at(ni, nj) ~= "B" then -- 줄 끝: 벽에 붙은 안내 레일
+			Kit.box(m, cf * CFrame.new(0, h / 2, s * (L / 2 - 0.2)), Vector3.new(0.9, h, 0.4), SOFT)
+		end
+	end
+end
+
+-- P 평행봉: 바닥 판 + 손잡이 봉 둘(이어진 방향) + 기둥
+function P.ParallelBars(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local axis = runAxis(ctx, i, j, "P")
+	local cf = CFrame.lookAt(p, p + axis) -- 로컬 Z = 봉 방향
+	local m = model(ctx, "ParallelBars")
+	local L = ctx.T
+	Kit.box(m, cf * CFrame.new(0, 0.1, 0), Vector3.new(3.4, 0.2, L), LINE)
+	for _, x in { -1.2, 1.2 } do
+		Kit.cylinder(m, (cf * CFrame.new(x, 3.0, -L / 2)).Position, (cf * CFrame.new(x, 3.0, L / 2)).Position, 0.12, SOFT)
+		for _, z in { -L / 4, L / 4 } do
+			Kit.cylinder(m, (cf * CFrame.new(x, 0.2, z)).Position, (cf * CFrame.new(x, 3.0, z)).Position, 0.1, LINE)
+		end
+	end
+	solid(m, cf, Vector3.new(3.4, 3.2, L))
+end
+
+-- d 협탁 + 오버베드 테이블: 벽 쪽 작은 서랍장(서랍 선 둘) + 바퀴 받침의 ㄱ자 식사 테이블
+function P.Bedside(ctx, i: number, j: number)
+	local cf = againstWall(ctx, i, j)
+	local m = model(ctx, "Bedside")
+	local z = ctx.T / 2 - 1.3
+	Kit.box(m, cf * CFrame.new(0, 1.4, z), Vector3.new(1.9, 2.8, 1.9), SOFT)
+	for k = 1, 2 do
+		Kit.box(m, cf * CFrame.new(0, k * 0.9, z - 0.97), Vector3.new(1.6, 0.08, 0.05), LINE)
+	end
+	Kit.box(m, cf * CFrame.new(0, 3.05, z), Vector3.new(0.5, 0.5, 0.5), LINE) -- 컵·약통
+	local tz = z - 2.4
+	Kit.box(m, cf * CFrame.new(-1.1, 0.12, tz), Vector3.new(0.5, 0.24, 2.2), LINE) -- 바퀴 받침
+	Kit.cylinder(m, (cf * CFrame.new(-1.1, 0.2, tz)).Position, (cf * CFrame.new(-1.1, 3.6, tz)).Position, 0.1, LINE)
+	Kit.box(m, cf * CFrame.new(0, 3.7, tz), Vector3.new(2.8, 0.15, 1.3), SOFT) -- 식사 판
+	solid(m, cf * CFrame.new(0, 0, z - 1), Vector3.new(3, 3.8, 3.6))
+end
+
+-- a 약품 카트: 서랍 몸체(서랍 선 셋) + 위 쟁반 테 + 손잡이 + 바퀴 넷
+function P.MedCart(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local cf = CFrame.new(p) * CFrame.Angles(0, ctx.hash(i, j, 91) * math.pi, 0)
+	local m = model(ctx, "MedCart")
+	Kit.box(m, cf * CFrame.new(0, 2.0, 0), Vector3.new(3.0, 2.8, 2.0), SOFT)
+	for k = 1, 3 do
+		Kit.box(m, cf * CFrame.new(0, 0.9 + k * 0.7, -1.02), Vector3.new(2.7, 0.08, 0.05), LINE)
+	end
+	Kit.box(m, cf * CFrame.new(0, 3.55, 0), Vector3.new(3.2, 0.3, 2.2), LINE) -- 쟁반 테
+	Kit.cylinder(m, (cf * CFrame.new(-1.3, 3.5, 1.3)).Position, (cf * CFrame.new(1.3, 3.5, 1.3)).Position, 0.09, LINE) -- 손잡이
+	for _, x in { -1.2, 1.2 } do
+		for _, zz in { -0.75, 0.75 } do
+			Kit.cylinder(m, (cf * CFrame.new(x - 0.1, 0.3, zz)).Position, (cf * CFrame.new(x + 0.1, 0.3, zz)).Position, 0.3, LINE)
+		end
+	end
+	solid(m, cf, Vector3.new(3.2, 3.8, 2.6))
 end
 
 return P

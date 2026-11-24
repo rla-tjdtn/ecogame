@@ -1,0 +1,6 @@
+{
+ "k3h2": { "split": true, "splitThin": true },
+ "k4h3": { "split": true, "splitThin": true },
+ "k4s1": { "maxBones": 400, "sigma": 0.02 },
+ "k4s4": { "split": true }
+}

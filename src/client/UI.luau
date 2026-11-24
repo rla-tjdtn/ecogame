@@ -110,8 +110,14 @@ local function tween(obj: Instance, t: number, props: { [string]: any })
 	TweenService:Create(obj, TweenInfo.new(t, Enum.EasingStyle.Sine), props):Play()
 end
 
+local shownFrac = -1
 function UI.setCooldown(frac: number)
-	barFill.Size = UDim2.fromScale(math.clamp(frac, 0, 1), 1)
+	frac = math.clamp(frac, 0, 1)
+	if frac == shownFrac then
+		return -- (다 찼으면 매 프레임 다시 그리지 않는다)
+	end
+	shownFrac = frac
+	barFill.Size = UDim2.fromScale(frac, 1)
 	barFill.BackgroundTransparency = if frac >= 1 then 0.6 else 0.35
 end
 
@@ -142,8 +148,11 @@ local nearText: string? = nil
 local lookText: string? = nil
 local function showPrompt()
 	local text = lookText or nearText
-	prompt.Visible = text ~= nil
-	prompt.Text = text or ""
+	local t = text or ""
+	if prompt.Text ~= t or prompt.Visible ~= (text ~= nil) then
+		prompt.Visible = text ~= nil
+		prompt.Text = t
+	end
 end
 
 function UI.setPrompt(text: string?)
@@ -183,7 +192,17 @@ function UI.liftOverlay()
 	tween(ovSub, 1.2, { TextTransparency = 1 })
 end
 
+local spectateShown: string? = nil
 function UI.setSpectate(text: string?)
+	if text == spectateShown then
+		-- (관전 중 매 프레임 같은 글을 다시 쓰지 않는다. 다른 화면이 조준점을 다시 켰으면 끄기만)
+		if text and dot.Visible then
+			dot.Visible = false
+			barBack.Visible = false
+		end
+		return
+	end
+	spectateShown = text
 	spectate.Visible = text ~= nil
 	spectate.Text = text or ""
 	if text then

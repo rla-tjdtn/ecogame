@@ -16,11 +16,12 @@ local S = Config.Sonar
 local TAGS = Config.Tags
 local SECONDS = (S :: any).MonsterRevealSeconds or 10
 
-type Entry = { from: number, to: number, parts: { BasePart }, boxes: { SelectionBox }, hl: Highlight?, ver: number, on: boolean }
+type Entry = { from: number, to: number, parts: { BasePart }, boxes: { SelectionBox }, hl: Highlight?, ver: number, on: boolean, dark: boolean? }
 local revealed: { [Model]: Entry } = {}
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Include
+rayParams.RespectCanCollide = true -- (서버 괴물 소리 판정과 같게: 부딪히지 않는 장식은 벽으로 세지 않는다)
 local function wallsBetween(a: Vector3, b: Vector3): number
 	local stage = workspace:FindFirstChild("Stage")
 	if not stage then
@@ -97,7 +98,12 @@ local function show(e: Entry, on: boolean)
 	e.on = on
 	for _, p in e.parts do
 		if p.Parent and p.Name ~= "Eye" then -- (도플갱어 눈은 DoppelFx 가 따로 빛나게 한다)
-			if on then
+			if on and e.dark then
+				-- 3D 시안 괴물: 메시 정점 색(검은 몸 + 시안 흰 선)을 괴물 몸에 붙은 빛으로 비추고 + 흰 윤곽선(Highlight)
+				p.Material = Enum.Material.SmoothPlastic
+				p.Color = Color3.new(1, 1, 1)
+				p.Transparency = 0
+			elseif on then
 				p.Material = Enum.Material.Neon
 				p.Color = LINE
 				p.Transparency = 0
@@ -111,6 +117,12 @@ local function show(e: Entry, on: boolean)
 	end
 	if e.hl then
 		e.hl.Enabled = on
+		local adorn = e.hl.Adornee
+		local root = if adorn and adorn:IsA("Model") then adorn.PrimaryPart else nil
+		local light = root and root:FindFirstChild("RevealLight") :: PointLight?
+		if light then
+			light.Enabled = on
+		end
 	end
 end
 
@@ -154,6 +166,35 @@ local function collect(m: Model, e: Entry)
 		hl.Enabled = false
 		hl.Parent = m
 		e.hl = hl
+	elseif m:GetAttribute("Rig") == 4 and m:FindFirstChild("Mesh") then
+		e.dark = true
+		for _, d in (m:FindFirstChild("Mesh") :: Instance):GetDescendants() do
+			if d:IsA("MeshPart") then
+				table.insert(e.parts, d)
+			end
+		end
+		local hl = Instance.new("Highlight")
+		hl.Name = "RevealOutline"
+		hl.Adornee = m
+		hl.FillTransparency = 1
+		hl.OutlineColor = Color3.new(1, 1, 1)
+		hl.OutlineTransparency = 0.05
+		hl.DepthMode = Enum.HighlightDepthMode.Occluded
+		hl.Enabled = false
+		hl.Parent = m
+		e.hl = hl
+		-- 맵은 캄캄하다(Lighting 0): 괴물 몸만 비추는 빛(맵 벽은 투명이라 비춰지지 않는다)
+		local root = m.PrimaryPart
+		if root and not root:FindFirstChild("RevealLight") then
+			local size = m:GetExtentsSize()
+			local light = Instance.new("PointLight")
+			light.Name = "RevealLight"
+			light.Range = math.clamp(math.max(size.X, size.Y, size.Z) * 1.2, 8, 30)
+			light.Brightness = 3
+			light.Shadows = false
+			light.Enabled = false
+			light.Parent = root
+		end
 	else
 		for _, d in m:GetDescendants() do
 			if d:IsA("BasePart") and CollectionService:HasTag(d, TAGS.Renderable) then

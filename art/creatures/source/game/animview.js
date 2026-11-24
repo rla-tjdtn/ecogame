@@ -1,0 +1,27 @@
+// 뼈 움직임 미리보기: node animview.js <id> → out/mesh/<id>_anim.png (걷기 4장 · 추격 · 덮침, 3/4 앞에서·옆에서)
+const fs=require('fs'),path=require('path'),{execFileSync}=require('child_process');
+const id=process.argv[2];const D=JSON.parse(fs.readFileSync(path.join(__dirname,'out/mesh',id+'_anim.json'),'utf8'));
+const html=`<!doctype html><body style="margin:0;background:#05070a"><canvas id=c width=1800 height=800></canvas><script>
+const D=${JSON.stringify(D)};const NB=D.bones.length;const gl=document.getElementById('c').getContext('webgl2',{antialias:true});
+const vs=\`#version 300 es
+in vec3 p;in vec3 n;in vec4 j;in vec4 w;in float cl;out float vc;uniform mat4 B[${D.bones.length+1}];uniform mat4 M;out vec3 vn;void main(){mat4 S=B[int(j.x)]*w.x+B[int(j.y)]*w.y+B[int(j.z)]*w.z+B[int(j.w)]*w.w;vec4 q=S*vec4(p,1);vn=mat3(S)*n;vc=cl;gl_Position=M*q;}\`;
+const fs=\`#version 300 es
+precision highp float;in vec3 vn;in float vc;uniform vec3 V;out vec4 o;void main(){vec3 n=normalize(vn);float r=pow(1.-abs(dot(n,V)),3.);float f=max(vc,.04+.3*r);o=vec4(vec3(f*.95,f*.96,f),1);}\`;
+const pr=gl.createProgram();for(const[t,s]of[[gl.VERTEX_SHADER,vs],[gl.FRAGMENT_SHADER,fs]]){const h=gl.createShader(t);gl.shaderSource(h,s);gl.compileShader(h);if(!gl.getShaderParameter(h,gl.COMPILE_STATUS))document.body.innerText=gl.getShaderInfoLog(h);gl.attachShader(pr,h)}gl.linkProgram(pr);gl.useProgram(pr);
+const buf=(a,l,n)=>{const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(a),gl.STATIC_DRAW);const L=gl.getAttribLocation(pr,l);gl.enableVertexAttribArray(L);gl.vertexAttribPointer(L,n,gl.FLOAT,false,0,0)};
+buf(D.P,'p',3);buf(D.N,'n',3);buf(D.J,'j',4);buf(D.W,'w',4);buf(D.C||new Array(D.P.length/3).fill(.07),'cl',1);const ib=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(D.T),gl.STATIC_DRAW);
+let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9];for(let i=0;i<D.P.length;i+=3)for(let k=0;k<3;k++){mn[k]=Math.min(mn[k],D.P[i+k]);mx[k]=Math.max(mx[k],D.P[i+k])}
+const c=mn.map((v,i)=>(v+mx[i])/2),R=Math.max(mx[1]-mn[1],mx[0]-mn[0],mx[2]-mn[2])*.6;
+function bonesOf(F){const out=new Float32Array(16*(NB+1));out.set([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],0);for(let b=0;b<NB;b++){const [x,y,z,w,tx,ty,tz]=F?F[b]:[0,0,0,1,0,0,0];const c=D.bones[b].c;const m=[1-2*(y*y+z*z),2*(x*y+z*w),2*(x*z-y*w),0, 2*(x*y-z*w),1-2*(x*x+z*z),2*(y*z+x*w),0, 2*(x*z+y*w),2*(y*z-x*w),1-2*(x*x+y*y),0, 0,0,0,1];
+ // M = T(c+t) R T(-c)
+ const rc=[m[0]*c[0]+m[4]*c[1]+m[8]*c[2],m[1]*c[0]+m[5]*c[1]+m[9]*c[2],m[2]*c[0]+m[6]*c[1]+m[10]*c[2]];m[12]=c[0]+tx-rc[0];m[13]=c[1]+ty-rc[1];m[14]=c[2]+tz-rc[2];out.set(m,16*(b+1));}return out}
+const views=[[D.walk[0],'걷기 0'],[D.walk[2],'걷기 2'],[D.walk[4],'걷기 4'],[D.walk[6],'걷기 6'],[D.chase[2],'추격'],[D.attack,'덮침']];
+gl.enable(gl.DEPTH_TEST);gl.enable(gl.SCISSOR_TEST);gl.clearColor(.02,.027,.04,1);
+const UB=gl.getUniformLocation(pr,'B'),UM=gl.getUniformLocation(pr,'M'),UV=gl.getUniformLocation(pr,'V');
+for(let row=0;row<2;row++)for(let i=0;i<6;i++){const W=300,H=400,x0=i*W,y0=(1-row)*H;gl.viewport(x0,y0,W,H);gl.scissor(x0,y0,W,H);gl.clear(16640);
+ const yaw=(row?90:200)*Math.PI/180,cy=Math.cos(yaw),sy=Math.sin(yaw),pt=.1,cp=Math.cos(pt),sp=Math.sin(pt),s=1/R,a=H/W;
+ const M=[cy*s*a,-sy*sp*s,sy*cp*-.01,0, 0,cp*s,sp*.01,0, sy*s*a,cy*sp*s,-cy*cp*.01,0, 0,0,0,1];M[12]=-(c[0]*M[0]+c[1]*M[4]+c[2]*M[8]);M[13]=-(c[0]*M[1]+c[1]*M[5]+c[2]*M[9]);
+ gl.uniformMatrix4fv(UM,false,M);gl.uniform3fv(UV,[sy*cp,sp,-cy*cp]);gl.uniformMatrix4fv(UB,false,bonesOf(views[i][0]));gl.drawElements(gl.TRIANGLES,D.T.length,gl.UNSIGNED_INT,0);}
+</script>`;
+const h=path.join(__dirname,'out/mesh',id+'_anim.html');fs.writeFileSync(h,html);
+execFileSync('C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',['--headless=new','--use-angle=d3d11','--hide-scrollbars','--window-size=1800,800',`--screenshot=${path.join(__dirname,'out/mesh',id+'_anim.png')}`,'file:///'+encodeURI(h.split(path.sep).join('/'))],{stdio:'ignore'});

@@ -7,6 +7,7 @@
 --   P 배전반(고압 차단기 함 + 경고 삼각형)            U 냉각 배관 선반(굵은 배관 3단 + 받침)
 --   j 정비 작업대(바이스·공구판)                       Y 공조기(큰 송풍기 둥근 얼굴 + 덕트, 2칸 머리) / y 나머지 칸
 --   h 바닥 경고 줄무늬(지나갈 수 있음)
+--   x 벽 소화전 함(벽에 붙은 얕은 함 + 호스 릴 + 위 비상등, 지나갈 수 있음 — 정비 통로 대피 칸 표시)
 
 local Kit = require(script.Parent.Parent.MapKit)
 
@@ -254,6 +255,24 @@ function Facility.Hazard(ctx, i: number, j: number)
 		local c = p + Vector3.new(k * 2.6, 0.04, 0)
 		Kit.box(m, CFrame.new(c) * CFrame.Angles(0, math.pi / 4, 0), Vector3.new(1.0, 0.08, ctx.T * 0.6), { collide = false, blocks = false })
 	end
+end
+
+-- x 벽 소화전 함: 벽에 붙은 얕은 철제 함(문틀 선) + 안쪽 둥근 호스 릴 + 함 위 비상등. 두께가 얕아 칸은 그대로 지나간다
+function Facility.HoseCabinet(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j)
+	if not side then
+		return
+	end
+	local m = model(ctx, "HoseCabinet")
+	local c = p + side * (ctx.T / 2 - 0.45) + Vector3.new(0, 3.4, 0)
+	local face = CFrame.lookAt(c, c - side)
+	Kit.box(m, face, Vector3.new(3.6, 4.4, 0.9), { name = "Cabinet", blocks = false })
+	Kit.box(m, face * CFrame.new(0, 0, -0.5), Vector3.new(3.0, 3.8, 0.1), { blocks = false, collide = false })
+	local r = (face * CFrame.new(0, -0.2, -0.6)).Position
+	Kit.cylinder(m, r, r - side * 0.3, 1.2, { blocks = false, collide = false, rings = 1 })
+	local l = (face * CFrame.new(0, 2.9, -0.3)).Position
+	Kit.box(m, CFrame.lookAt(l, l - side), Vector3.new(1.6, 0.6, 0.6), { blocks = false, collide = false })
 end
 
 return Facility

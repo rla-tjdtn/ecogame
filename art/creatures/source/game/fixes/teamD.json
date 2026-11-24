@@ -1,0 +1,6 @@
+{
+ "k9s2": { "mod": "set2/d9n_rig" },
+ "k10s1": { "split": true },
+ "k9s4": { "split": true, "splitThin": true },
+ "k10s3": { "split": true }
+}

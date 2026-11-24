@@ -68,8 +68,18 @@ local STEP = 0.55
 function P.Seats(ctx, i: number, j: number)
 	local T = ctx.T
 	local p = base(ctx, i, j)
+	-- 스크린(W)이 북쪽인지 남쪽인지: 좌석 줄을 따라 위아래로 훑어 먼저 만나는 W 쪽을 본다(없으면 북쪽)
+	local dz = -1
+	for k = 1, 14 do
+		if ctx.at(i, j + k) == "W" then
+			dz = 1
+			break
+		elseif ctx.at(i, j - k) == "W" then
+			break
+		end
+	end
 	local n = 1 -- 스크린 쪽 벽까지 칸 수
-	while n < 20 and not ctx.isWall(i, j - n) do
+	while n < 20 and not ctx.isWall(i, j + dz * n) do
 		n += 1
 	end
 	local h = math.max(0, n - 4) * STEP
@@ -77,16 +87,14 @@ function P.Seats(ctx, i: number, j: number)
 	if h > 0.05 then
 		Kit.box(m, CFrame.new(p + Vector3.new(0, h / 2, 0)), Vector3.new(T, h, T), { blocks = false, name = "SeatRiser" })
 	end
-	local cf = CFrame.new(p + Vector3.new(0, h, 0.8)) -- 로컬 -Z = 스크린 쪽
-	Kit.box(m, cf * CFrame.new(0, 0.7, 0), Vector3.new(T - 0.6, 1.4, 1.2), LINE)
-	Kit.box(m, cf * CFrame.new(0, 1.65, 0.2), Vector3.new(T - 0.3, 0.5, 2.0), SOFT)
+	-- 로컬 -Z = 스크린 쪽. 한 칸 = 긴 의자 한 덩어리(방석 + 등받이) + 팔걸이 선 하나, 줄 끝 칸만 바깥 팔걸이를 더한다(부품 4~5개)
+	local cf = CFrame.lookAt(p + Vector3.new(0, h, -dz * 0.8), p + Vector3.new(0, h, -dz * 0.8 + dz))
+	Kit.box(m, cf * CFrame.new(0, 1.0, 0.2), Vector3.new(T - 0.3, 2.0, 2.0), SOFT)
 	Kit.box(m, cf * CFrame.new(0, 3.0, 1.2) * CFrame.Angles(0.18, 0, 0), Vector3.new(T - 0.3, 2.4, 0.35), SOFT)
-	-- 팔걸이(의자 사이): 왼쪽 끝은 늘, 오른쪽 끝은 옆 칸이 좌석이 아닐 때만
-	for k = 0, 3 do
-		if k < 3 or ctx.at(i + 1, j) ~= "q" then
-			local x = -T / 2 + 0.15 + k * (T - 0.3) / 3
-			Kit.box(m, cf * CFrame.new(x, 2.2, 0), Vector3.new(0.3, 0.25, 2.0), LINE)
-		end
+	Kit.box(m, cf * CFrame.new(-T / 2 + 0.15, 2.2, 0), Vector3.new(0.3, 0.25, 2.0), LINE)
+	-- (줄 끝: 이웃 칸이 좌석이 아니면 그쪽 끝에도 팔걸이. 로컬 +X 가 어느 칸인지는 방향에 따라 바뀌므로 양쪽 다 본다)
+	if ctx.at(i + 1, j) ~= "q" or ctx.at(i - 1, j) ~= "q" then
+		Kit.box(m, cf * CFrame.new(T / 2 - 0.15, 2.2, 0), Vector3.new(0.3, 0.25, 2.0), LINE)
 	end
 	solid(m, CFrame.new(p), Vector3.new(T, h + 4, T))
 end
@@ -129,7 +137,7 @@ function P.Screen(ctx, i: number, j: number)
 		if ctx.at(i + s, j) ~= "W" then
 			-- 막 옆 커튼 주름 셋
 			for k = 0, 2 do
-				local q = base(ctx, i, j) + Vector3.new(s * (T / 2 - 0.5 - k * 0.9), (ctx.H - 0.6) / 2, -T / 2 + 0.9)
+				local q = base(ctx, i, j) + Vector3.new(s * (T / 2 - 0.5 - k * 0.9), (ctx.H - 0.6) / 2, -cf.LookVector.Z * (T / 2 - 0.9))
 				Kit.box(m, CFrame.new(q) * CFrame.Angles(0, if k % 2 == 0 then 0.5 else -0.5, 0), Vector3.new(1.1, ctx.H - 1.6, 0.25), LINE)
 			end
 		end
@@ -385,12 +393,20 @@ local SEG = { -- 위, 가운데, 아래, 왼위, 왼아래, 오른위, 오른아
 	{ true, true, true, false, true, true, false },
 	{ true, true, true, false, false, true, true },
 	{ false, true, false, true, false, true, true },
+	{ true, true, true, true, false, false, true },
 }
 function P.HallSign(ctx, i: number, j: number)
 	local cf = againstWall(ctx, i, j, Vector3.new(0, 0, -1)) * CFrame.new(0, 6.6, ctx.T / 2 - 0.5)
 	local m = model(ctx, "HallSign")
 	Kit.box(m, cf, Vector3.new(3.6, 4.6, 0.5), LINE)
-	local n = if i <= 9 then 1 elseif i <= 19 then 2 elseif i <= 30 then 3 else 4
+	-- 상영관 복도(1층 y19~22): 북쪽 벽 = 2·3·4관(x6~16 / 18~28 / 30~40), 남쪽 벽 = 1관(서)·5관(동). i·j 는 1부터
+	local x, y = i - 1, j - 1
+	local n
+	if y >= 21 then
+		n = if x <= 14 then 1 else 5
+	else
+		n = if x <= 16 then 2 elseif x <= 28 then 3 else 4
+	end
 	local s = SEG[n]
 	-- (로컬 -Z 쪽에서 보면 로컬 +X 가 왼쪽)
 	local bars = {
@@ -409,7 +425,9 @@ end
 -- J 영사기: 받침대 + 몸체 + 렌즈(북쪽 영사창) + 필름 릴 두 개 + 영사창 틀
 function P.Projector(ctx, i: number, j: number)
 	local p = base(ctx, i, j)
-	local cf = CFrame.new(p) -- 로컬 -Z = 북쪽(상영관)
+	-- 로컬 -Z = 영사창(상영관 쪽 벽): 북쪽 벽이 있으면 북쪽, 아니면 남쪽(1관·5관 영사실은 남쪽 상영관을 본다)
+	local dz = if ctx.isWall(i, j - 1) or not ctx.isWall(i, j + 1) then -1 else 1
+	local cf = CFrame.lookAt(p, p + Vector3.new(0, 0, dz))
 	local m = model(ctx, "Projector")
 	Kit.box(m, cf * CFrame.new(0, 1.6, 0), Vector3.new(2.4, 3.2, 3.0), { name = "ProjectorStand" })
 	Kit.box(m, cf * CFrame.new(0, 4.4, 0), Vector3.new(1.8, 2.4, 3.6))

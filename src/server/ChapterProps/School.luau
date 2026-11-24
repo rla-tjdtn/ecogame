@@ -5,6 +5,8 @@
 --   W 신발장                  U 화장실 칸                 I 세면대 + 거울           J 실험대(개수대)
 --   Y 업라이트 피아노         e 이젤                      M 방송 콘솔               F 급식 식탁(긴 의자)
 --   V 배식대                  H 서가                      g 농구대(벽)              u 체육관 단상
+--   t 중정 나무(줄기 + 가지)  h 중정 동상(받침대 위 인물)  r 화단(낮은 벽돌 틀)      j 중정 벤치
+--   q 뜀틀·매트 더미          x 트로피 진열장(벽)          w 정수기(벽, 지나감)      P 프로젝터 스크린(벽)
 
 local Kit = require(script.Parent.Parent.MapKit)
 
@@ -340,6 +342,114 @@ function P.Stage(ctx, i: number, j: number)
 	for k = 0, 2 do -- 뒤쪽 막 주름
 		Kit.box(m, cf * CFrame.new(-2.7 + k * 2.7, 3.4 + (ctx.H - 4.6) / 2, -L / 2 + 0.5) * CFrame.Angles(0, if k % 2 == 0 then 0.25 else -0.25, 0), Vector3.new(2.6, ctx.H - 4.6, 0.12), LINE)
 	end
+end
+
+-- t 중정 나무: 굵은 줄기 + 사방 가지(잎 없는 겨울나무 — 음파에 가지 선이 또렷하다)
+function P.Tree(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "Tree")
+	local top = math.min(ctx.H - 0.6, 10.5)
+	Kit.cylinder(m, p, p + Vector3.new(0.3, top * 0.6, 0.2), 0.7, SOFT)
+	local fork = p + Vector3.new(0.3, top * 0.6, 0.2)
+	for k = 0, 3 do
+		local a = k * math.pi / 2 + ctx.hash(i, j, 60 + k) * 0.8
+		local tip = fork + Vector3.new(math.cos(a) * 3.0, top * 0.35 + ctx.hash(i, j, 70 + k), math.sin(a) * 3.0)
+		Kit.cylinder(m, fork, tip, 0.22, LINE)
+	end
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 0.3, 0)), Vector3.new(4.4, 0.6, 4.4), LINE) -- 나무 둘레 보호틀
+	solid(m, CFrame.new(p), Vector3.new(2.2, top, 2.2))
+end
+
+-- h 중정 동상: 두 단 받침대 + 책을 든 인물(머리·몸·팔 덩어리) — 중정 한가운데 랜드마크
+function P.Statue(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local cf = CFrame.lookAt(p, p + Vector3.new(0, 0, 1))
+	local m = model(ctx, "Statue")
+	Kit.box(m, cf * CFrame.new(0, 0.6, 0), Vector3.new(6.4, 1.2, 6.4))
+	Kit.box(m, cf * CFrame.new(0, 2.4, 0), Vector3.new(3.6, 2.4, 3.6))
+	Kit.box(m, cf * CFrame.new(0, 4.6, 0), Vector3.new(1.8, 2.0, 1.1), SOFT) -- 다리·옷자락
+	Kit.box(m, cf * CFrame.new(0, 6.6, 0), Vector3.new(2.2, 2.2, 1.2), SOFT) -- 몸
+	Kit.ball(m, at(cf, 0, 8.3, 0), 0.75, SOFT) -- 머리
+	Kit.box(m, cf * CFrame.new(1.2, 6.9, 0.7) * CFrame.Angles(-0.9, 0, 0), Vector3.new(0.5, 2.0, 0.5), SOFT) -- 책 든 팔
+	Kit.box(m, cf * CFrame.new(1.2, 7.4, 1.4), Vector3.new(1.4, 1.0, 0.25), LINE) -- 책
+	solid(m, cf, Vector3.new(6.4, 9, 6.4))
+end
+
+-- r 화단: 무릎 높이 벽돌 틀 + 마른 줄기 몇 개
+function P.FlowerBed(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local axis = runAxis(ctx, i, j, "r")
+	local cf = CFrame.lookAt(p, p + axis)
+	local m = model(ctx, "FlowerBed")
+	local L = ctx.T
+	Kit.box(m, cf * CFrame.new(0, 0.9, 0), Vector3.new(4.6, 1.8, L))
+	Kit.box(m, cf * CFrame.new(0, 1.85, 0), Vector3.new(3.8, 0.1, L - 0.8), LINE)
+	for k = -1, 1 do
+		local x = (ctx.hash(i, j, 80 + k) - 0.5) * 2.4
+		Kit.cylinder(m, at(cf, x, 1.8, k * 2.4), at(cf, x * 1.2, 3.4, k * 2.6), 0.08, LINE)
+	end
+end
+
+-- j 중정 벤치: 앉는 판 + 등판 + 다리 둘
+function P.Bench(ctx, i: number, j: number)
+	local cf = againstWall(ctx, i, j)
+	local m = model(ctx, "Bench")
+	Kit.box(m, cf * CFrame.new(0, 1.7, 1.2), Vector3.new(6.4, 0.25, 1.8), SOFT)
+	Kit.box(m, cf * CFrame.new(0, 2.9, 2.1) * CFrame.Angles(-0.15, 0, 0), Vector3.new(6.4, 1.4, 0.2), SOFT)
+	for _, x in { -2.6, 2.6 } do
+		Kit.box(m, cf * CFrame.new(x, 0.85, 1.2), Vector3.new(0.3, 1.7, 1.6), LINE)
+	end
+	solid(m, cf * CFrame.new(0, 0, 1.2), Vector3.new(6.6, 2.0, 2.0))
+end
+
+-- q 뜀틀 + 접은 매트 더미(체육관 창고에서 끌어낸 것)
+function P.VaultBox(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local cf = CFrame.new(p) * CFrame.Angles(0, (ctx.hash(i, j, 33) - 0.5) * 0.6, 0)
+	local m = model(ctx, "VaultBox")
+	for k = 0, 3 do -- 뜀틀 단(위로 갈수록 좁다)
+		Kit.box(m, cf * CFrame.new(-1.2, 0.5 + k * 0.95, 0), Vector3.new(3.4 - k * 0.3, 0.9, 5.2 - k * 0.3), if k == 3 then SOFT else nil)
+	end
+	Kit.box(m, cf * CFrame.new(2.2, 0.9, 0) * CFrame.Angles(0, 0, 0.12), Vector3.new(2.4, 1.8, 5.6), SOFT) -- 접은 매트
+	solid(m, cf, Vector3.new(7, 4, 6))
+end
+
+-- x 트로피 진열장(벽): 유리장 틀 + 선반 셋 + 트로피 몇 개
+function P.TrophyCase(ctx, i: number, j: number)
+	local cf = againstWall(ctx, i, j)
+	local m = model(ctx, "TrophyCase")
+	local z = ctx.T / 2 - 1.1
+	local h = math.min(ctx.H - 1.5, 8)
+	Kit.box(m, cf * CFrame.new(0, h / 2, z), Vector3.new(6.6, h, 2.0), SOFT)
+	for k = 1, 3 do
+		Kit.box(m, cf * CFrame.new(0, k * h / 4, z - 0.2), Vector3.new(6.2, 0.12, 1.6), LINE)
+		local x = (ctx.hash(i, j, 100 + k) - 0.5) * 4
+		local c = at(cf, x, k * h / 4, z - 0.2)
+		Kit.cylinder(m, c, c + Vector3.new(0, 1.2, 0), 0.35, LINE)
+	end
+	solid(m, cf * CFrame.new(0, 0, z), Vector3.new(6.6, h, 2.1))
+end
+
+-- w 정수기(벽, 지나감): 몸통 + 물통 + 컵 받침
+function P.WaterCooler(ctx, i: number, j: number)
+	local cf = againstWall(ctx, i, j)
+	local m = model(ctx, "WaterCooler")
+	local z = ctx.T / 2 - 1.0
+	Kit.box(m, cf * CFrame.new(1.8, 2.2, z), Vector3.new(1.8, 4.4, 1.8), SOFT)
+	Kit.cylinder(m, at(cf, 1.8, 4.4, z), at(cf, 1.8, 6.0, z), 0.8, LINE)
+	Kit.box(m, cf * CFrame.new(1.8, 3.0, z - 1.0), Vector3.new(1.2, 0.12, 0.3), LINE)
+end
+
+-- P 프로젝터 스크린(시청각실 앞 벽): 내려온 스크린 막 + 위 통 + 아래 교탁
+function P.ProjectorScreen(ctx, i: number, j: number)
+	local cf = againstWall(ctx, i, j)
+	local m = model(ctx, "ProjectorScreen")
+	local z = ctx.T / 2 - 0.3
+	local top = ctx.H - 1.2
+	Kit.box(m, cf * CFrame.new(0, top, z), Vector3.new(14, 0.6, 0.6), SOFT)
+	Kit.box(m, cf * CFrame.new(0, top - 3.4, z - 0.1), Vector3.new(13, 6.2, 0.08), LINE)
+	Kit.box(m, cf * CFrame.new(-2.2, 1.6, z - 2.2), Vector3.new(2.4, 3.2, 1.6), SOFT)
+	solid(m, cf * CFrame.new(-2.2, 0, z - 2.2), Vector3.new(2.6, 3.4, 1.8))
 end
 
 return P

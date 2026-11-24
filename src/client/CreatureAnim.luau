@@ -6,6 +6,8 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage.Shared.Config)
+local SpriteAnim = require(script.Parent:WaitForChild("SpriteAnim"))
+local RigAnim = require(script.Parent:WaitForChild("RigAnim"))
 
 local CreatureAnim = {}
 CreatureAnim.range = 170
@@ -110,13 +112,25 @@ function CreatureAnim.approach(cur: number, target: number, rate: number, dt: nu
 	return cur + (target - cur) * (1 - math.exp(-rate * dt))
 end
 
+local Perf = require(script.Parent:WaitForChild("Perf"))
 RunService.RenderStepped:Connect(function(dt)
+	local perf0 = os.clock()
 	dt = math.min(dt, 1 / 20)
 	local cam = workspace.CurrentCamera
 	local camPos = cam and cam.CFrame.Position or Vector3.zero
 	for _, inst in CollectionService:GetTagged(Config.Tags.Monster) do
 		local model = inst :: Model
-		if model:IsA("Model") and model.Parent and model:GetAttribute("Rig") == 3 then
+		if model:IsA("Model") and model.Parent and model:GetAttribute("Rig") == 4 then
+			-- 시안 챕터 괴물: 3D 뼈 메시가 있으면 뼈를 움직이고, 아직 메시가 없으면 시안 그림(8방향 × 9자세)
+			local root4 = model.PrimaryPart
+			if root4 and (root4.Position - camPos).Magnitude > CreatureAnim.range then
+				-- (아주 멀다: 뼈·그림 둘 다 건너뛴다. 걸음 소리도 들리지 않는 거리)
+			elseif RigAnim.has(model) then
+				RigAnim.step(model, dt)
+			else
+				SpriteAnim.step(model, dt, camPos)
+			end
+		elseif model:IsA("Model") and model.Parent and model:GetAttribute("Rig") == 3 then
 			local id = model:GetAttribute("Creature")
 			local root = model.PrimaryPart
 			if typeof(id) == "string" and root and (root.Position - camPos).Magnitude < CreatureAnim.range then
@@ -154,6 +168,9 @@ RunService.RenderStepped:Connect(function(dt)
 			bodies[model] = nil
 		end
 	end
+	SpriteAnim.cleanup()
+	RigAnim.cleanup()
+	Perf.add("creatureAnim", os.clock() - perf0)
 end)
 
 function CreatureAnim.reset()

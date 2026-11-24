@@ -72,12 +72,15 @@ function Mates.count(): number
 	return n
 end
 
+local Perf = require(script.Parent:WaitForChild("Perf"))
 local acc = 0
 RunService.Heartbeat:Connect(function(dt)
 	acc += dt
 	if acc >= 0.25 then
 		acc = 0
+		local t0 = os.clock()
 		sync()
+		Perf.add("mates", os.clock() - t0)
 	end
 end)
 

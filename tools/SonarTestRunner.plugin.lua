@@ -1,5 +1,6 @@
 -- Studio plugin: runs automated play tests on request from tools/studio-test.js (음파공포).
--- It asks http://localhost:34902/next every 2 s; when a test is queued it starts a real Play session with
+-- It asks http://localhost:<port>/next every 2 s (port = the place's ServerStorage attribute TestPort, baked in by
+-- tools/perf-build.sh so several Studio windows can run tests at once; 34902 when the place has none); when a test is queued it starts a real Play session with
 -- StudioTestService:ExecutePlayModeAsync, or ExecuteMultiplayerTestAsync with a local server and job.players clients
 -- (the game's TestHarness script plays the scenario and calls EndTest),
 -- then posts what came back to /result. Only the edit session polls; nothing runs in normal play.
@@ -19,13 +20,18 @@ local function thisGame(): boolean
 	return stages ~= nil and stages:FindFirstChild("Stage1") ~= nil and server:FindFirstChild("StageBuilder") ~= nil and server:FindFirstChild("TestHarness") ~= nil
 end
 
-local BASE = "http://localhost:34902"
 local busy = false
+
+-- (each place picks its own port: read every poll, the place may finish loading after the plugin starts)
+local function base(): string
+	local port = game:GetService("ServerStorage"):GetAttribute("TestPort")
+	return "http://localhost:" .. tostring(if type(port) == "number" then port else 34902)
+end
 
 local function request(method, path, body)
 	return pcall(function()
 		return HttpService:RequestAsync({
-			Url = BASE .. path,
+			Url = base() .. path,
 			Method = method,
 			Body = body,
 			Headers = if body then { ["Content-Type"] = "application/json" } else nil,

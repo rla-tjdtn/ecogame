@@ -28,9 +28,15 @@ World.buildCpu = 0
 World.culled = 0
 World.unattached = 0
 World.cellSegs = {} :: { [number]: { number } }
--- 보는 위치에 따라 선이 바뀌는 정적 파트(원통·구) — 16스터드 버킷
+-- 보는 위치에 따라 선이 바뀌는 정적 파트(원통·구): 위치·크기·모양을 빌드할 때 한 번만 읽어 두고,
+-- 그 선이 음파를 받을 수 있는 구역(복셀 4칸 = 8스터드)마다 번호를 적어 둔다 → 파동이 그 구역에 들어갈 때만 계산한다
 World.viewParts = {} :: { BasePart }
-local viewBuckets: { [number]: { number } } = {}
+World.viewCF = {} :: { CFrame }
+World.viewSize = {} :: { Vector3 }
+World.viewBall = {} :: { boolean }
+World.viewBlocks = {} :: { [number]: { number } }
+World.BLOCK = 4
+World.bnx, World.bny, World.bnz = 0, 0, 0
 -- 격자
 World.cs = S.CellSize
 World.origin = Vector3.zero
@@ -38,7 +44,6 @@ World.nx, World.ny, World.nz = 0, 0, 0
 World.occ = buffer.create(1)
 World.doors = {} :: { { model: Model, cells: { number }, blocked: boolean, conn: RBXScriptConnection? } }
 
-local VB = 16
 local function vkey(x: number, y: number, z: number): number
 	return (x + 512) + (y + 64) * 1024 + (z + 512) * 1024 * 128
 end
@@ -207,31 +212,25 @@ local function refreshDoor(d)
 	end
 end
 
--- ── 보는 위치 의존 파트 조회 ──
-function World.viewPartsNear(p: Vector3, radius: number): { BasePart }
-	local out = {}
-	local r = math.ceil(radius / VB)
-	local cx, cy, cz = math.floor(p.X / VB), math.floor(p.Y / VB), math.floor(p.Z / VB)
-	local seen = {}
-	for dz = -r, r do
-		for dy = -2, 2 do
-			for dx = -r, r do
-				local list = viewBuckets[vkey(cx + dx, cy + dy, cz + dz)]
-				if list then
-					for _, i in list do
-						if not seen[i] then
-							seen[i] = true
-							local part = World.viewParts[i]
-							if (part.Position - p).Magnitude <= radius + part.Size.Magnitude / 2 then
-								table.insert(out, part)
-							end
-						end
-					end
-				end
+-- ── 구역(복셀 4칸) ──
+-- 가운데 p, 반폭 (hx, hy, hz) 인 상자(음파를 받는 거리만큼 넓힌다)에 걸치는 구역마다 fn(구역 번호)
+function World.eachBlock(p: Vector3, hx: number, hy: number, hz: number, fn: (b: number) -> ())
+	local o, size = World.origin, World.cs * World.BLOCK
+	local pad = S.AttachDistance + 0.1
+	local bnx, bny, bnz = World.bnx, World.bny, World.bnz
+	local x0 = math.clamp((p.X - hx - pad - o.X) // size, 0, bnx - 1)
+	local x1 = math.clamp((p.X + hx + pad - o.X) // size, 0, bnx - 1)
+	local y0 = math.clamp((p.Y - hy - pad - o.Y) // size, 0, bny - 1)
+	local y1 = math.clamp((p.Y + hy + pad - o.Y) // size, 0, bny - 1)
+	local z0 = math.clamp((p.Z - hz - pad - o.Z) // size, 0, bnz - 1)
+	local z1 = math.clamp((p.Z + hz + pad - o.Z) // size, 0, bnz - 1)
+	for z = z0, z1 do
+		for y = y0, y1 do
+			for x = x0, x1 do
+				fn(x + bnx * (y + bny * z))
 			end
 		end
 	end
-	return out
 end
 
 -- 움직이는 대상(문, 괴물, 다른 플레이어 캐릭터)
@@ -262,16 +261,12 @@ World.skipMonster = function(_m: Model): boolean
 	return false
 end
 
-function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { { part: BasePart, char: boolean } }
+function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { BasePart }
 	local out = {}
-	local function consider(p: BasePart, isChar: boolean)
-		if (p.Position - near).Magnitude <= radius + 4 then
-			table.insert(out, { part = p, char = isChar })
-		end
-	end
+	local reach = radius + 4
 	for _, p in World.stageDynamics do
-		if p.Parent then
-			consider(p, false)
+		if (p.Position - near).Magnitude <= reach and p.Parent then
+			table.insert(out, p)
 		end
 	end
 	for _, m in CollectionService:GetTagged(TAGS.Monster) do
@@ -281,7 +276,9 @@ function World.dynamicParts(near: Vector3, radius: number, exclude: Model?): { {
 		end
 		if m:IsA("Model") and m.Parent and m ~= exclude and m.PrimaryPart and (m.PrimaryPart.Position - near).Magnitude <= radius + 12 then
 			for _, p in partsOfMonster(m) do
-				consider(p, false)
+				if (p.Position - near).Magnitude <= reach then
+					table.insert(out, p)
+				end
 			end
 		end
 	end
@@ -314,8 +311,7 @@ function World.build(stage: Folder)
 	World.culled = 0
 	World.unattached = 0
 	World.cellSegs = {}
-	World.viewParts = {}
-	viewBuckets = {}
+	World.viewParts, World.viewCF, World.viewSize, World.viewBall, World.viewBlocks = {}, {}, {}, {}, {}
 
 	-- 정적 파트
 	local statics: { BasePart } = {}
@@ -347,9 +343,12 @@ function World.build(stage: Folder)
 	World.ny = math.ceil(hi.Y) - math.floor(lo.Y)
 	World.nz = math.ceil(hi.Z) - math.floor(lo.Z)
 	World.occ = buffer.create(World.nx * World.ny * World.nz)
+	World.bnx = (World.nx + World.BLOCK - 1) // World.BLOCK
+	World.bny = (World.ny + World.BLOCK - 1) // World.BLOCK
+	World.bnz = (World.nz + World.BLOCK - 1) // World.BLOCK
 
-	-- 공간 해시(점 포함 판정용, 8스터드 버킷)
-	local HB = 8
+	-- 공간 해시(점 포함 판정용, 4스터드 버킷)
+	local HB = 4
 	-- 파트마다 위치·축·크기·모양을 숫자로 한 번만 읽어 둔다(속성 읽기는 느리다)
 	type Info = { px: number, py: number, pz: number, xx: number, xy: number, xz: number, yx: number, yy: number, yz: number, zx: number, zy: number, zz: number, hx: number, hy: number, hz: number, shape: string }
 	local hbuckets: { [number]: { Info } } = {}
@@ -531,13 +530,27 @@ function World.build(stage: Folder)
 		if Geo.hasViewEdges(p) then
 			table.insert(World.viewParts, p)
 			local i = #World.viewParts
-			local k = vkey(math.floor(p.Position.X / VB), math.floor(p.Position.Y / VB), math.floor(p.Position.Z / VB))
-			local l = viewBuckets[k]
-			if not l then
-				l = {}
-				viewBuckets[k] = l
-			end
-			table.insert(l, i)
+			local cf, sz = p.CFrame, p.Size
+			World.viewCF[i] = cf
+			World.viewSize[i] = sz
+			World.viewBall[i] = Geo.shapeOf(p) == "Ball"
+			local X, Y, Z = cf.XVector, cf.YVector, cf.ZVector
+			local h = sz / 2
+			local blocks = World.viewBlocks
+			World.eachBlock(
+				cf.Position,
+				math.abs(X.X) * h.X + math.abs(Y.X) * h.Y + math.abs(Z.X) * h.Z,
+				math.abs(X.Y) * h.X + math.abs(Y.Y) * h.Y + math.abs(Z.Y) * h.Z,
+				math.abs(X.Z) * h.X + math.abs(Y.Z) * h.Y + math.abs(Z.Z) * h.Z,
+				function(b: number)
+					local l = blocks[b]
+					if not l then
+						l = {}
+						blocks[b] = l
+					end
+					table.insert(l, i)
+				end
+			)
 		end
 		yieldSometimes()
 	end

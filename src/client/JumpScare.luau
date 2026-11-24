@@ -40,6 +40,17 @@ aspect.AspectRatio = 1
 aspect.Parent = face
 local scale = Instance.new("UIScale")
 scale.Parent = face
+-- 시안 그림 챕터 괴물: 그 괴물의 덮침 그림(정면)을 화면 가득
+local creatureImg = Instance.new("ImageLabel")
+creatureImg.Name = "Creature"
+creatureImg.BackgroundTransparency = 1
+creatureImg.AnchorPoint = Vector2.new(0.5, 0.5)
+creatureImg.Position = UDim2.fromScale(0.5, 0.58)
+creatureImg.Size = UDim2.fromScale(1.6, 1.6)
+creatureImg.ScaleType = Enum.ScaleType.Fit
+creatureImg.Visible = false
+creatureImg.ZIndex = 5
+creatureImg.Parent = face
 
 gui.Parent = player:WaitForChild("PlayerGui")
 
@@ -274,7 +285,8 @@ end
 
 -- 얼굴을 띄운다(이미 떠 있으면 무시). kind = "doppel" 이면 도플갱어 얼굴, "flower" 면 꽃괴물
 local busy = false
-function JumpScare.play(scream: (() -> ())?, kind: string?)
+export type Sprite = { url: string, offset: Vector2, size: Vector2 }
+function JumpScare.play(scream: (() -> ())?, kind: string?, sprite: Sprite?)
 	if busy then
 		return
 	end
@@ -282,7 +294,17 @@ function JumpScare.play(scream: (() -> ())?, kind: string?)
 	JumpScare.count += 1
 
 	gui.Enabled = true
-	if kind == "doppel" then
+	creatureImg.Visible = sprite ~= nil
+	if sprite then
+		for _, c in face:GetChildren() do
+			if c:IsA("Frame") then
+				c:Destroy()
+			end
+		end
+		creatureImg.Image = sprite.url
+		creatureImg.ImageRectOffset = sprite.offset
+		creatureImg.ImageRectSize = sprite.size
+	elseif kind == "doppel" then
 		drawDoppel()
 	elseif kind == "flower" then
 		drawFlower()

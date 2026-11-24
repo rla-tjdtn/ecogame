@@ -33,6 +33,9 @@ local function base(p: BasePart, parent: Instance, opts: Opts?)
 	p.BottomSurface = Enum.SurfaceType.Smooth
 	p.CanCollide = if o.collide == nil then true else o.collide
 	p.CanTouch = false
+	-- 부딪히지 않고 음파·소리도 막지 않는 장식은 공간 쿼리에서도 뺀다(서버 소리·괴물 레이, 클라 Reveal 은 RespectCanCollide,
+	-- 음파 윤곽은 태그·지오메트리만 쓴다 — opt-sonar 확인). SearchLook 은 손잡이 뒤 서랍 판(충돌)으로 같은 Comp 를 맞힌다.
+	p.CanQuery = p.CanCollide or o.blocks == true
 	if o.invisible then
 		p.Transparency = 1
 	end

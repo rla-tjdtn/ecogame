@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local Config = require(ReplicatedStorage.Shared.Config)
+local NetStat = require(script.Parent:WaitForChild("NetStat"))
 
 local Audio = {}
 local SND = Config.Sounds :: { [string]: { Id: string, Volume: number, Pitch: number, Range: number, Cut: number?, Fx: { { any } }?, Steps: { { number } }?, Thump: number?, Claw: string? } }
@@ -31,12 +32,19 @@ local function makeSound(name: string, parent: Instance, looped: boolean?): Soun
 		return nil
 	end
 	local s = Instance.new("Sound")
+	NetStat.count("snd.new")
 	s.Name = name
 	s.SoundId = def.Id
 	s.Volume = def.Volume
 	s.PlaybackSpeed = def.Pitch
 	s.Looped = looped == true
 	s.SoundGroup = master
+	-- 챕터 소리 묶음(한 파일에 여러 괴물 소리): 이 소리 구간만 재생
+	local region = (def :: any).Region
+	if region then
+		s.PlaybackRegionsEnabled = true
+		s.PlaybackRegion = NumberRange.new(region[1], region[2])
+	end
 	if def.Range > 0 then
 		s.RollOffMode = Enum.RollOffMode.InverseTapered
 		s.RollOffMinDistance = (def :: any).Near or 5 -- (이 거리 안에서는 소리가 줄지 않는다)
@@ -56,6 +64,7 @@ local function makeSound(name: string, parent: Instance, looped: boolean?): Soun
 					end)
 				end
 				eff.Parent = s
+				NetStat.count("snd.fx")
 			end
 		end
 	end
@@ -63,11 +72,45 @@ local function makeSound(name: string, parent: Instance, looped: boolean?): Soun
 	return s
 end
 
+local CULL_MARGIN = 20 -- (스터드) 짧은 소리가 재생되는 동안 소리 난 곳이 다가올 수 있는 거리
 -- 한 번 재생하고 지운다. at 이 Vector3 이면 그 위치에서(3D), Instance 면 거기 붙여서, nil 이면 2D.
 Audio.steps = 0 -- (테스트) 지금까지 재생한 플레이어 발소리 수
+Audio.live = 0 -- (측정) Audio.play 로 만든, 아직 지우지 않은 소리 수
+Audio.livePeak = 0
 
 -- opts.gate = { 켜짐초, 꺼짐초 }: 그 박자로 소리를 끊어 켰다 껐다 한다(끊기는 괴성). opts.sweep = { { 정규화 시간 0~1, 피치 배율 }, ... }, opts.dur = 전체 길이(초): 소리를 반복 재생하면서 피치를 시간에 따라 바꾼다(사이렌·오르내리는 괴성)
 function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number?, volumeScale: number?, pitchScale: number?, startAt: number?, cutOverride: number?, opts: { sweep: { { number } }?, dur: number?, gate: { number }? }?)
+	NetStat.count("snd.play")
+	NetStat.count("snd:" .. name)
+	local cpu0 = os.clock()
+	if string.sub(name, 1, 13) == "Voice_Doppel_" then
+		volumeScale = (volumeScale or 1) * ((Config :: any).Doppel.VoiceVolume or 1)
+	end
+	-- 들리는 거리(RollOffMaxDistance = Range) 밖의 소리는 만들지 않는다(InverseTapered 라 그 밖에서는 소리 크기 0).
+	-- 위치가 고정된 소리는 Range 그대로, 움직이는 것(캐릭터·괴물)에 붙는 소리는 재생 중에 다가올 수 있어
+	-- 짧은 소리(Cut ≤ 1.2초)만 Range + 여유로 거른다(괴성·특수음 같은 긴 소리는 그대로 만든다)
+	local def0 = SND[name]
+	if def0 and def0.Range > 0 and at ~= nil then
+		local cam = workspace.CurrentCamera
+		if cam then
+			local far = -1
+			if typeof(at) == "Vector3" then
+				far = def0.Range
+			elseif (at :: Instance):IsA("BasePart") then
+				local cut0 = cutOverride or def0.Cut
+				if cut0 and cut0 <= 1.2 and not (opts and (opts.sweep or opts.gate)) then
+					far = def0.Range + CULL_MARGIN
+				end
+			end
+			if far > 0 then
+				local pos = if typeof(at) == "Vector3" then at :: Vector3 else ((at :: Instance) :: BasePart).Position
+				if (cam.CFrame.Position - pos).Magnitude > far then
+					NetStat.count("snd.culled")
+					return
+				end
+			end
+		end
+	end
 	local parent: Instance
 	local holder: Attachment? = nil
 	if typeof(at) == "Vector3" then
@@ -87,6 +130,10 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 			holder:Destroy()
 		end
 		return
+	end
+	Audio.live += 1
+	if Audio.live > Audio.livePeak then
+		Audio.livePeak = Audio.live
 	end
 	if pitchJitter then
 		s.PlaybackSpeed *= 1 + (math.random() * 2 - 1) * pitchJitter
@@ -156,12 +203,23 @@ function Audio.play(name: string, at: (Vector3 | Instance)?, pitchJitter: number
 			s:Stop()
 		end)
 	end
-	task.delay(6, function()
+	-- 다 재생됐거나 멈췄으면 바로 지운다(늦어도 6초: 불러오지 못한 소리). 반복 소리(sweep)는 멈출 때
+	local gone = false
+	local function remove()
+		if gone then
+			return
+		end
+		gone = true
+		Audio.live -= 1
 		s:Destroy()
 		if holder then
 			holder:Destroy()
 		end
-	end)
+	end
+	s.Ended:Once(remove)
+	s.Stopped:Once(remove)
+	task.delay(6, remove)
+	NetStat.count("snd.cpuUs", (os.clock() - cpu0) * 1e6)
 end
 
 -- 괴성: Config.Screams[kind] 의 목소리들을 시간차로 겹쳐 길게 지른다
@@ -322,7 +380,7 @@ local function stepFor(model: Model, root: BasePart, isMonster: boolean)
 			tr.acc = 0
 			Audio.footstep("FootWalk", root, 0)
 		end
-	elseif isMonster and (model:GetAttribute("Rig") == 2 or model:GetAttribute("Rig") == 3) then
+	elseif isMonster and (model:GetAttribute("Rig") == 2 or model:GetAttribute("Rig") == 3 or model:GetAttribute("Rig") == 4) then
 		-- 전신 뼈대 괴물: 발이 실제로 땅에 닿는 순간 MonsterAnim 이 Audio.monsterFoot 을 부른다
 		tr.acc = 0
 	elseif isMonster then
@@ -422,6 +480,18 @@ local function watchMonster(m: Instance)
 	end)
 end
 CollectionService:GetInstanceAddedSignal(Config.Tags.Monster):Connect(watchMonster)
+-- (복제된 괴물이 지워질 때 Destroying 이 오지 않는 경우에도 표가 남지 않게)
+CollectionService:GetInstanceRemovedSignal(Config.Tags.Monster):Connect(function(m: Instance)
+	local conns = monsterConns[m :: Model]
+	if conns then
+		for _, c in conns do
+			c:Disconnect()
+		end
+		monsterConns[m :: Model] = nil
+		screamAt[m :: Model] = nil
+		trackers[m :: Model] = nil
+	end
+end)
 for _, m in CollectionService:GetTagged(Config.Tags.Monster) do
 	watchMonster(m)
 end
@@ -470,6 +540,7 @@ for _, e in CollectionService:GetTagged(Config.Tags.AmbientEmitter) do
 end
 
 local nextAmbient = os.clock() + 4
+local nextSweep = 0
 local ONE_SHOTS = { "AmbientCreak" } -- 물방울·폭발음 같은 금속음은 뺐다
 
 function Audio.update()
@@ -482,8 +553,8 @@ function Audio.update()
 		end
 	end
 	local now = os.clock()
-	for _, m in CollectionService:GetTagged(Config.Tags.Monster) do
-		if m:IsA("Model") and m.PrimaryPart then
+	for m in monsterConns do
+		if m.PrimaryPart and m.Parent then
 			-- 발소리는 늘 난다(움직일 때). 괴성은 쫓아올 때만
 			stepFor(m, m.PrimaryPart, true)
 			if m:GetAttribute("State") == "Chase" then
@@ -506,9 +577,12 @@ function Audio.update()
 			Audio.play(ONE_SHOTS[math.random(1, #ONE_SHOTS)], p, 0.15)
 		end
 	end
-	for model, _ in trackers do
-		if not model.Parent then
-			trackers[model] = nil
+	if now > nextSweep then
+		nextSweep = now + 1
+		for model, _ in trackers do
+			if not model.Parent then
+				trackers[model] = nil
+			end
 		end
 	end
 end

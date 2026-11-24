@@ -93,24 +93,25 @@ g.put("R", [[32, 41], [33, 41], [34, 41], [37, 41]]).put("K", [[34, 39], [35, 39
 g.fill(40, 39, 45, 41).set(42, 38, "D");
 g.put("c", [[45, 41], [44, 41]]).put("h", [[41, 41], [42, 41]]).set(45, 39, "Z").set(40, 39, "L");
 
-// ══ 가운데 놀이 마당(x17~29, y13~32): 남쪽 울타리 문 두 곳으로만 들어간다 ══
-g.fill(17, 13, 29, 32).fill(17, 33, 19, 33).fill(21, 33, 22, 33);
-// 울타리 두 줄(줄마다 양 끝 틈): 놀이기구 마당 / 그네 마당 / 모래 마당
-g.wall(20, 22, 26, 22).wall(21, 17, 27, 17);
+// ══ 가운데 놀이 마당(x17~29, y13~32, 바깥 마당): 울타리 문 둘 — 남쪽 급식 홀 쪽(x18~19) / 동쪽 실내 놀이터 쪽(y29~30) ══
+g.fill(17, 13, 29, 32).fill(18, 33, 19, 33).fill(30, 29, 30, 30);
+// 마당 안 낮은 나무 울타리 두 줄(Q, 허리 높이 — 음파로 너머가 보인다. 줄마다 양 끝 틈): 놀이기구 마당 / 그네 마당 / 모래 마당
+g.fill(20, 22, 26, 22, "Q").fill(21, 17, 27, 17, "Q");
 g.set(20, 26, "U").set(23, 27, "J").put("e", [[26, 29], [26, 25]]).put("H", [[20, 30], [22, 30]]).put("u", [[29, 31], [29, 32]]);
 g.set(17, 32, "L").set(29, 25, "Z").set(23, 23, "Z");
-g.fill(18, 14, 21, 16, "g");
+g.fill(24, 14, 27, 15, "g");
 g.put("w", [[24, 19], [25, 19]]).set(29, 20, "i").set(17, 20, "L").set(29, 13, "Z");
-g.set(28, 12, "E"); // 마당 북동쪽 끝 뒷문(비상구)
+g.set(18, 12, "E"); // 마당 북서쪽 끝 후문(등하원 뒷길로 나가는 철문)
+g.put("l", [[17, 13], [19, 13]]); // 후문 양옆 가로등(랜드마크)
 
 if (process.argv.includes("--print")) console.log(g.rows().map((row, i) => String(i).padStart(2) + " " + row).join("\n"));
 const PROPS = {
 	W: "CP.ShoeCubby", r: "CP.Reception", T: "CP.KidTable", B: "CP.Board", k: "CP.BagCubby", P: "CP.Organ", h: "CP.KidShelf", M: "CP.MatPile",
 	i: "CP.Playhouse", X: "CP.SoftBlocks", x: "CP.SickBed", I: "CP.KidSink", a: "CP.Stage", F: "CP.LunchTable", V: "CP.ServingCounter", R: "CP.Range",
 	K: "CP.PrepTable", J: "CP.JungleGym", w: "CP.Swing", e: "CP.Seesaw", H: "CP.SpringHorse", g: "CP.Sand", u: "CP.Planter",
-	Y: "Props.Desk", C: "Props.Cabinet", U: "Props.Slide", y: "Props.ToyPile", G: "Props.BallPit", N: "Props.NapMat", j: "Props.KidToilet",
+	Q: "CP.Fence", l: "CP.LampPost", Y: "Props.Desk", C: "Props.Cabinet", U: "Props.Slide", y: "Props.ToyPile", G: "Props.BallPit", N: "Props.NapMat", j: "Props.KidToilet",
 };
-const WALK = ["G", "N", "g"];
+const WALK = ["G", "N", "g", "l"];
 const r = report("유치원", g, { walkable: WALK, blocked: Object.keys(PROPS).filter((k) => !WALK.includes(k)) });
 if (!process.argv.includes("--dry")) {
 	// 스테이지 파일 전체를 한 번에 쓴다(Props 줄 포함)

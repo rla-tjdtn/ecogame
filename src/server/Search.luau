@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Kit = require(script.Parent.MapKit)
 local SoundBus = require(script.Parent.SoundBus)
+local RateLimit = require(script.Parent.RateLimit)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RoundEvent = Remotes:WaitForChild("RoundEvent") :: RemoteEvent
@@ -240,6 +241,9 @@ SearchAction.OnServerEvent:Connect(function(player: Player, spotId: any, index: 
 	if type(spotId) ~= "number" or type(index) ~= "number" then
 		return
 	end
+	if not RateLimit.allow(player, "SearchAction", 6, 10) then
+		return
+	end
 	local spot = byId[spotId]
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -313,6 +317,9 @@ end
 
 -- "힌트 보기": 준비됐고 아직 남은 열쇠가 있으면 그 상자 위치를 팀 전체 지도에 표시
 KeyHint.OnServerEvent:Connect(function(player: Player)
+	if not RateLimit.allow(player, "KeyHint", 1, 3) then
+		return
+	end
 	if ReplicatedStorage:GetAttribute("KeyHintReady") ~= true or ReplicatedStorage:GetAttribute("HasKey") == true then
 		return
 	end

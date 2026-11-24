@@ -5,6 +5,7 @@
 --   K 석회암 석재 블록     W 손 권양기            R 광차                                  r 광차 레일(바닥, 밟고 지나감)
 --   N 갱도 이름 벽 명판    P 예배당 신도석        J 제단 + 벽 십자가                       Y 채석공 우물
 --   G 수직갱 권양탑        I 지상으로 오르는 나선 계단(입구)                               V 석관
+--   H 납골당 문틀(명문 판, 밟고 지나감)  F 붕락 돌무더기(무너진 갱도)  l 무덤 등불(불 그릇 기둥)  M 채석공 요새 부조
 local Kit = require(script.Parent.Parent.MapKit)
 
 local M = {}
@@ -285,6 +286,91 @@ function M.Sarcophagus(ctx, i: number, j: number)
 	Kit.box(m, lid, Vector3.new(3.4, 0.5, 6.8), { blocks = false })
 	Kit.box(m, lid * CFrame.new(0, 0.35, -0.6), Vector3.new(0.4, 0.2, 3.4), { blocks = false, collide = false })
 	Kit.box(m, lid * CFrame.new(0, 0.35, -1.4), Vector3.new(1.8, 0.2, 0.4), { blocks = false, collide = false })
+end
+
+-- 갱도 진행 방향(양옆이 벽이면 그 사이로 지나간다): 동서로 지나가면 X 축
+local function passAxis(ctx, i: number, j: number): Vector3
+	if ctx.isWall(i, j - 1) or ctx.isWall(i, j + 1) or ctx.at(i, j - 1) == "H" or ctx.at(i, j + 1) == "H" then
+		return Vector3.new(1, 0, 0)
+	end
+	return Vector3.new(0, 0, 1)
+end
+
+-- H: 납골당 문틀 — 갱도를 가로지르는 돌 문설주(벽 쪽에만) + 위 상인방 + "멈춰라, 여기부터 죽음의 제국" 명문 판(글줄 셋).
+--   두 칸 폭 문이면 두 칸이 한 문틀을 나눠 짓는다(벽에 붙은 쪽에만 기둥). 칸은 그대로 밟고 지나간다
+function M.OssuaryGate(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local h = height(ctx, i, j)
+	local go = passAxis(ctx, i, j) -- 지나가는 방향
+	local across = Vector3.new(go.Z, 0, go.X) -- 문 폭 방향
+	local m = model(ctx, "OssuaryGate")
+	local T = ctx.T
+	local top = math.min(h - 0.6, 9.5)
+	for _, s in { -1, 1 } do
+		local ni, nj = i + across.X * s, j + across.Z * s
+		if ctx.isWall(ni, nj) then
+			local c = p + across * (s * (T / 2 - 0.7))
+			Kit.box(m, CFrame.lookAt(c + Vector3.new(0, top / 2, 0), c + Vector3.new(0, top / 2, 0) + go), Vector3.new(1.4, top, 2.2), { name = "Jamb" })
+		end
+	end
+	local lc = p + Vector3.new(0, top + 0.5, 0)
+	Kit.box(m, CFrame.lookAt(lc, lc + go), Vector3.new(T, 1.0, 2.4), { name = "Lintel" })
+	-- 명문 판: 상인방 위 얇은 판 + 글줄 셋(가는 띠)
+	if ctx.at(i - across.X, j - across.Z) ~= "H" then
+		local both = ctx.at(i + across.X, j + across.Z) == "H"
+		local w = if both then T * 2 - 1.5 else T - 1.5
+		local pc = lc + Vector3.new(0, 1.3, 0) + (if both then across * (T / 2) else Vector3.zero)
+		Kit.box(m, CFrame.lookAt(pc, pc + go), Vector3.new(w, 1.6, 0.4), { blocks = false, collide = false })
+		for k = -1, 1 do
+			local q = pc + Vector3.new(0, k * 0.45, 0) - go * 0.25
+			Kit.box(m, CFrame.lookAt(q, q + go), Vector3.new(w * (0.8 - math.abs(k) * 0.15), 0.12, 0.1), { blocks = false, collide = false })
+		end
+	end
+end
+
+-- F: 붕락 돌무더기 — 천장이 무너져 갱도를 막은 큰 바위 셋 + 기울어진 판석 + 부서진 버팀목
+function M.Rubble(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local h = height(ctx, i, j)
+	local m = model(ctx, "Rubble")
+	local r = ctx.hash(i, j, 5)
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 1.8, 0)) * CFrame.Angles(0.2, r, 0.15), Vector3.new(7, 3.6, 6.5), { name = "Rock" })
+	Kit.box(m, CFrame.new(p + Vector3.new(-1.2, 4.6, 0.6)) * CFrame.Angles(-0.3, r + 0.7, 0.25), Vector3.new(5, 3, 4.4), { name = "Rock" })
+	Kit.box(m, CFrame.new(p + Vector3.new(1.4, 7.2, -0.4)) * CFrame.Angles(0.4, r - 0.5, -0.3), Vector3.new(4.2, 2.6, 3.6), { name = "Rock" })
+	Kit.wedge(m, CFrame.new(p + Vector3.new(0.5, math.min(h - 1.6, 10), 1.2)) * CFrame.Angles(0, r, 0.5), Vector3.new(6, 2, 5), { blocks = false })
+	Kit.box(m, CFrame.new(p + Vector3.new(2.6, 2.6, 2.6)) * CFrame.Angles(0.8, 0.3, 0), Vector3.new(0.6, 5.5, 0.6), { blocks = false, collide = false })
+	Kit.box(m, CFrame.new(p + Vector3.new(0, math.min(h, 12) / 2, 0)), Vector3.new(ctx.T, math.min(h, 12), ctx.T), { invisible = true, tag = false })
+end
+
+-- l: 무덤 등불 — 납골당 공기를 돌리려고 불을 피우던 돌 기둥 위 넓은 불 그릇(원형실의 둘째 랜드마크)
+function M.Lamp(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local m = model(ctx, "SepulchralLamp")
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 0.5, 0)), Vector3.new(4.4, 1, 4.4), { name = "Plinth" })
+	Kit.cylinder(m, p + Vector3.new(0, 1, 0), p + Vector3.new(0, 4.2, 0), 1.0, { name = "Shaft" })
+	Kit.cylinder(m, p + Vector3.new(0, 4.2, 0), p + Vector3.new(0, 5.2, 0), 2.6, { name = "Bowl", rings = 1 })
+	Kit.cylinder(m, p + Vector3.new(0, 5.2, 0), p + Vector3.new(0, 5.4, 0), 2.9, { blocks = false, collide = false })
+	Kit.box(m, CFrame.new(p + Vector3.new(0, 2.8, 0)), Vector3.new(4.4, 5.6, 4.4), { invisible = true, tag = false })
+end
+
+-- M: 채석공 요새 부조 — 옛 채석공이 벽 턱에 새긴 성채 모형(탑 셋 + 성벽 + 받침 턱). 벽에 붙는다
+function M.Sculpture(ctx, i: number, j: number)
+	local p = base(ctx, i, j)
+	local side = wallSide(ctx, i, j) or Vector3.new(0, 0, -1)
+	local along = Vector3.new(side.Z, 0, -side.X)
+	local m = model(ctx, "QuarrySculpture")
+	local c = p + side * (ctx.T / 2 - 1.6)
+	local face = function(q: Vector3): CFrame
+		return CFrame.lookAt(q, q - side)
+	end
+	Kit.box(m, face(c + Vector3.new(0, 1.6, 0)), Vector3.new(ctx.T - 0.6, 3.2, 3.2), { name = "Ledge" })
+	Kit.box(m, face(c + Vector3.new(0, 4.0, 0)), Vector3.new(5.6, 1.6, 1.6), { name = "Rampart" })
+	for k, x in { -2.6, 0, 2.6 } do
+		local th = if k == 2 then 3.4 else 2.4
+		local q = c + along * x + Vector3.new(0, 3.2 + th / 2, 0)
+		Kit.box(m, face(q), Vector3.new(1.2, th, 1.2), { blocks = false })
+		Kit.wedge(m, face(q + Vector3.new(0, th / 2 + 0.4, 0)), Vector3.new(1.3, 0.8, 1.3), { blocks = false, collide = false })
+	end
 end
 
 return M

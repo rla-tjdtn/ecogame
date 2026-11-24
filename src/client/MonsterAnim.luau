@@ -38,17 +38,28 @@ local function sp(x: number?): Spring
 	return { x = x or 0, v = 0 }
 end
 -- 스프링-감쇠(freq: 초당 진동수, damp: 1 = 임계 감쇠)
+-- 한 번에 적분하는 시간은 SUB 이하로 나눈다: 가장 단단한 스프링(머리 ~10Hz)은 1/60초 근처가 안정 한계라
+-- 프레임이 늘어지거나(저사양) 멀리 있는 괴물을 몇 프레임에 한 번 계산해도(LOD) 몸이 튀지 않는다. 60fps 에서는 1번 그대로
+local SUB = 1 / 55
 local function step(s: Spring, target: number, freq: number, damp: number, dt: number)
 	local w = TWO_PI * freq
-	local a = w * w * (target - s.x) - 2 * damp * w * s.v
-	s.v += a * dt
-	s.x += s.v * dt
+	local n = if dt > SUB then math.ceil(dt / SUB) else 1
+	local h = dt / n
+	for _ = 1, n do
+		local a = w * w * (target - s.x) - 2 * damp * w * s.v
+		s.v += a * h
+		s.x += s.v * h
+	end
 end
 local function vstep(s: VSpring, target: Vector3, freq: number, damp: number, dt: number)
 	local w = TWO_PI * freq
-	local a = (target - s.x) * (w * w) - s.v * (2 * damp * w)
-	s.v += a * dt
-	s.x += s.v * dt
+	local n = if dt > SUB then math.ceil(dt / SUB) else 1
+	local h = dt / n
+	for _ = 1, n do
+		local a = (target - s.x) * (w * w) - s.v * (2 * damp * w)
+		s.v += a * h
+		s.x += s.v * h
+	end
 end
 -- 벡터 a 를 b 로 돌리는 회전
 local function fromTo(a: Vector3, b: Vector3): CFrame
@@ -149,6 +160,8 @@ type Body = {
 	lastHeard: any,
 	lastState: string,
 	stats: { [string]: number },
+	lodAcc: number, -- (LOD) 건너뛴 프레임의 시간 누적
+	lodSkip: number, -- (LOD) 건너뛴 프레임 수
 }
 
 local bodies: { [Model]: Body } = {}
@@ -258,6 +271,8 @@ local function build(model: Model): Body?
 		lastHeard = model:GetAttribute("Heard"),
 		lastState = (model:GetAttribute("State") :: string?) or "Wander",
 		stats = { steps = 0, slip = 0, pelvisMin = math.huge, pelvisMax = -math.huge, chestYawMax = 0, headLag = 0, frames = 0, leanMax = 0, armMax = 0, liftMax = 0, freezes = 0, handSteps = 0 },
+		lodAcc = 0,
+		lodSkip = math.random(0, 3), -- (괴물마다 다른 프레임에 계산되게 흩뿌린다)
 	}
 	Anim.stats[model] = b.stats
 	return b
@@ -774,32 +789,66 @@ local function animated(m: Model): boolean
 	return f ~= "Disguise" and f ~= "Bursting"
 end
 
+-- LOD: 음파에 드러난(또는 곧 드러날) 괴물과 가까운 괴물은 매 프레임, 드러나지 않은(투명한) 먼 괴물은 2·4프레임에 한 번
+-- (건너뛴 시간을 모아서 계산하므로 걸음·속도·발 위치는 그대로. 발소리는 드러난 동안만 들리므로 그때는 늘 매 프레임)
+Anim.lodNear = 40 -- 이 거리 안은 매 프레임
+Anim.lodMid = 90 -- 이 거리 안은 2프레임에 한 번, 그 밖(~range)은 4프레임에 한 번
+Anim.lod = true
+local Reveal = require(script.Parent:WaitForChild("Reveal"))
+-- 괴물 목록(태그 신호로 유지: 매 프레임 GetTagged 배열을 새로 만들지 않는다)
+local tagged: { [Model]: boolean } = {}
+for _, inst in CollectionService:GetTagged(Config.Tags.Monster) do
+	if inst:IsA("Model") then
+		tagged[inst] = true
+	end
+end
+CollectionService:GetInstanceAddedSignal(Config.Tags.Monster):Connect(function(inst)
+	if inst:IsA("Model") then
+		tagged[inst] = true
+	end
+end)
+CollectionService:GetInstanceRemovedSignal(Config.Tags.Monster):Connect(function(inst)
+	tagged[inst :: Model] = nil
+end)
+local Perf = require(script.Parent:WaitForChild("Perf"))
 RunService.RenderStepped:Connect(function(dt)
+	local t0 = os.clock()
 	dt = math.min(dt, 1 / 20)
 	local cam = workspace.CurrentCamera
 	local camPos = cam and cam.CFrame.Position or Vector3.zero
-	for _, inst in CollectionService:GetTagged(Config.Tags.Monster) do
-		local m = inst :: Model
-		if m:IsA("Model") and m.Parent and animated(m) then
+	local nUpd = 0
+	for m in tagged do
+		if m.Parent and animated(m) then
 			local b = bodies[m]
 			local root = m.PrimaryPart
-			if root and (root.Position - camPos).Magnitude < Anim.range then
+			local d = if root then (root.Position - camPos).Magnitude else math.huge
+			if root and d < Anim.range then
 				if not b or b.root ~= root or not b.pelvisM.Parent then
 					b = build(m)
 					bodies[m] = b
 				end
 				if b then
-					update(b, dt)
+					local every = if not Anim.lod or d < Anim.lodNear or Reveal.has(m) then 1 elseif d < Anim.lodMid then 2 else 4
+					b.lodAcc += dt
+					b.lodSkip += 1
+					if b.lodSkip >= every then
+						update(b, math.min(b.lodAcc, 0.1))
+						b.lodAcc = 0
+						b.lodSkip = 0
+						nUpd += 1
+					end
 				end
 			end
 		end
 	end
+	Perf.count("monsterAnimUpdates", nUpd)
 	for m in bodies do
 		if not m.Parent then
 			bodies[m] = nil
 			Anim.stats[m] = nil
 		end
 	end
+	Perf.add("monsterAnim", os.clock() - t0)
 end)
 
 -- (테스트) 측정값 요약: 움직인 괴물들 중 최대 미끄러짐, 걸음 수, 골반 오르내림 폭 등

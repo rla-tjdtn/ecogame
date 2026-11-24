@@ -1,7 +1,8 @@
 // Runs an automated play test inside the open Roblox Studio and prints the result.
 //
 //   node tools/studio-test.js [testName] [timeoutSeconds]
-//   (env PLAYERS=4: a local server with that many clients; WATCH_SECONDS: how long the "watch" test plays)
+//   (env PLAYERS=4: a local server with that many clients; WATCH_SECONDS: how long the "watch" test plays;
+//    TEST_PORT: which Studio window takes it — a place built with that ServerStorage.TestPort (tools/perf-build.sh), default 34902)
 //
 // Installs tools/SonarTestRunner.plugin.lua into Studio's local plugins folder (once), serves one test request on
 // http://localhost:34902, waits for the plugin to run it (a real Play session; src/server/TestHarness.server.luau
@@ -51,7 +52,8 @@ const server = http.createServer((req, res) => {
 		}
 	});
 });
-server.listen(34902, "127.0.0.1", () => console.log("waiting for Studio (plugin polls every 2 s)..."));
+const port = Number(process.env.TEST_PORT || 34902);
+server.listen(port, "127.0.0.1", () => console.log("waiting for Studio (plugin polls every 2 s)..."));
 setTimeout(() => {
 	console.log(handed ? "TIMEOUT: Studio took the test but did not report back" : "TIMEOUT: Studio never asked for the test (plugin not loaded, or HTTP not allowed for it)");
 	process.exit(2);

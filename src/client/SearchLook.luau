@@ -64,6 +64,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	end
 end)
 
+local Perf = require(script.Parent:WaitForChild("Perf"))
 local acc = 0
 RunService.RenderStepped:Connect(function(dt)
 	acc += dt
@@ -71,7 +72,9 @@ RunService.RenderStepped:Connect(function(dt)
 		return
 	end
 	acc = 0
+	local t0 = os.clock()
 	current = find()
+	Perf.add("searchLook", os.clock() - t0)
 	if current then
 		local open = current.model:GetAttribute("Open") == true
 		local what = if current.label == "서랍장" or current.label == "협탁" then "서랍" else current.label

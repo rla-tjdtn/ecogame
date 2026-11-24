@@ -1,0 +1,8 @@
+{
+ "k5h2": { "chase": { "twist": 2.1, "jaw": 44 }, "attack": { "twist": 2.1, "jaw": 56, "walk": 0.5 } },
+ "k5s1": { "chase": { "jawDrop": 0.7 } },
+ "k6h1": { "chase": { "spin": 0.12, "headYaw": 25 } },
+ "k6s3": { "split": true, "splitThin": true },
+ "k7s2": { "chase": { "jaw": 24 } },
+ "k7s3": { "walk": { "sing": 0.5 }, "chase": { "sing": 0.7, "gape": 0.6 }, "attack": { "sing": 1, "walk": 0.4, "gape": 1.15 } }
+}

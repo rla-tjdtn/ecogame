@@ -1,0 +1,2048 @@
+{
+ "picks": {
+  "k1h1": {
+   "scream": {
+    "fs": "333832",
+    "q": "monster roar distorted",
+    "url": "https://freesound.org/s/333832/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "349865",
+    "q": "heavy boots concrete footstep",
+    "url": "https://freesound.org/s/349865/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "134025",
+    "q": "bone snap crunch",
+    "url": "https://freesound.org/s/134025/",
+    "dur": 1.01
+   }
+  },
+  "k1h2": {
+   "scream": {
+    "fs": "267179",
+    "q": "ghost moan",
+    "url": "https://freesound.org/s/267179/",
+    "dur": 3
+   },
+   "special": {
+    "fs": "764458",
+    "q": "chiropractor crack",
+    "url": "https://freesound.org/s/764458/",
+    "dur": 1.5
+   },
+   "steps": {
+    "fs": "366111",
+    "q": "footstep",
+    "url": "https://freesound.org/s/366111/",
+    "dur": 0.8
+   }
+  },
+  "k1s1": {
+   "scream": {
+    "fs": "535095",
+    "q": "double voice demon",
+    "url": "https://freesound.org/s/535095/",
+    "dur": 3
+   },
+   "special": {
+    "fs": "316797",
+    "q": "whispering voices creepy",
+    "url": "https://freesound.org/s/316797/",
+    "dur": 1.5
+   },
+   "steps": {
+    "fs": "50725",
+    "q": "footstep",
+    "url": "https://freesound.org/s/50725/",
+    "dur": 0.8
+   }
+  },
+  "k1s2": {
+   "scream": {
+    "fs": "251309",
+    "q": "wood groan",
+    "url": "https://freesound.org/s/251309/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "457741",
+    "q": "wood knock single",
+    "url": "https://freesound.org/s/457741/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "369986",
+    "q": "branch snap breaking",
+    "url": "https://freesound.org/s/369986/",
+    "dur": 1.5
+   }
+  },
+  "k2h1": {
+   "scream": {
+    "fs": "433735",
+    "q": "raspy monster scream",
+    "url": "https://freesound.org/s/433735/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "389990",
+    "q": "hand slap concrete",
+    "url": "https://freesound.org/s/389990/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "450509",
+    "q": "horror sound effect",
+    "url": "https://freesound.org/s/450509/",
+    "dur": 1.5
+   }
+  },
+  "k2h2": {
+   "scream": {
+    "fs": "85568",
+    "q": "monster growl",
+    "url": "https://freesound.org/s/85568/",
+    "dur": 2.463
+   },
+   "steps": {
+    "fs": "19292",
+    "q": "footstep",
+    "url": "https://freesound.org/s/19292/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "453763",
+    "q": "cash register ding",
+    "url": "https://freesound.org/s/453763/",
+    "dur": 1.5
+   }
+  },
+  "k2s1": {
+   "scream": {
+    "fs": "398908",
+    "q": "monster growl",
+    "url": "https://freesound.org/s/398908/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "452621",
+    "q": "fingers tapping table",
+    "url": "https://freesound.org/s/452621/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "417537",
+    "q": "fingernails scratching wood",
+    "url": "https://freesound.org/s/417537/",
+    "dur": 1.5
+   }
+  },
+  "k2s2": {
+   "scream": {
+    "fs": "147069",
+    "q": "metal screech scraping",
+    "url": "https://freesound.org/s/147069/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "738951",
+    "q": "metal tip tap floor",
+    "url": "https://freesound.org/s/738951/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "236007",
+    "q": "scissors snip",
+    "url": "https://freesound.org/s/236007/",
+    "dur": 1.5
+   }
+  },
+  "k3h1": {
+   "scream": {
+    "fs": "575314",
+    "q": "drowning gurgle roar",
+    "url": "https://freesound.org/s/575314/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "376809",
+    "q": "wet footstep puddle",
+    "url": "https://freesound.org/s/376809/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "423959",
+    "q": "bubbles water gurgle",
+    "url": "https://freesound.org/s/423959/",
+    "dur": 1.5
+   }
+  },
+  "k3h2": {
+   "scream": {
+    "fs": "268580",
+    "q": "snake hiss",
+    "url": "https://freesound.org/s/268580/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "495117",
+    "q": "wet cloth slap",
+    "url": "https://freesound.org/s/495117/",
+    "dur": 0.489
+   },
+   "special": {
+    "fs": "162758",
+    "q": "sponge squeeze water",
+    "url": "https://freesound.org/s/162758/",
+    "dur": 1.5
+   }
+  },
+  "k3s1": {
+   "scream": {
+    "fs": "734900",
+    "q": "crocodile growl",
+    "url": "https://freesound.org/s/734900/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "411206",
+    "q": "footstep",
+    "url": "https://freesound.org/s/411206/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "238258",
+    "q": "teeth chattering",
+    "url": "https://freesound.org/s/238258/",
+    "dur": 1.5
+   }
+  },
+  "k3s2": {
+   "scream": {
+    "fs": "449066",
+    "q": "wet sucking groan",
+    "url": "https://freesound.org/s/449066/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "198962",
+    "q": "footstep",
+    "url": "https://freesound.org/s/198962/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "222517",
+    "q": "horror sound effect",
+    "url": "https://freesound.org/s/222517/",
+    "dur": 3
+   }
+  },
+  "k4h1": {
+   "scream": {
+    "fs": "320740",
+    "q": "woman shriek horror",
+    "url": "https://freesound.org/s/320740/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "844745",
+    "q": "rubber sole squeak floor",
+    "url": "https://freesound.org/s/844745/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "458424",
+    "q": "syringe plunger",
+    "url": "https://freesound.org/s/458424/",
+    "dur": 1.5
+   }
+  },
+  "k4h2": {
+   "scream": {
+    "fs": "483634",
+    "q": "electric buzz scream",
+    "url": "https://freesound.org/s/483634/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "837389",
+    "q": "heavy metal robot footstep",
+    "url": "https://freesound.org/s/837389/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "577277",
+    "q": "fluorescent light buzz flicker",
+    "url": "https://freesound.org/s/577277/",
+    "dur": 1.5
+   }
+  },
+  "k4h3": {
+   "scream": {
+    "fs": "590135",
+    "q": "asthma wheeze",
+    "url": "https://freesound.org/s/590135/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "240732",
+    "q": "footstep",
+    "url": "https://freesound.org/s/240732/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "703025",
+    "q": "ventilator breathing machine",
+    "url": "https://freesound.org/s/703025/",
+    "dur": 3
+   }
+  },
+  "k4s1": {
+   "scream": {
+    "fs": "661211",
+    "q": "child scream distant",
+    "url": "https://freesound.org/s/661211/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "57642",
+    "q": "wheelchair squeak",
+    "url": "https://freesound.org/s/57642/",
+    "dur": 0.273
+   },
+   "special": {
+    "fs": "336328",
+    "q": "wheel spinning",
+    "url": "https://freesound.org/s/336328/",
+    "dur": 1.5
+   }
+  },
+  "k4s2": {
+   "scream": {
+    "fs": "520286",
+    "q": "strangled scream",
+    "url": "https://freesound.org/s/520286/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "260824",
+    "q": "crawling hands floor",
+    "url": "https://freesound.org/s/260824/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "578874",
+    "q": "knuckle crack",
+    "url": "https://freesound.org/s/578874/",
+    "dur": 0.692
+   }
+  },
+  "k4s3": {
+   "scream": {
+    "fs": "240091",
+    "q": "reversed scream",
+    "url": "https://freesound.org/s/240091/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "352870",
+    "q": "footstep",
+    "url": "https://freesound.org/s/352870/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "65401",
+    "q": "heart monitor flatline",
+    "url": "https://freesound.org/s/65401/",
+    "dur": 3
+   }
+  },
+  "k4s4": {
+   "scream": {
+    "fs": "140256",
+    "q": "double scream",
+    "url": "https://freesound.org/s/140256/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "481862",
+    "q": "body drag cloth",
+    "url": "https://freesound.org/s/481862/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "397994",
+    "q": "cart rolling metal",
+    "url": "https://freesound.org/s/397994/",
+    "dur": 1.5
+   }
+  },
+  "k5h1": {
+   "scream": {
+    "fs": "345645",
+    "q": "deep horn drone",
+    "url": "https://freesound.org/s/345645/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "616615",
+    "q": "stone step echo",
+    "url": "https://freesound.org/s/616615/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "389590",
+    "q": "whoosh swish arm",
+    "url": "https://freesound.org/s/389590/",
+    "dur": 0.251
+   }
+  },
+  "k5h2": {
+   "scream": {
+    "fs": "170454",
+    "q": "monster growl",
+    "url": "https://freesound.org/s/170454/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "175215",
+    "q": "creature footsteps",
+    "url": "https://freesound.org/s/175215/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "169727",
+    "q": "horror sound effect",
+    "url": "https://freesound.org/s/169727/",
+    "dur": 1.5
+   }
+  },
+  "k5s1": {
+   "scream": {
+    "fs": "760564",
+    "q": "spider hiss",
+    "url": "https://freesound.org/s/760564/",
+    "dur": 0.278
+   },
+   "steps": {
+    "fs": "175226",
+    "q": "spider legs scuttle",
+    "url": "https://freesound.org/s/175226/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "655333",
+    "q": "jaw dislocate pop",
+    "url": "https://freesound.org/s/655333/",
+    "dur": 1.5
+   }
+  },
+  "k5s2": {
+   "scream": {
+    "fs": "321464",
+    "q": "muffled squeal",
+    "url": "https://freesound.org/s/321464/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "500009",
+    "q": "rubber squeak wall",
+    "url": "https://freesound.org/s/500009/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "243699",
+    "q": "stone scrape wall",
+    "url": "https://freesound.org/s/243699/",
+    "dur": 1.5
+   }
+  },
+  "k5s3": {
+   "scream": {
+    "fs": "171945",
+    "q": "whale low moan",
+    "url": "https://freesound.org/s/171945/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "465358",
+    "q": "light tap floor",
+    "url": "https://freesound.org/s/465358/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "419748",
+    "q": "tinnitus ringing",
+    "url": "https://freesound.org/s/419748/",
+    "dur": 3
+   }
+  },
+  "k6h1": {
+   "scream": {
+    "fs": "278903",
+    "q": "soprano vocal high",
+    "url": "https://freesound.org/s/278903/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "392482",
+    "q": "tiptoe tap dance",
+    "url": "https://freesound.org/s/392482/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "150025",
+    "q": "old waltz record",
+    "url": "https://freesound.org/s/150025/",
+    "dur": 3
+   }
+  },
+  "k6h2": {
+   "scream": {
+    "fs": "329867",
+    "q": "creepy laughter",
+    "url": "https://freesound.org/s/329867/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "712066",
+    "q": "creature footsteps",
+    "url": "https://freesound.org/s/712066/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "116779",
+    "q": "hotel service bell ding",
+    "url": "https://freesound.org/s/116779/",
+    "dur": 1.5
+   }
+  },
+  "k6h3": {
+   "scream": {
+    "fs": "502211",
+    "q": "insect screech",
+    "url": "https://freesound.org/s/502211/",
+    "dur": 0.485
+   },
+   "steps": {
+    "fs": "659370",
+    "q": "creature footsteps",
+    "url": "https://freesound.org/s/659370/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "240549",
+    "q": "insect wings buzz flutter",
+    "url": "https://freesound.org/s/240549/",
+    "dur": 1.5
+   }
+  },
+  "k6s1": {
+   "scream": {
+    "fs": "166156",
+    "q": "muffled screaming",
+    "url": "https://freesound.org/s/166156/",
+    "dur": 2.168
+   },
+   "steps": {
+    "fs": "588655",
+    "q": "creature footsteps",
+    "url": "https://freesound.org/s/588655/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "180686",
+    "q": "zipper open",
+    "url": "https://freesound.org/s/180686/",
+    "dur": 1.5
+   }
+  },
+  "k6s2": {
+   "scream": {
+    "fs": "244690",
+    "q": "two tone scream",
+    "url": "https://freesound.org/s/244690/",
+    "dur": 0.734
+   },
+   "steps": {
+    "fs": "431541",
+    "q": "sticky footsteps",
+    "url": "https://freesound.org/s/431541/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "824189",
+    "q": "slime stretch",
+    "url": "https://freesound.org/s/824189/",
+    "dur": 0.438
+   }
+  },
+  "k6s3": {
+   "scream": {
+    "fs": "161691",
+    "q": "underwater scream",
+    "url": "https://freesound.org/s/161691/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "432821",
+    "q": "ceramic scrape drag",
+    "url": "https://freesound.org/s/432821/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "382649",
+    "q": "bath water slosh",
+    "url": "https://freesound.org/s/382649/",
+    "dur": 1.5
+   }
+  },
+  "k6s4": {
+   "scream": {
+    "fs": "157835",
+    "q": "choking water cough",
+    "url": "https://freesound.org/s/157835/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "531725",
+    "q": "creature footsteps",
+    "url": "https://freesound.org/s/531725/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "456771",
+    "q": "shower water running",
+    "url": "https://freesound.org/s/456771/",
+    "dur": 3
+   }
+  },
+  "k7h1": {
+   "scream": {
+    "fs": "377742",
+    "q": "girl creepy giggle",
+    "url": "https://freesound.org/s/377742/",
+    "dur": 2.926
+   },
+   "steps": {
+    "fs": "613747",
+    "q": "slipper shuffle",
+    "url": "https://freesound.org/s/613747/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "378394",
+    "q": "school bell ring",
+    "url": "https://freesound.org/s/378394/",
+    "dur": 1.5
+   }
+  },
+  "k7h2": {
+   "scream": {
+    "fs": "486289",
+    "q": "chair scraping screech",
+    "url": "https://freesound.org/s/486289/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "569255",
+    "q": "creature footsteps",
+    "url": "https://freesound.org/s/569255/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "379924",
+    "q": "wooden desk slam",
+    "url": "https://freesound.org/s/379924/",
+    "dur": 0.414
+   }
+  },
+  "k7h3": {
+   "scream": {
+    "fs": "438421",
+    "q": "children crowd shout",
+    "url": "https://freesound.org/s/438421/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "262507",
+    "q": "ball bounce gym",
+    "url": "https://freesound.org/s/262507/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "736924",
+    "q": "crowd cheering kids",
+    "url": "https://freesound.org/s/736924/",
+    "dur": 3
+   }
+  },
+  "k7h4": {
+   "scream": {
+    "fs": "483157",
+    "q": "kid counting one two three",
+    "url": "https://freesound.org/s/483157/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "51148",
+    "q": "small bare feet running",
+    "url": "https://freesound.org/s/51148/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "151219",
+    "q": "hand clap single",
+    "url": "https://freesound.org/s/151219/",
+    "dur": 1.5
+   }
+  },
+  "k7s1": {
+   "scream": {
+    "fs": "320345",
+    "q": "monster growl",
+    "url": "https://freesound.org/s/320345/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "529245",
+    "q": "creature footsteps",
+    "url": "https://freesound.org/s/529245/",
+    "dur": 0.765
+   },
+   "special": {
+    "fs": "278205",
+    "q": "plastic click",
+    "url": "https://freesound.org/s/278205/",
+    "dur": 0.976
+   }
+  },
+  "k7s2": {
+   "scream": {
+    "fs": "445138",
+    "q": "chalk screech",
+    "url": "https://freesound.org/s/445138/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "735343",
+    "q": "heavy footstep wood",
+    "url": "https://freesound.org/s/735343/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "365892",
+    "q": "chalk writing blackboard",
+    "url": "https://freesound.org/s/365892/",
+    "dur": 1.5
+   }
+  },
+  "k7s3": {
+   "scream": {
+    "fs": "569857",
+    "q": "pipe organ chord",
+    "url": "https://freesound.org/s/569857/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "502507",
+    "q": "wood floor creak",
+    "url": "https://freesound.org/s/502507/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "166748",
+    "q": "horror sound effect",
+    "url": "https://freesound.org/s/166748/",
+    "dur": 3
+   }
+  },
+  "k8h1": {
+   "scream": {
+    "fs": "20208",
+    "q": "monster growl",
+    "url": "https://freesound.org/s/20208/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "504626",
+    "q": "thud impact",
+    "url": "https://freesound.org/s/504626/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "468443",
+    "q": "squeaky toy",
+    "url": "https://freesound.org/s/468443/",
+    "dur": 0.44
+   }
+  },
+  "k8h2": {
+   "scream": {
+    "fs": "677660",
+    "q": "muffled yelling",
+    "url": "https://freesound.org/s/677660/",
+    "dur": 0.879
+   },
+   "steps": {
+    "fs": "862960",
+    "q": "rope drag",
+    "url": "https://freesound.org/s/862960/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "157873",
+    "q": "whistle blow",
+    "url": "https://freesound.org/s/157873/",
+    "dur": 1.5
+   }
+  },
+  "k8h3": {
+   "scream": {
+    "fs": "512966",
+    "q": "metal pipe resonance",
+    "url": "https://freesound.org/s/512966/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "435210",
+    "q": "metal pole clang",
+    "url": "https://freesound.org/s/435210/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "412394",
+    "q": "playground slide sliding",
+    "url": "https://freesound.org/s/412394/",
+    "dur": 1.5
+   }
+  },
+  "k8s1": {
+   "scream": {
+    "fs": "346663",
+    "q": "child crying",
+    "url": "https://freesound.org/s/346663/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "245937",
+    "q": "bare feet slap floor",
+    "url": "https://freesound.org/s/245937/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "646047",
+    "q": "needle thread stitching",
+    "url": "https://freesound.org/s/646047/",
+    "dur": 1.5
+   }
+  },
+  "k8s2": {
+   "scream": {
+    "fs": "59569",
+    "q": "horse neigh",
+    "url": "https://freesound.org/s/59569/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "124972",
+    "q": "rocking chair creak",
+    "url": "https://freesound.org/s/124972/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "364704",
+    "q": "wood knock hollow",
+    "url": "https://freesound.org/s/364704/",
+    "dur": 0.26
+   }
+  },
+  "k8s3": {
+   "scream": {
+    "fs": "457294",
+    "q": "steam hiss release",
+    "url": "https://freesound.org/s/457294/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "772279",
+    "q": "wind chimes tinkle",
+    "url": "https://freesound.org/s/772279/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "163644",
+    "q": "music box lullaby",
+    "url": "https://freesound.org/s/163644/",
+    "dur": 3
+   }
+  },
+  "k8s4": {
+   "scream": {
+    "fs": "418194",
+    "q": "porcelain crack",
+    "url": "https://freesound.org/s/418194/",
+    "dur": 0.652
+   },
+   "steps": {
+    "fs": "553899",
+    "q": "porcelain tap ceramic",
+    "url": "https://freesound.org/s/553899/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "415278",
+    "q": "horror sound effect",
+    "url": "https://freesound.org/s/415278/",
+    "dur": 1.5
+   }
+  },
+  "k9h1": {
+   "scream": {
+    "fs": "869056",
+    "q": "deep distorted roar",
+    "url": "https://freesound.org/s/869056/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "622737",
+    "q": "giant footstep",
+    "url": "https://freesound.org/s/622737/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "104373",
+    "q": "metal pipe hit echo",
+    "url": "https://freesound.org/s/104373/",
+    "dur": 1.5
+   }
+  },
+  "k9h2": {
+   "scream": {
+    "fs": "104026",
+    "q": "tire screech",
+    "url": "https://freesound.org/s/104026/",
+    "dur": 1.964
+   },
+   "steps": {
+    "fs": "221650",
+    "q": "limp dragging footsteps",
+    "url": "https://freesound.org/s/221650/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "237375",
+    "q": "car crash impact",
+    "url": "https://freesound.org/s/237375/",
+    "dur": 1.5
+   }
+  },
+  "k9h3": {
+   "scream": {
+    "fs": "231347",
+    "q": "hydraulic machine",
+    "url": "https://freesound.org/s/231347/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "481926",
+    "q": "heavy box tumble",
+    "url": "https://freesound.org/s/481926/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "51044",
+    "q": "metal crush",
+    "url": "https://freesound.org/s/51044/",
+    "dur": 3
+   }
+  },
+  "k9s1": {
+   "scream": {
+    "fs": "837986",
+    "q": "whisper hiss",
+    "url": "https://freesound.org/s/837986/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "243400",
+    "q": "thud impact",
+    "url": "https://freesound.org/s/243400/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "170243",
+    "q": "car alarm",
+    "url": "https://freesound.org/s/170243/",
+    "dur": 0.407
+   }
+  },
+  "k9s2": {
+   "scream": {
+    "fs": "445958",
+    "q": "bat screech",
+    "url": "https://freesound.org/s/445958/",
+    "dur": 0.409
+   },
+   "steps": {
+    "fs": "19295",
+    "q": "wing flap",
+    "url": "https://freesound.org/s/19295/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "558749",
+    "q": "tarp flap",
+    "url": "https://freesound.org/s/558749/",
+    "dur": 1.5
+   }
+  },
+  "k9s3": {
+   "scream": {
+    "fs": "273334",
+    "q": "engine rev growl",
+    "url": "https://freesound.org/s/273334/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "390798",
+    "q": "tire rolling gravel",
+    "url": "https://freesound.org/s/390798/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "182474",
+    "q": "car horn honk",
+    "url": "https://freesound.org/s/182474/",
+    "dur": 1.5
+   }
+  },
+  "k9s4": {
+   "scream": {
+    "fs": "125211",
+    "q": "engine steam hiss",
+    "url": "https://freesound.org/s/125211/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "108673",
+    "q": "sheet metal rattle",
+    "url": "https://freesound.org/s/108673/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "329516",
+    "q": "car hood slam",
+    "url": "https://freesound.org/s/329516/",
+    "dur": 1.5
+   }
+  },
+  "k10h1a": {
+   "scream": {
+    "fs": "840311",
+    "q": "high pitched ringing screech",
+    "url": "https://freesound.org/s/840311/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "142008",
+    "q": "boots carpet step",
+    "url": "https://freesound.org/s/142008/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "445109",
+    "q": "wet squish",
+    "url": "https://freesound.org/s/445109/",
+    "dur": 0.351
+   }
+  },
+  "k10h1b": {
+   "scream": {
+    "fs": "829399",
+    "q": "deep groan moan",
+    "url": "https://freesound.org/s/829399/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "191513",
+    "q": "chain drag floor",
+    "url": "https://freesound.org/s/191513/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "232130",
+    "q": "camera shutter",
+    "url": "https://freesound.org/s/232130/",
+    "dur": 1.5
+   }
+  },
+  "k10h1c": {
+   "scream": {
+    "fs": "813270",
+    "q": "gasp rasp breath",
+    "url": "https://freesound.org/s/813270/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "702293",
+    "q": "bone clack wooden floor",
+    "url": "https://freesound.org/s/702293/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "698818",
+    "q": "suction pop",
+    "url": "https://freesound.org/s/698818/",
+    "dur": 1.5
+   }
+  },
+  "k10s1": {
+   "scream": {
+    "fs": "520147",
+    "q": "film static hiss",
+    "url": "https://freesound.org/s/520147/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "508673",
+    "q": "paper fan flutter",
+    "url": "https://freesound.org/s/508673/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "534695",
+    "q": "tv static glitch",
+    "url": "https://freesound.org/s/534695/",
+    "dur": 1.5
+   }
+  },
+  "k10s2": {
+   "scream": {
+    "fs": "196099",
+    "q": "audience murmur",
+    "url": "https://freesound.org/s/196099/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "584864",
+    "q": "folding seat",
+    "url": "https://freesound.org/s/584864/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "570312",
+    "q": "popcorn crunch",
+    "url": "https://freesound.org/s/570312/",
+    "dur": 1.5
+   }
+  },
+  "k10s3": {
+   "scream": {
+    "fs": "391552",
+    "q": "monster growl",
+    "url": "https://freesound.org/s/391552/",
+    "dur": 3
+   },
+   "steps": {
+    "fs": "339114",
+    "q": "thud impact",
+    "url": "https://freesound.org/s/339114/",
+    "dur": 0.8
+   },
+   "special": {
+    "fs": "253758",
+    "q": "film projector running",
+    "url": "https://freesound.org/s/253758/",
+    "dur": 3
+   }
+  }
+ },
+ "packs": {
+  "1": {
+   "file": "pack_ch1.ogg",
+   "length": 24.31,
+   "index": {
+    "k1h1": {
+     "scream": {
+      "start": 0,
+      "dur": 3
+     },
+     "steps": {
+      "start": 3.3,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 4.4,
+      "dur": 1.01
+     }
+    },
+    "k1h2": {
+     "scream": {
+      "start": 5.71,
+      "dur": 3
+     },
+     "steps": {
+      "start": 9.01,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 10.11,
+      "dur": 1.5
+     }
+    },
+    "k1s1": {
+     "scream": {
+      "start": 11.91,
+      "dur": 3
+     },
+     "steps": {
+      "start": 15.21,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 16.31,
+      "dur": 1.5
+     }
+    },
+    "k1s2": {
+     "scream": {
+      "start": 18.11,
+      "dur": 3
+     },
+     "steps": {
+      "start": 21.41,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 22.51,
+      "dur": 1.5
+     }
+    }
+   },
+   "assetId": 91571656965183
+  },
+  "2": {
+   "file": "pack_ch2.ogg",
+   "length": 24.26,
+   "index": {
+    "k2h1": {
+     "scream": {
+      "start": 0,
+      "dur": 3
+     },
+     "steps": {
+      "start": 3.3,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 4.4,
+      "dur": 1.5
+     }
+    },
+    "k2h2": {
+     "scream": {
+      "start": 6.2,
+      "dur": 2.463
+     },
+     "steps": {
+      "start": 8.963,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 10.063,
+      "dur": 1.5
+     }
+    },
+    "k2s1": {
+     "scream": {
+      "start": 11.863,
+      "dur": 3
+     },
+     "steps": {
+      "start": 15.163,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 16.263,
+      "dur": 1.5
+     }
+    },
+    "k2s2": {
+     "scream": {
+      "start": 18.063,
+      "dur": 3
+     },
+     "steps": {
+      "start": 21.363,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 22.463,
+      "dur": 1.5
+     }
+    }
+   },
+   "assetId": 126579656575718
+  },
+  "3": {
+   "file": "pack_ch3.ogg",
+   "length": 25.99,
+   "index": {
+    "k3h1": {
+     "scream": {
+      "start": 0,
+      "dur": 3
+     },
+     "steps": {
+      "start": 3.3,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 4.4,
+      "dur": 1.5
+     }
+    },
+    "k3h2": {
+     "scream": {
+      "start": 6.2,
+      "dur": 3
+     },
+     "steps": {
+      "start": 9.5,
+      "dur": 0.489
+     },
+     "special": {
+      "start": 10.289,
+      "dur": 1.5
+     }
+    },
+    "k3s1": {
+     "scream": {
+      "start": 12.089,
+      "dur": 3
+     },
+     "steps": {
+      "start": 15.389,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 16.489,
+      "dur": 1.5
+     }
+    },
+    "k3s2": {
+     "scream": {
+      "start": 18.289,
+      "dur": 3
+     },
+     "steps": {
+      "start": 21.589,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 22.689,
+      "dur": 3
+     }
+    }
+   },
+   "assetId": 81158456574281
+  },
+  "4": {
+   "file": "pack_ch4.ogg",
+   "length": 45.07,
+   "index": {
+    "k4h1": {
+     "scream": {
+      "start": 0,
+      "dur": 3
+     },
+     "steps": {
+      "start": 3.3,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 4.4,
+      "dur": 1.5
+     }
+    },
+    "k4h2": {
+     "scream": {
+      "start": 6.2,
+      "dur": 3
+     },
+     "steps": {
+      "start": 9.5,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 10.6,
+      "dur": 1.5
+     }
+    },
+    "k4h3": {
+     "scream": {
+      "start": 12.4,
+      "dur": 3
+     },
+     "steps": {
+      "start": 15.7,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 16.8,
+      "dur": 3
+     }
+    },
+    "k4s1": {
+     "scream": {
+      "start": 20.1,
+      "dur": 3
+     },
+     "steps": {
+      "start": 23.4,
+      "dur": 0.273
+     },
+     "special": {
+      "start": 23.973,
+      "dur": 1.5
+     }
+    },
+    "k4s2": {
+     "scream": {
+      "start": 25.773,
+      "dur": 3
+     },
+     "steps": {
+      "start": 29.073,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 30.173,
+      "dur": 0.692
+     }
+    },
+    "k4s3": {
+     "scream": {
+      "start": 31.165,
+      "dur": 3
+     },
+     "steps": {
+      "start": 34.465,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 35.565,
+      "dur": 3
+     }
+    },
+    "k4s4": {
+     "scream": {
+      "start": 38.865,
+      "dur": 3
+     },
+     "steps": {
+      "start": 42.165,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 43.265,
+      "dur": 1.5
+     }
+    }
+   },
+   "assetId": 132906482027644
+  },
+  "5": {
+   "file": "pack_ch5.ogg",
+   "length": 28.53,
+   "index": {
+    "k5h1": {
+     "scream": {
+      "start": 0,
+      "dur": 3
+     },
+     "steps": {
+      "start": 3.3,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 4.4,
+      "dur": 0.251
+     }
+    },
+    "k5h2": {
+     "scream": {
+      "start": 4.951,
+      "dur": 3
+     },
+     "steps": {
+      "start": 8.251,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 9.351,
+      "dur": 1.5
+     }
+    },
+    "k5s1": {
+     "scream": {
+      "start": 11.151,
+      "dur": 0.278
+     },
+     "steps": {
+      "start": 11.729,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 12.829,
+      "dur": 1.5
+     }
+    },
+    "k5s2": {
+     "scream": {
+      "start": 14.629,
+      "dur": 3
+     },
+     "steps": {
+      "start": 17.929,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 19.029,
+      "dur": 1.5
+     }
+    },
+    "k5s3": {
+     "scream": {
+      "start": 20.829,
+      "dur": 3
+     },
+     "steps": {
+      "start": 24.129,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 25.229,
+      "dur": 3
+     }
+    }
+   },
+   "assetId": 139570916666564
+  },
+  "6": {
+   "file": "pack_ch6.ogg",
+   "length": 39.72,
+   "index": {
+    "k6h1": {
+     "scream": {
+      "start": 0,
+      "dur": 3
+     },
+     "steps": {
+      "start": 3.3,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 4.4,
+      "dur": 3
+     }
+    },
+    "k6h2": {
+     "scream": {
+      "start": 7.7,
+      "dur": 3
+     },
+     "steps": {
+      "start": 11,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 12.1,
+      "dur": 1.5
+     }
+    },
+    "k6h3": {
+     "scream": {
+      "start": 13.9,
+      "dur": 0.485
+     },
+     "steps": {
+      "start": 14.685,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 15.785,
+      "dur": 1.5
+     }
+    },
+    "k6s1": {
+     "scream": {
+      "start": 17.585,
+      "dur": 2.168
+     },
+     "steps": {
+      "start": 20.053,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 21.153,
+      "dur": 1.5
+     }
+    },
+    "k6s2": {
+     "scream": {
+      "start": 22.953,
+      "dur": 0.734
+     },
+     "steps": {
+      "start": 23.987,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 25.087,
+      "dur": 0.438
+     }
+    },
+    "k6s3": {
+     "scream": {
+      "start": 25.825,
+      "dur": 3
+     },
+     "steps": {
+      "start": 29.125,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 30.225,
+      "dur": 1.5
+     }
+    },
+    "k6s4": {
+     "scream": {
+      "start": 32.025,
+      "dur": 3
+     },
+     "steps": {
+      "start": 35.325,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 36.425,
+      "dur": 3
+     }
+    }
+   },
+   "assetId": 75782061847063
+  },
+  "7": {
+   "file": "pack_ch7.ogg",
+   "length": 44.68,
+   "index": {
+    "k7h1": {
+     "scream": {
+      "start": 0,
+      "dur": 2.926
+     },
+     "steps": {
+      "start": 3.226,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 4.326,
+      "dur": 1.5
+     }
+    },
+    "k7h2": {
+     "scream": {
+      "start": 6.126,
+      "dur": 3
+     },
+     "steps": {
+      "start": 9.426,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 10.526,
+      "dur": 0.414
+     }
+    },
+    "k7h3": {
+     "scream": {
+      "start": 11.24,
+      "dur": 3
+     },
+     "steps": {
+      "start": 14.54,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 15.64,
+      "dur": 3
+     }
+    },
+    "k7h4": {
+     "scream": {
+      "start": 18.94,
+      "dur": 3
+     },
+     "steps": {
+      "start": 22.24,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 23.34,
+      "dur": 1.5
+     }
+    },
+    "k7s1": {
+     "scream": {
+      "start": 25.14,
+      "dur": 3
+     },
+     "steps": {
+      "start": 28.44,
+      "dur": 0.765
+     },
+     "special": {
+      "start": 29.505,
+      "dur": 0.976
+     }
+    },
+    "k7s2": {
+     "scream": {
+      "start": 30.781,
+      "dur": 3
+     },
+     "steps": {
+      "start": 34.081,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 35.181,
+      "dur": 1.5
+     }
+    },
+    "k7s3": {
+     "scream": {
+      "start": 36.981,
+      "dur": 3
+     },
+     "steps": {
+      "start": 40.281,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 41.381,
+      "dur": 3
+     }
+    }
+   },
+   "assetId": 114174835468486
+  },
+  "8": {
+   "file": "pack_ch8.ogg",
+   "length": 38.13,
+   "index": {
+    "k8h1": {
+     "scream": {
+      "start": 0,
+      "dur": 3
+     },
+     "steps": {
+      "start": 3.3,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 4.4,
+      "dur": 0.44
+     }
+    },
+    "k8h2": {
+     "scream": {
+      "start": 5.14,
+      "dur": 0.879
+     },
+     "steps": {
+      "start": 6.319,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 7.419,
+      "dur": 1.5
+     }
+    },
+    "k8h3": {
+     "scream": {
+      "start": 9.219,
+      "dur": 3
+     },
+     "steps": {
+      "start": 12.519,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 13.619,
+      "dur": 1.5
+     }
+    },
+    "k8s1": {
+     "scream": {
+      "start": 15.419,
+      "dur": 3
+     },
+     "steps": {
+      "start": 18.719,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 19.819,
+      "dur": 1.5
+     }
+    },
+    "k8s2": {
+     "scream": {
+      "start": 21.619,
+      "dur": 3
+     },
+     "steps": {
+      "start": 24.919,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 26.019,
+      "dur": 0.26
+     }
+    },
+    "k8s3": {
+     "scream": {
+      "start": 26.579,
+      "dur": 3
+     },
+     "steps": {
+      "start": 29.879,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 30.979,
+      "dur": 3
+     }
+    },
+    "k8s4": {
+     "scream": {
+      "start": 34.279,
+      "dur": 0.652
+     },
+     "steps": {
+      "start": 35.231,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 36.331,
+      "dur": 1.5
+     }
+    }
+   },
+   "assetId": 106197945666716
+  },
+  "9": {
+   "file": "pack_ch9.ogg",
+   "length": 40.18,
+   "index": {
+    "k9h1": {
+     "scream": {
+      "start": 0,
+      "dur": 3
+     },
+     "steps": {
+      "start": 3.3,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 4.4,
+      "dur": 1.5
+     }
+    },
+    "k9h2": {
+     "scream": {
+      "start": 6.2,
+      "dur": 1.964
+     },
+     "steps": {
+      "start": 8.464,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 9.564,
+      "dur": 1.5
+     }
+    },
+    "k9h3": {
+     "scream": {
+      "start": 11.364,
+      "dur": 3
+     },
+     "steps": {
+      "start": 14.664,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 15.764,
+      "dur": 3
+     }
+    },
+    "k9s1": {
+     "scream": {
+      "start": 19.064,
+      "dur": 3
+     },
+     "steps": {
+      "start": 22.364,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 23.464,
+      "dur": 0.407
+     }
+    },
+    "k9s2": {
+     "scream": {
+      "start": 24.171,
+      "dur": 0.409
+     },
+     "steps": {
+      "start": 24.88,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 25.98,
+      "dur": 1.5
+     }
+    },
+    "k9s3": {
+     "scream": {
+      "start": 27.78,
+      "dur": 3
+     },
+     "steps": {
+      "start": 31.08,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 32.18,
+      "dur": 1.5
+     }
+    },
+    "k9s4": {
+     "scream": {
+      "start": 33.98,
+      "dur": 3
+     },
+     "steps": {
+      "start": 37.28,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 38.38,
+      "dur": 1.5
+     }
+    }
+   },
+   "assetId": 113939796310653
+  },
+  "10": {
+   "file": "pack_ch10.ogg",
+   "length": 37.55,
+   "index": {
+    "k10h1a": {
+     "scream": {
+      "start": 0,
+      "dur": 3
+     },
+     "steps": {
+      "start": 3.3,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 4.4,
+      "dur": 0.351
+     }
+    },
+    "k10h1b": {
+     "scream": {
+      "start": 5.051,
+      "dur": 3
+     },
+     "steps": {
+      "start": 8.351,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 9.451,
+      "dur": 1.5
+     }
+    },
+    "k10h1c": {
+     "scream": {
+      "start": 11.251,
+      "dur": 3
+     },
+     "steps": {
+      "start": 14.551,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 15.651,
+      "dur": 1.5
+     }
+    },
+    "k10s1": {
+     "scream": {
+      "start": 17.451,
+      "dur": 3
+     },
+     "steps": {
+      "start": 20.751,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 21.851,
+      "dur": 1.5
+     }
+    },
+    "k10s2": {
+     "scream": {
+      "start": 23.651,
+      "dur": 3
+     },
+     "steps": {
+      "start": 26.951,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 28.051,
+      "dur": 1.5
+     }
+    },
+    "k10s3": {
+     "scream": {
+      "start": 29.851,
+      "dur": 3
+     },
+     "steps": {
+      "start": 33.151,
+      "dur": 0.8
+     },
+     "special": {
+      "start": 34.251,
+      "dur": 3
+     }
+    }
+   },
+   "assetId": 105296463212360
+  }
+ }
+}

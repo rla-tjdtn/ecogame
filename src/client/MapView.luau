@@ -8,6 +8,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local World = require(script.Parent:WaitForChild("SonarWorld"))
+local NetStat = require(script.Parent:WaitForChild("NetStat"))
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 -- 팀 지도 공유: 내가 새로 밝힌 칸을 서버에 보내고, 서버가 모은 팀 전체 기록을 받는다(멀리 있는 팀원·다시 살아남·재접속도 같은 지도)
 local MapShare = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("MapShare") :: RemoteEvent
@@ -297,10 +298,13 @@ function Map.load(stage: Instance)
 	-- 팀이 이미 밝힌 칸을 서버에서 받아 온다(다시 살아나거나 다시 들어와도 지도가 이어진다)
 	currentBuild = stage:GetAttribute("BuildId") :: number?
 	MapShare:FireServer("sync")
+	NetStat.count("send.MapShare")
 end
 
 -- 서버가 보낸 팀원 기록(같은 스테이지일 때만)
 MapShare.OnClientEvent:Connect(function(data: any)
+	NetStat.count("recv.MapShare")
+	NetStat.count("recv.MapShare.tiles", if type(data) == "table" and type(data.tiles) == "table" then #data.tiles else 0)
 	if type(data) ~= "table" or data.build ~= currentBuild or type(data.tiles) ~= "table" or W == 0 then
 		return
 	end
@@ -312,24 +316,36 @@ MapShare.OnClientEvent:Connect(function(data: any)
 end)
 
 -- 내 음파가 끝났다: 닿은 복셀의 칸을 기록
-function Map.onReach(dist: { [number]: number }, radius: number)
+-- cells: 음파가 닿은 복셀 번호(World.index) 목록. 복셀 여러 개가 한 칸(8스터드)이므로 칸마다 한 번만 판정한다
+local reachSeen: { [number]: boolean } = {}
+function Map.onReach(cells: { number })
 	if W == 0 then
 		return
 	end
 	local fresh = {}
-	for idx, d in dist do
-		if d <= radius then
-			local c = World.cellCenter(idx)
-			local i, j = math.floor(c.X / T) + 1, math.floor(c.Z / T) + 1
-			local fl = myFloor(c.Y)
+	local o, cs = World.origin, World.cs
+	local ox, oy, oz = o.X + cs / 2, o.Y + cs / 2, o.Z + cs / 2
+	local nx, ny = World.nx, World.ny
+	table.clear(reachSeen)
+	for _, idx in cells do
+		local c = idx - 1
+		local t = c // nx
+		local i = (ox + (c % nx) * cs) // T + 1
+		local j = (oz + (t // ny) * cs) // T + 1
+		local fl = if hasUpper and oy + (t % ny) * cs > UPPER_Y then 2 else 1
+		local k = j * 1024 + i + (fl - 1) * 100000
+		if not reachSeen[k] then
+			reachSeen[k] = true
 			if markTile(i, j, fl) then
-				table.insert(fresh, j * 1024 + i + (fl - 1) * 100000)
+				table.insert(fresh, k)
 			end
 		end
 	end
 	-- 새로 밝힌 칸을 팀에 알린다
 	if #fresh > 0 and currentBuild then
 		MapShare:FireServer({ build = currentBuild, tiles = fresh })
+		NetStat.count("send.MapShare")
+		NetStat.count("send.MapShare.tiles", #fresh)
 	end
 end
 

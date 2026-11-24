@@ -1,7 +1,7 @@
 // 8장 사람형 — 술래: 어른 키의 가는 몸에 아기 머리. 긴 손가락 네 손이 제 머리를 새장처럼 감싸 눈을 가리고 숫자를 센다. 손가락이 벌어지면 본 것이다.
 const { V, Frame, Body } = require('./sculpt.js'), A = require('./anat.js');
 module.exports = { id: 'c8h', name: '술래', kind: '사람형 · 8장 폐유치원', H: 9.4, build(p = {}) {
-  const B = new Body(), w = p.walk, S = w == null ? .4 : Math.sin(w * Math.PI * 2), peek = p.peek ?? .12;
+  const B = new Body(), w = p.walk, S = w == null ? .4 : Math.sin(w * Math.PI * 2), peek = p.peek ?? .12, sp = p.spread ?? 0; // spread: 0 = 네 팔로 얼굴·머리를 감쌈(시안), 1 = 팔을 양옆으로 크게 벌리고 손가락을 펼친 채 덮쳐 옴
   for (const m of [-1, 1]) { const st = m * S, h = [m * .3, 3.75, 0], k = [m * .36, 2.05, .2 + st * .5], an = [m * .2, .3 + Math.max(0, -st) * .15, -.1 + st * .8]; A.leg(B, h, k, an, .25, { m: .75, front: [-m * .15, 0, 1] }); A.foot(B, new Frame(an, [1, 0, 0], [0, 1, 0], V.norm([-m * .35, 0, 1])), .95, {}); }
   A.pelvis(B, new Frame([0, 3.9, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]), { w: .44, d: .3 });
   // 기저귀처럼 묶인 천
@@ -22,8 +22,8 @@ module.exports = { id: 'c8h', name: '술래', kind: '사람형 · 8장 폐유치
   // 손 넷: 두 팔은 앞에서 눈을, 두 팔은 뒤에서 머리를 감싼다. 손가락이 머리 길이만큼 길다
   const wrap = (s, e, wr, tips, r) => { A.arm(B, s, e, wr, r, { m: .7 }); B.group({ k: .05, kg: .08 }); const pm = V.lerp(wr, tips[0][0], .5); B.ell(Frame.along(V.lerp(wr, V.lerp(tips[1][0], tips[2][0], .5), .55), V.sub(V.lerp(tips[1][0], tips[2][0], .5), wr)), [.18, .3, .1]); for (const t of tips) B.cone(wr, t[0], .1, .075); for (const t of tips) { B.group({ k: .015, kg: .03 }); B.tube(t, [.08, .074, .066, .05, .03], { per: 4 }); for (let i = 0; i < t.length - 1; i++) B.ball(t[i], .092 - i * .012, { k: .03 }); } };
   for (const m of [-1, 1]) {
-    { const s = [m * .62, 6.3, 0], e = [m * 1.35, 5.75, .85], wr = [m * .78, 6.85, 1.35]; const tips = []; for (let i = 0; i < 4; i++) { const y = -.42 + i * .2, op = peek * (i === 2 ? 1.6 : i === 1 ? -.9 : .2); tips.push([H([m * .66, y * .8 - .12, 1.0]), H([m * .4, y + .1 + op, 1.2]), H([m * .08, y + .26 + op, 1.16]), H([-m * .3, y + .4 + op * .8, 1.06]), H([-m * .62, y + .5 + op * .5, .86])]); } wrap(s, e, wr, tips, .17); }
-    { const s = [m * .55, 6.05, -.25], e = [m * 1.75, 6.5, -.75], wr = [m * 1.35, 7.75, -.55]; const tips = []; for (let i = 0; i < 4; i++) { const z = -.5 + i * .26; tips.push([H([m * 1.12, .15 + i * .03, z * .8]), H([m * 1.02, .62, z]), H([m * .7, 1.02, z * 1.02]), H([m * .28, 1.22, z * .95 + .05]), H([-m * .12, 1.2, z * .85 + .1])]); } wrap(s, e, wr, tips, .16); }
+    { const s = [m * .62, 6.3, 0], e = V.lerp([m * 1.35, 5.75, .85], [m * 1.75, 6.15, .55], sp), wr = V.lerp([m * .78, 6.85, 1.35], [m * 2.85, 6.55, 1.0], sp); const tips = []; for (let i = 0; i < 4; i++) { const y = -.42 + i * .2, op = peek * (i === 2 ? 1.6 : i === 1 ? -.9 : .2); const shut = [H([m * .66, y * .8 - .12, 1.0]), H([m * .4, y + .1 + op, 1.2]), H([m * .08, y + .26 + op, 1.16]), H([-m * .3, y + .4 + op * .8, 1.06]), H([-m * .62, y + .5 + op * .5, .86])]; const fan = (i - 1.5) * .32, dir = V.norm([m * Math.cos(fan) * .75, Math.sin(fan) * .9, .55]); const open = [0, 1, 2, 3, 4].map(k => V.add(wr, V.mul(dir, .18 + k * .34))); tips.push(shut.map((q, k) => V.lerp(q, open[k], sp))); } wrap(s, e, wr, tips, .17); }
+    { const s = [m * .55, 6.05, -.25], e = V.lerp([m * 1.75, 6.5, -.75], [m * 1.9, 7.1, -.45], sp), wr = V.lerp([m * 1.35, 7.75, -.55], [m * 2.6, 8.3, -.2], sp); const tips = []; for (let i = 0; i < 4; i++) { const z = -.5 + i * .26; const shut = [H([m * 1.12, .15 + i * .03, z * .8]), H([m * 1.02, .62, z]), H([m * .7, 1.02, z * 1.02]), H([m * .28, 1.22, z * .95 + .05]), H([-m * .12, 1.2, z * .85 + .1])]; const fan = (i - 1.5) * .3, dir = V.norm([m * .7, .75 + Math.sin(fan) * .3, Math.cos(fan) * .25 + .1]); const open = [0, 1, 2, 3, 4].map(k => V.add(wr, V.mul(dir, .18 + k * .32))); tips.push(shut.map((q, k) => V.lerp(q, open[k], sp))); } wrap(s, e, wr, tips, .16); }
   }
   return B;
 } };

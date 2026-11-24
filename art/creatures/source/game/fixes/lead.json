@@ -1,0 +1,19 @@
+{
+ "k7h1": {
+  "split": true
+ },
+ "k7h4": {
+  "split": true,
+  "splitThin": true,
+  "chase": {
+   "spread": 1,
+   "peek": 0
+  },
+  "attack": {
+   "spread": 1,
+   "peek": 0,
+   "walk": 0.6
+  },
+  "maxBones": 450
+ }
+}
