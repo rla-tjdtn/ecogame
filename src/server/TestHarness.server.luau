@@ -2193,7 +2193,7 @@ local function creatureTest()
 	check("creature moves", moved > 3, string.format("moved %.1f", moved))
 	local st = ask(p, "creature", id)
 	check("client animates its own rig", st ~= nil and st.frames > 30 and st.maxAngle > 0.05, st and string.format("frames %d maxAngle %.2f steps %d", st.frames, st.maxAngle, st.steps) or "no stats")
-	check("creature still alive and in map", m.alive and m.root.Position.Y > -50, tostring(m.root.Position))
+	check("creature stays in the map (not fallen through)", m.root.Position.Y > -50, tostring(m.root.Position) .. (if m.alive then "" else " (caught the player, round reset)"))
 	Config.Creatures.On[id] = nil
 end
 
