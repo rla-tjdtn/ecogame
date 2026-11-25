@@ -12,7 +12,6 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local SoundBus = require(script.Parent.SoundBus)
 local Round = require(script.Parent.Round)
 local RateLimit = require(script.Parent.RateLimit)
-local RateLimit = require(script.Parent.RateLimit)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local SonarFire = Remotes:WaitForChild("SonarFire") :: RemoteEvent
@@ -43,9 +42,6 @@ Sonar.accepted = accepted
 -- ── 시선 공유(관전용): 각 플레이어가 보내는 카메라 방향(좌우 yaw·위아래 pitch, 라디안)을 속성으로 퍼뜨린다 ──
 local LookShare = Remotes:WaitForChild("LookShare") :: RemoteEvent
 LookShare.OnServerEvent:Connect(function(player: Player, yaw: any, pitch: any)
-	if not RateLimit.allow(player, "LookShare", 15, 20) then
-		return -- (클라이언트는 초당 최대 10번 보낸다)
-	end
 	if not RateLimit.allow(player, "LookShare", 15, 20) then
 		return -- (클라이언트는 초당 최대 10번 보낸다)
 	end
@@ -93,9 +89,6 @@ end)
 -- ── 이동 모드(소리·시점 표시용 속성. 실제 소음 크기는 서버가 속도로 판정) ──
 local MODES = { Walk = Config.Move.Walk, Run = Config.Move.Run, Crouch = Config.Move.Crouch }
 SetMoveMode.OnServerEvent:Connect(function(player: Player, mode: any)
-	if not RateLimit.allow(player, "SetMoveMode", 8, 12) then
-		return
-	end
 	if not RateLimit.allow(player, "SetMoveMode", 8, 12) then
 		return
 	end
