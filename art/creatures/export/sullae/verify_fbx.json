@@ -1,0 +1,187 @@
+{
+ "file": "sullae.fbx",
+ "bytes": 13509756,
+ "fps": 30.0,
+ "bones": [
+  "Root",
+  "Hips",
+  "Spine1",
+  "Spine2",
+  "Spine3",
+  "Neck",
+  "Head",
+  "Jaw",
+  "Eye.L",
+  "Eye.R",
+  "Shoulder_F.L",
+  "UpperArm_F.L",
+  "LowerArm_F.L",
+  "Hand_F.L",
+  "Thumb1_F.L",
+  "Thumb2_F.L",
+  "Thumb3_F.L",
+  "Index1_F.L",
+  "Index2_F.L",
+  "Index3_F.L",
+  "Middle1_F.L",
+  "Middle2_F.L",
+  "Middle3_F.L",
+  "Ring1_F.L",
+  "Ring2_F.L",
+  "Ring3_F.L",
+  "Pinky1_F.L",
+  "Pinky2_F.L",
+  "Pinky3_F.L",
+  "Shoulder_F.R",
+  "UpperArm_F.R",
+  "LowerArm_F.R",
+  "Hand_F.R",
+  "Thumb1_F.R",
+  "Thumb2_F.R",
+  "Thumb3_F.R",
+  "Index1_F.R",
+  "Index2_F.R",
+  "Index3_F.R",
+  "Middle1_F.R",
+  "Middle2_F.R",
+  "Middle3_F.R",
+  "Ring1_F.R",
+  "Ring2_F.R",
+  "Ring3_F.R",
+  "Pinky1_F.R",
+  "Pinky2_F.R",
+  "Pinky3_F.R",
+  "Shoulder_B.L",
+  "UpperArm_B.L",
+  "LowerArm_B.L",
+  "Hand_B.L",
+  "Thumb1_B.L",
+  "Thumb2_B.L",
+  "Thumb3_B.L",
+  "Index1_B.L",
+  "Index2_B.L",
+  "Index3_B.L",
+  "Middle1_B.L",
+  "Middle2_B.L",
+  "Middle3_B.L",
+  "Ring1_B.L",
+  "Ring2_B.L",
+  "Ring3_B.L",
+  "Pinky1_B.L",
+  "Pinky2_B.L",
+  "Pinky3_B.L",
+  "Shoulder_B.R",
+  "UpperArm_B.R",
+  "LowerArm_B.R",
+  "Hand_B.R",
+  "Thumb1_B.R",
+  "Thumb2_B.R",
+  "Thumb3_B.R",
+  "Index1_B.R",
+  "Index2_B.R",
+  "Index3_B.R",
+  "Middle1_B.R",
+  "Middle2_B.R",
+  "Middle3_B.R",
+  "Ring1_B.R",
+  "Ring2_B.R",
+  "Ring3_B.R",
+  "Pinky1_B.R",
+  "Pinky2_B.R",
+  "Pinky3_B.R",
+  "Thigh.L",
+  "Shin.L",
+  "Foot.L",
+  "Toe.L",
+  "Thigh.R",
+  "Shin.R",
+  "Foot.R",
+  "Toe.R"
+ ],
+ "bone_count": 94,
+ "meshes": {
+  "Sullae_Body": {
+   "tris": 37992,
+   "verts": 18986,
+   "groups": 91,
+   "skinned": true,
+   "textures": [
+    "sullae_skin_baseColor",
+    "sullae_skin_normal",
+    "sullae_skin_roughness"
+   ]
+  },
+  "Sullae_Cloth": {
+   "tris": 10998,
+   "verts": 6923,
+   "groups": 32,
+   "skinned": true,
+   "textures": [
+    "sullae_cloth_baseColor",
+    "sullae_cloth_normal",
+    "sullae_cloth_roughness"
+   ]
+  },
+  "Sullae_Eyes": {
+   "tris": 1680,
+   "verts": 844,
+   "groups": 2,
+   "skinned": true,
+   "textures": [
+    "sullae_eye_baseColor",
+    "sullae_eye_normal",
+    "sullae_eye_roughness"
+   ]
+  },
+  "Sullae_Nails": {
+   "tris": 3120,
+   "verts": 1600,
+   "groups": 20,
+   "skinned": true,
+   "textures": [
+    "sullae_nail_baseColor",
+    "sullae_nail_normal",
+    "sullae_nail_roughness"
+   ]
+  }
+ },
+ "clips": {
+  "Sullae|Sullae|Attack": {
+   "frames": 40.0,
+   "seconds": 1.333
+  },
+  "Sullae|Sullae|Count": {
+   "frames": 120.0,
+   "seconds": 4.0
+  },
+  "Sullae|Sullae|Death": {
+   "frames": 75.0,
+   "seconds": 2.5
+  },
+  "Sullae|Sullae|Hit": {
+   "frames": 20.0,
+   "seconds": 0.667
+  },
+  "Sullae|Sullae|Idle": {
+   "frames": 90.0,
+   "seconds": 3.0
+  },
+  "Sullae|Sullae|LookAround": {
+   "frames": 120.0,
+   "seconds": 4.0
+  },
+  "Sullae|Sullae|Peek": {
+   "frames": 90.0,
+   "seconds": 3.0
+  },
+  "Sullae|Sullae|Run": {
+   "frames": 20.0,
+   "seconds": 0.667
+  },
+  "Sullae|Sullae|Walk": {
+   "frames": 40.0,
+   "seconds": 1.333
+  }
+ },
+ "total_tris": 53790
+}
