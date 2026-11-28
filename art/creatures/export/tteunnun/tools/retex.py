@@ -68,20 +68,41 @@ for i, b in enumerate(hdr['buckets']):
         bone_v[BKV == i] = 1.0          # 가는 관(갈비 테·속눈썹·갈고리·손가락) — 뼈빛
 a = me.attributes.new('thin', 'FLOAT', 'POINT'); a.data.foreach_set('value', bone_v.astype(np.float32))
 
+# ---- 사람 손 4개(시안 손 관절 자리에 새 살) → 몸 메시에 합침
+from limbs import build_limbs
+_G = json.load(open(os.path.join(WORK, 'design_prims.json')))
+from lids import build_lids
+_lparts, _ljson = build_limbs(_G)
+json.dump(_ljson, open(os.path.join(WORK, "limbs.json"), "w"))
+_lg, _lsh = build_lids(EC, ER - .003)
+_hobs = [to_object(g) for g in _lparts] + [to_object(_lg), to_object(_lsh)]   # 속눈썹도 몸에 합침(뼈빛)
+_lash = None
+for o in bpy.data.objects:
+    o.select_set(False)
+for o in _hobs:
+    o.select_set(True)
+body.select_set(True); vl.objects.active = body
+bpy.ops.object.join()
+me = body.data; me.materials.clear()
+V = np.array([v.co for v in me.vertices]); nv = len(V)
+print('HANDS added, verts', nv, 'tris', sum(len(p.vertices) - 2 for p in me.polygons))
+
 # ---- 부위 속성: 허리 넝마(시안의 골반 덩어리), 눈꺼풀 가장자리 충혈·젖음
 z = V[:, 2]
 rag = smooth(.925, .945, z) * (1 - smooth(1.095, 1.115, z)) * (np.abs(V[:, 0]) < .2)
 dE = np.linalg.norm(V - EC, axis=1)
 dir_ = (V - EC) / np.maximum(dE, 1e-6)[:, None]
 front = np.clip((dir_ @ FWD3 - .2) / .3, 0, 1)
-lid = np.clip(1 - (dE - ER) / .05, 0, 1) * front
+lid = np.clip(1 - (dE - ER) / .05, 0, 1) * front * 0.0
+if 'lidm' in me.attributes:
+    lid = np.maximum(lid, np.array([a.value for a in me.attributes['lidm'].data]))
 for nm, arr in (('rag', rag), ('lid', lid)):
     a = me.attributes.new(nm, 'FLOAT', 'POINT'); a.data.foreach_set('value', arr.astype(np.float32))
 me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
-mat_body = bpy.data.materials.new('Body'); me.materials.append(mat_body)
+mat_body = bpy.data.materials.get('Body') or bpy.data.materials.new('Body'); me.materials.append(mat_body)
 
 # ---- 새 눈알(따로 된 구): 흰자·홍채, 각막, 동공 원판 — build.py 와 같은 방식, 크기만 시안 눈에 맞춤
-R_EYE = ER - .003; RI = .136; PHI_I = math.asin(RI / R_EYE); RP = .072
+R_EYE = ER - .003; RI = .112; PHI_I = math.asin(RI / R_EYE); RP = .051   # 세로로 째진 동공 원판(속은 짙은 홍채 안쪽 + 가운데 세로 틈)
 E = EC
 RGT = np.array([1.0, 0, 0]); UPV = np.array([0, 0, 1.0]); FWD = FWD3
 
@@ -91,7 +112,7 @@ def sph(th, phi, r):
 
 
 from tt_common import _connect
-eg = Geo('Eyeball', 'Eye'); n = 64
+eg = Geo('Eyeball', 'Eye'); n = 48
 phis = list(np.linspace(0, PHI_I, 13)) + list(np.linspace(PHI_I, math.pi, 34)[1:])
 rings = []
 for k, phi in enumerate(phis):
@@ -190,8 +211,23 @@ def body_shader(mat):
     bone = b.math('MULTIPLY', b.math('MAXIMUM', ridge, b.math('MULTIPLY', b.attr('thin'), .85)), b.ramp(n3, .2, .6))
     col = b.mix(b.math('MULTIPLY', bone, .75), col, (.66, .62, .55))
     col = b.mix(b.math('MULTIPLY', cav, .85), col, (.07, .065, .06))
+    hs = b.attr('headskin')                                  # 눈알 머리 살: 따뜻한 갈회색, 울퉁불퉁
+    col = b.mix(b.math('MULTIPLY', hs, .55), col, b.mix(n2, (.42, .34, .3), (.33, .27, .25)))
+    pebble = b.ramp(b.voronoi(pos, 160.0), .5, .0)
+    col = b.mix(b.math('MULTIPLY', b.math('MULTIPLY', hs, pebble), .25), col, (.5, .42, .38))
+    nail = b.ramp(b.attr('nail'), .45, .56)
+    col = b.mix(nail, col, b.mix(b.ramp(n3, .3, .7), (.6, .55, .45), (.42, .37, .28)))
     lid = b.attr('lid')
-    col = b.mix(b.math('MULTIPLY', lid, .45), col, (.5, .32, .3))
+    col = b.mix(b.math('MULTIPLY', lid, .3), col, (.45, .31, .29))
+    lip = b.attr('lip')                                       # 두툼한 눈꺼풀 입술: 참고 그림의 분홍빛 갈색
+    col = b.mix(b.math('MULTIPLY', lip, .75), col, b.mix(n2, (.56, .38, .35), (.46, .3, .28)))
+    # 눈꺼풀 가장자리: 젖은 분홍 점막 + 기름샘 작은 점 + 핏줄
+    edge = b.ramp(lid, .88, .98)
+    col = b.mix(b.math('MULTIPLY', edge, .45), col, (.52, .34, .32))
+    dots = b.math('MULTIPLY', b.ramp(b.voronoi(pos, 700.0), .1, .0), edge)
+    col = b.mix(b.math('MULTIPLY', dots, .6), col, (.85, .78, .62))
+    lv = b.math('MULTIPLY', b.ramp(b.voronoi(b.n('ShaderNodeVectorMath', {0: pos, 1: b.noise(pos, 40.0, 2, .5, out='Color')}, operation='ADD').outputs[0], 90.0, 'DISTANCE_TO_EDGE'), .04, .0), b.ramp(lid, .3, .8))
+    col = b.mix(b.math('MULTIPLY', lv, .5), col, (.45, .08, .07))
     rag = b.ramp(b.attr('rag'), .4, .6)
     linen = b.mix(b.noise(pos, 7.0, 6, .6), (.36, .33, .29), (.27, .25, .22))
     linen = b.mix(b.ramp(b.noise(pos, 2.5, 5, .6), .58, .7), linen, (.14, .12, .1))
@@ -200,13 +236,17 @@ def body_shader(mat):
     rough = b.math('ADD', .6, b.math('MULTIPLY', n2, .18))
     rough = b.fmix(ridge, rough, .48)
     rough = b.fmix(b.math('MULTIPLY', lid, .7), rough, .25)
+    rough = b.fmix(edge, rough, .12)
+    rough = b.fmix(b.math('MULTIPLY', lip, .6), rough, .3)
     rough = b.fmix(rag, rough, .92)
+    rough = b.fmix(nail, rough, .33)
     hgt = b.math('ADD', b.math('MULTIPLY', b.noise(pos, 420.0, 2, .5), .3),
                  b.math('MULTIPLY', b.wave(pos, 110.0, 10.0, 'Z', 4.0), .55))
     hgt = b.math('ADD', hgt, b.math('MULTIPLY', b.noise(pos, 32.0, 5), .7))
     hgt = b.math('ADD', hgt, b.math('MULTIPLY', vmask, .4))
     weave = b.math('MULTIPLY', b.math('ADD', b.wave(pos, 700.0, .5, 'X', 0.0), b.wave(pos, 700.0, .5, 'Z', 0.0)), .3)
     hgt = b.fmix(rag, hgt, b.math('ADD', weave, b.math('MULTIPLY', b.noise(pos, 14.0, 4, .5, 2.0), 1.0)))
+    hgt = b.math('ADD', hgt, b.math('MULTIPLY', hs, b.math('ADD', b.math('MULTIPLY', pebble, .9), b.math('MULTIPLY', b.wave(pos, 260.0, 14.0, 'X', 3.0), .4))))
     bump = b.n('ShaderNodeBump', {'Height': hgt, 'Strength': .6, 'Distance': .0016})
     return b, col, rough, None, bump.outputs['Normal']
 
@@ -228,11 +268,12 @@ final_material(EYEO['Eyeball'].data.materials[0], eimg, sss=.05)
 pimg = {k: ld('pupil_' + k) for k in ('basecolor', 'roughness', 'normal', 'ao')}
 for k in ('roughness', 'normal', 'ao'):
     pimg[k].colorspace_settings.name = 'Non-Color'
-final_material(EYEO['Pupil'].data.materials[0], pimg, emissive=ld('pupil_emissive'))
+final_material(EYEO['Pupil'].data.materials[0], pimg)
 pc_ = final_material(EYEO['Cornea'].data.materials[0], None)
-pc_.inputs['Base Color'].default_value = (1, 1, 1, 1); pc_.inputs['Roughness'].default_value = .02
-pc_.inputs['Alpha'].default_value = .08; pc_.inputs['IOR'].default_value = 1.376
-EYEO['Cornea'].data.materials[0].surface_render_method = 'BLENDED'
+pc_.inputs['Base Color'].default_value = (1, 1, 1, 1); pc_.inputs['Roughness'].default_value = 0.0
+pc_.inputs['Transmission Weight'].default_value = 1.0
+pc_.inputs['Alpha'].default_value = .06; pc_.inputs['Specular IOR Level'].default_value = .8; pc_.inputs['IOR'].default_value = 1.376
+EYEO['Cornea'].data.materials[0].surface_render_method = 'BLENDED'   # (게임용 파일은 반투명, 렌더는 render.py 가 굴절로 바꿈)
 body.name = 'Tteunnun'; me.name = 'Tteunnun'
 np.save(os.path.join(WORK, 'eye_fit.npy'), np.r_[EC, ER])
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(WORK, 'retexA.blend'))

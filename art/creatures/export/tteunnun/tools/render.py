@@ -11,6 +11,8 @@ src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'preview.py'
 sys.argv = [sys.argv[0]]
 exec(src.split('cam = stage(sc)')[0])
 cam = stage(sc)
+if os.environ.get('REAL'):
+    realistic(sc)
 sc.render.resolution_x, sc.render.resolution_y = 540, 720
 sc.eevee.taa_render_samples = 32
 sc.render.image_settings.file_format = 'PNG'
@@ -20,8 +22,9 @@ for tr in ad.nla_tracks:
     tr.mute = True
 FULL = ((2.7, -4.3, 1.75), (0, -.05, 1.15), 46)
 CAMS = {'EyeDart': ((.55, -1.75, 2.05), (0, -.08, 1.96), 55), 'Stare': ((.45, -1.9, 2.0), (0, -.08, 1.93), 50),
-        'Death': ((3.2, -4.4, 1.6), (0, .25, .8), 40), 'Attack': ((3.0, -4.4, 1.7), (0, -.2, 1.15), 42)}
-clips = argv or ['Idle', 'Walk', 'Run', 'Attack', 'LookAround', 'Hit', 'Death', 'EyeDart', 'Stare']
+        'Death': ((3.2, -4.4, 1.6), (0, .25, .8), 40), 'Attack': ((3.0, -4.4, 1.7), (0, -.2, 1.15), 42), 'Kill': ((2.6, -4.4, 1.8), (0, -.25, 1.3), 40),
+        'Jumpscare': ((0, -2.6, 1.95), (0, -.2, 1.75), 30), 'Spot': ((2.7, -4.3, 1.75), (0, -.05, 1.15), 46)}
+clips = [a for a in argv if a in ('Idle','Walk','Run','Attack','LookAround','Hit','Death','EyeDart','Stare','Kill','Jumpscare','Spot')] or ['Idle', 'Walk', 'Run', 'Attack', 'LookAround', 'Hit', 'Death', 'EyeDart', 'Stare', 'Kill', 'Jumpscare', 'Spot']
 for name in clips:
     act = bpy.data.actions[name]
     ad.action = act

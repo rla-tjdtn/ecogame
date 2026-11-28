@@ -62,7 +62,7 @@ bone('Spine3', W([0, 6.15, 0]), W([0, 7.0, -.05]), FWD, 'Spine2')
 bone('Neck', W([0, 7.0, -.05]), W([0, 7.62, .1]), FWD, 'Spine3')
 bone('Head', W([0, 7.62, .1]), W([0, 9.4, .1]), FWD, 'Neck')
 bone('Eye', E, E + FWD * .16, UP, 'Head')
-R_EYE = R0 - .003; RI = .136; PHI_I = math.asin(RI / R_EYE)
+R_EYE = R0 - .003; RI = .112; PHI_I = math.asin(RI / R_EYE)
 pc = E + FWD * (R_EYE * math.cos(PHI_I) + .0012)
 bone('Pupil', pc, pc + FWD * .03, UP, 'Eye')
 bone('EyelidUpper', E, E + nrm((0, -.48, .88)) * .2, (0, -1, 0), 'Head')
@@ -71,20 +71,14 @@ for gi in (16,):
     GB[gi] = ['Hips', 'Spine1', 'UpperLeg.L', 'UpperLeg.R']
 GB[17] = ['Hips', 'Spine1', 'Spine2']; GB[19] = ['Spine1', 'Spine2', 'Spine3']
 GB[18] = ['Spine1', 'Spine2', 'Spine3', 'Neck', 'Shoulder_F.L', 'Shoulder_F.R', 'Shoulder_B.L', 'Shoulder_B.R']
-GB[20] = ['Spine3', 'Neck', 'Head']; GB[21] = ['Neck', 'Head']; GB[22] = ['Head']; GB[114] = ['Head']
+GB[20] = ['Spine3', 'Neck', 'Head']; GB[21] = ['Neck', 'Head']; GB[22] = ['Head']
+for _gi in range(44, 76):
+    GB.pop(_gi, None)            # 굵은 눈꺼풀 주름 관은 뺐다(lids.py 눈꺼풀로 바뀜)
 for gi in list(range(44, 60)):
     GB[gi] = ('fix', 'EyelidUpper')
 for gi in list(range(60, 76)):
     GB[gi] = ('fix', 'EyelidLower')
-# ---- 관자 쇠틀 + 갈고리
-for plate, hooks in ((76, (77, 78)), (79, (80, 81))):
-    pcen = W(G[plate]['prims'][0]['a']); m = 1 if pcen[0] > 0 else -1
-    GB[plate] = ['Head']
-    for hg in hooks:
-        P = gpts(G[hg]); far = P[np.argmax(np.linalg.norm(P - pcen, axis=1))]
-        nm = ('Hook_Up' if far[2] > E[2] else 'Hook_Lo') + SIDE(m)
-        bone(nm, pcen, far, FWD, 'Head')
-        GB[hg] = ('hook', nm, pcen, far)
+# (관자 쇠틀·갈고리·눈물 관은 사용자 요청으로 뺐다 — 뼈도 없음)
 
 # ---- 다리·발
 for m, (leg, leg2, foot, toes) in ((-1, (0, 1, 2, range(3, 8))), (1, (8, 9, 10, range(11, 16)))):
@@ -102,49 +96,11 @@ for m, (leg, leg2, foot, toes) in ((-1, (0, 1, 2, range(3, 8))), (1, (8, 9, 10, 
     for t in toes:
         GB[t] = ['Foot' + sd, 'Toes' + sd]
 
-# ---- 팔 4개 + 손(손가락 마디는 시안의 공 자리)
-ARMS = [(-1, 'F', 82, 83, 84, range(85, 89), 89, [-1.05, 6.95, -.02], [-2.0, 6.5, .75]),
-        (-1, 'B', 90, 91, 92, range(93, 97), 97, [-.8, 7.2, -.45], [-2.0, 8.9, -.45]),
-        (1, 'F', 98, 99, 100, range(101, 105), 105, [1.05, 6.95, -.02], [2.0, 6.5, .75]),
-        (1, 'B', 106, 107, 108, range(109, 113), 113, [.8, 7.2, -.45], [2.0, 8.9, -.45])]
-for m, hk, ga, ga2, gh, gfs, gt, s_, e_ in ARMS:
-    sd = '_%s%s' % (hk, SIDE(m))
-    S_, El = W(s_), W(e_)
-    palm_start = np.mean([s[0] for s in segs(G[gh])[:4]], 0)
-    ends = np.array([p for s in segs(G[ga]) for p in s])
-    Wr = ends[np.argmin(np.linalg.norm(ends - palm_start, axis=1))]
-    # 손가락 사슬: 공(마디) + 원뿔 끝
-    chains = []
-    for gf in gfs:
-        sg = segs(G[gf]); ch = [sg[0][0]] + [s[1] for s in sg]
-        chains.append((gf, ch))
-    sgt = segs(G[gt]); tch = [sgt[0][0]] + [s[1] for s in sgt]
-    knm = np.mean([c[0] for _, c in chains], 0)
-    # 엄지에 가까운 순서로 Index, Middle, Ring, Pinky
-    chains.sort(key=lambda gc: np.linalg.norm(gc[1][0] - tch[1]))
-    up_arm = nrm(np.cross(El - S_, Wr - El))
-    palmn = nrm(np.mean([nrm((c[3] - c[1]) - nrm(c[1] - c[0]) * np.dot(c[3] - c[1], nrm(c[1] - c[0]))) for _, c in chains], 0))
-    bone('Shoulder' + sd, W([m * .25, 6.95 if hk == 'F' else 7.0, -.1 if hk == 'F' else -.35]), S_, UP, 'Spine3')
-    bone('UpperArm' + sd, S_, El, np.cross(nrm(El - S_), up_arm), 'Shoulder' + sd)
-    bone('LowerArm' + sd, El, Wr, np.cross(nrm(Wr - El), up_arm), 'UpperArm' + sd)
-    bone('Hand' + sd, Wr, knm, palmn, 'LowerArm' + sd)
-    for nm_, (gf, ch) in zip(('Index', 'Middle', 'Ring', 'Pinky'), chains):
-        for j in range(3):
-            d = nrm(ch[j + 1] - ch[j])
-            ref = ch[min(j + 3, len(ch) - 1)] - ch[j]
-            zb = ref - d * np.dot(ref, d)
-            zb = nrm(zb) if np.linalg.norm(zb) > 1e-5 else palmn
-            bone('%s%d%s' % (nm_, j + 1, sd), ch[j], ch[j + 1], zb, 'Hand' + sd if j == 0 else '%s%d%s' % (nm_, j, sd))
-        GB[gf] = ['Hand' + sd] + ['%s%d%s' % (nm_, j, sd) for j in (1, 2, 3)]
-    tpts = tch if len(tch) >= 4 else tch + [tch[-1] + (tch[-1] - tch[-2])]
-    for j in range(3):
-        d = nrm(tpts[j + 1] - tpts[j]); ref = tpts[-1] - tpts[j]; zb = ref - d * np.dot(ref, d)
-        zb = nrm(zb) if np.linalg.norm(zb) > 1e-5 else palmn
-        bone('Thumb%d%s' % (j + 1, sd), tpts[j], tpts[j + 1], zb, 'Hand' + sd if j == 0 else 'Thumb%d%s' % (j, sd))
-    GB[gt] = ['Hand' + sd, 'Thumb1' + sd, 'Thumb2' + sd, 'Thumb3' + sd]
-    GB[ga] = ['Spine3', 'Shoulder' + sd, 'UpperArm' + sd, 'LowerArm' + sd, 'Hand' + sd]
-    GB[ga2] = ['Shoulder' + sd, 'UpperArm' + sd, 'LowerArm' + sd, 'Hand' + sd]
-    GB[gh] = ['LowerArm' + sd, 'Hand' + sd] + ['%s1%s' % (f, sd) for f in ('Index', 'Middle', 'Ring', 'Pinky', 'Thumb')]
+# ---- 팔 4개 + 손: 펼친 묶는 자세(limbs.py → work/limbs.json)의 관절 그대로
+LIMBS = json.load(open(os.path.join(WORK, 'limbs.json')))
+for n, (h, t, u, par) in LIMBS['joints'].items():
+    bone(n, h, t, u, par)
+ARMG = {int(k): v for k, v in LIMBS['groups'].items()}
 print('BONES', len(BONES))
 
 # ---- 아마추어
@@ -189,6 +145,11 @@ for a, b_ in E_:
     ra, rb = find(a), find(b_)
     if ra != rb: par[rb] = ra
 comp = np.array([find(i) for i in range(nv)])
+LIDS = None
+ARMP = np.array([a.value for a in me.attributes['armpart'].data]) if 'armpart' in me.attributes else None
+if 'lidshell' in me.attributes:
+    _ga = lambda n: np.array([a.value for a in me.attributes[n].data])
+    LIDS = (_ga('lidshell'), _ga('w_up'), _ga('w_lo'))
 deform_all = {b.name: b.use_deform for b in arm_d.bones}
 W_all = {}                       # 뼈 → 정점별 웨이트
 def addw(bn, idx, w):
@@ -196,10 +157,20 @@ def addw(bn, idx, w):
 fails = []
 for c in np.unique(comp):
     idx = np.nonzero(comp == c)[0]
+    if ARMP is not None and ARMP[idx].max() > .5:              # 새 팔·손 조각: 만들 때 정한 뼈 묶음
+        code = int(round(np.median(ARMP[idx][ARMP[idx] > .5])))
+        bones = sorted(ARMG[code])
+    elif LIDS is not None and LIDS[0][idx].mean() > .5:          # 눈꺼풀 살 띠: 만들 때 넣은 위/아래 웨이트 그대로
+        up_, lo_ = LIDS[1][idx], LIDS[2][idx]
+        addw('EyelidUpper', idx, up_); addw('EyelidLower', idx, lo_); addw('Head', idx, np.clip(1 - up_ - lo_, 0, 1)); continue
     labs, cnt = np.unique(lab[idx], return_counts=True)
     main = labs[np.argmax(cnt)]
+    # 손 조각(사람 손으로 새로 만든 것)은 머리·눈꺼풀 그룹이 가까워도 팔·손 뼈만 쓴다
+    HANDG = set(range(82, 114))
+    if int(main) in HANDG:
+        keep = np.isin(labs, list(HANDG)); labs, cnt = labs[keep], cnt[keep]
     spec = GB.get(int(main))
-    if isinstance(spec, tuple) and spec[0] == 'fix':
+    if isinstance(spec, tuple) and spec[0] == 'fix' and not (ARMP is not None and ARMP[idx].max() > .5):
         addw(spec[1], idx, 1.0); continue
     if isinstance(spec, tuple) and spec[0] == 'hook':
         p0, p1 = spec[2], spec[3]; t = np.clip(((V[idx] - p0) @ (p1 - p0)) / np.dot(p1 - p0, p1 - p0), 0, 1)
@@ -215,6 +186,8 @@ for c in np.unique(comp):
         else:
             bones += sp
     bones = sorted(set(bones))
+    if ARMP is not None and ARMP[idx].max() > .5:
+        bones = sorted(ARMG[int(round(np.median(ARMP[idx][ARMP[idx] > .5])))])
     if len(bones) == 1:
         addw(bones[0], idx, 1.0); continue
     # 이 껍질만 떼어 자동 웨이트
@@ -249,6 +222,17 @@ for c in np.unique(comp):
 for b in arm_d.bones:
     b.use_deform = deform_all[b.name]
 print('HEAT_FALLBACK', fails)
+# 눈구멍 테두리 살(굵은 눈꺼풀 관을 뺀 자리) → 눈꺼풀 뼈로 섞음: 눈알 가까이, 앞쪽일수록 눈꺼풀을 따라 움직임
+dEv = np.linalg.norm(V - E, axis=1); dirv = (V - E) / np.maximum(dEv, 1e-9)[:, None]
+front = smooth(.25, .6, dirv @ FWD)
+headish = (W_all.get('Head', np.zeros(nv)) > .5) & ((LIDS[0] < .5) if LIDS is not None else True)
+wl = (1 - smooth(R0 + .008, R0 + .055, dEv)) * front * headish
+upv = smooth(-.25, .25, dirv[:, 2])
+for b in list(W_all):
+    W_all[b] = W_all[b] * (1 - wl)
+W_all['EyelidUpper'] = W_all.get('EyelidUpper', np.zeros(nv)) + wl * upv
+W_all['EyelidLower'] = W_all.get('EyelidLower', np.zeros(nv)) + wl * (1 - upv)
+print('LID rim verts', int((wl > .05).sum()))
 # 정점당 4개, 정규화
 names = list(W_all); M_ = np.stack([W_all[n] for n in names], 1)
 order = np.argsort(-M_, 1)
@@ -270,6 +254,16 @@ for on, grp in (('Eyeball', 'Eye'), ('Cornea', 'Eye'), ('Pupil', 'Pupil')):
     o = bpy.data.objects[on]
     vg = o.vertex_groups.new(name=grp); vg.add(list(range(len(o.data.vertices))), 1.0, 'REPLACE')
     md = o.modifiers.new('Armature', 'ARMATURE'); md.object = arm; o.parent = arm
+# 속눈썹: 만들 때 넣은 위/아래 웨이트로
+lo_ = bpy.data.objects.get('Lashes')
+if lo_:
+    lm = lo_.data; ga_ = lambda n: np.array([a.value for a in lm.attributes[n].data])
+    for gname, arr in (('EyelidUpper', ga_('w_up')), ('EyelidLower', ga_('w_lo'))):
+        vg = lo_.vertex_groups.new(name=gname)
+        for i in np.nonzero(arr > .01)[0]:
+            vg.add([int(i)], float(arr[i]), 'REPLACE')
+    md = lo_.modifiers.new('Armature', 'ARMATURE'); md.object = arm; lo_.parent = arm
+    lo_.name = 'M_Lash'
 # animate.py 가 'M_' 로 시작하는 메시들을 하나로 합친다
 body.name = 'M_Body'; bpy.data.objects['Eyeball'].name = 'M_Eye'; bpy.data.objects['Cornea'].name = 'M_Cornea'; bpy.data.objects['Pupil'].name = 'M_Pupil'
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(WORK, 'stageB.blend'))

@@ -10,7 +10,7 @@ from tt_common import *
 
 sc = bpy.context.scene
 SIZE = {'Skin': int(os.environ.get('SKIN', 2048)), 'Cloth': int(os.environ.get('CLOTH', 2048)), 'Metal': 1024}
-EYE_N = int(os.environ.get('EYE', 2048))
+EYE_N = int(os.environ.get('EYE', 4096))
 R_EYE = 0.248; RI = 0.118; PHI_I = math.asin(RI / R_EYE)
 rng = np.random.default_rng(10)
 
@@ -48,6 +48,27 @@ def fbm(h, w, base_v, base_u, seed, oct=5):
     return s / tot
 
 
+# ============================================================ 참고 눈 그림(사용자가 준 실사 눈) — 홍채·동공·흰자를 그대로 옮긴다
+REF = os.path.join(os.path.dirname(HERE), 'ref', 'eye_ref.webp')
+REF_C, REF_R = (518.0, 480.0), (316.0, 344.0)        # 그림 속 홍채 중심(x, y 아래로)·반지름(px)
+
+
+def ref_img():
+    if not os.path.exists(REF):
+        return None
+    im = bpy.data.images.load(REF)
+    w, h = im.size
+    a = np.array(im.pixels[:], dtype=np.float32).reshape(h, w, 4)[::-1, :, :3]   # 행 0 = 위
+    return a
+
+
+def ref_sample(a, x, y):
+    h, w = a.shape[:2]
+    x = np.clip(x, 0, w - 1.001); y = np.clip(y, 0, h - 1.001)
+    x0 = np.floor(x).astype(int); y0 = np.floor(y).astype(int); fx = (x - x0)[..., None]; fy = (y - y0)[..., None]
+    return (a[y0, x0] * (1 - fx) + a[y0, x0 + 1] * fx) * (1 - fy) + (a[y0 + 1, x0] * (1 - fx) + a[y0 + 1, x0 + 1] * fx) * fy
+
+
 # ============================================================ 눈알(극좌표: u=theta/2pi, v=phi/pi)
 def paint_eye():
     N = EYE_N
@@ -58,7 +79,7 @@ def paint_eye():
     iris = (phi < PHI_I)[:, None] * np.ones((1, N), bool)
     # 흰자: 누런 기운 + 가장자리로 갈수록 충혈
     n1 = fbm(N, N, 6, 12, 1); n2 = fbm(N, N, 24, 48, 5, 4)
-    scl = np.stack([.8 - .05 * n1, .78 - .06 * n1, .73 - .08 * n1], -1)
+    scl = np.stack([.9 - .04 * n1, .8 - .06 * n1, .75 - .07 * n1], -1)   # 분홍빛 흰자
     redz = smooth(.24, .42, v)[:, None] * (.55 + .45 * n2)
     scl = scl * (1 - redz[..., None] * .55) + np.array([.78, .42, .38]) * redz[..., None] * .55
     yel = smooth(.55, .8, fbm(N, N, 5, 10, 9))[..., None] * smooth(.2, .3, v)[:, None, None]
@@ -79,11 +100,11 @@ def paint_eye():
             w *= .9935
             if depth < 2 and rng.random() < .018:
                 walk(th, ph, w * .72, depth + 1, stop + rng.uniform(0, .1), rng.choice([-1, 1]) * rng.uniform(.6, 1.1))
-    for i in range(70):
+    for i in range(130):
         th0 = rng.uniform(0, 2 * math.pi)
         walk(th0, rng.uniform(math.radians(62), math.radians(100)), rng.uniform(.0009, .0021), 0,
              rng.uniform(math.radians(31), math.radians(47)), rng.normal(0, .3))
-    for i in range(420):   # 잔 모세혈관
+    for i in range(2200):   # 잔 모세혈관(그물)
         th0 = rng.uniform(0, 2 * math.pi); ph0 = rng.uniform(math.radians(36), math.radians(80))
         d = rng.uniform(-1.5, 1.5); w = rng.uniform(.00025, .0006); L = rng.integers(10, 40)
         th, ph = th0, ph0
@@ -114,25 +135,46 @@ def paint_eye():
     fib = fib / 8
     wav = .03 * np.sin(TH * 7 + 1.0)
     fibr = np.tanh(fib + .6 * np.sin(TH * 31 + rr * 9)) * .5 + .5
-    inner = np.array([.24, .26, .28]); outer = np.array([.12, .135, .15])
-    tcol = smooth(.32, .7, rr + wav)[..., None]
-    ic = inner * (1 - tcol) + outer * tcol
-    ic = ic * (.62 + .5 * fibr[..., None])
-    coll = np.exp(-((rr - .47 - wav) / .035) ** 2)[..., None]
-    ic = ic * (1 - coll * .5) + np.array([.45, .47, .48]) * coll * .5
-    crypt = smooth(.68, .8, fbm(N, N, 40, 160, 21, 3))[..., None] * smooth(.4, .55, rr)[..., None] * (1 - smooth(.85, .95, rr)[..., None])
-    ic = ic * (1 - crypt * .6)
-    limb = smooth(.82, 1.0, rr)[..., None]
-    ic = ic * (1 - limb * .8)
-    pup = smooth(.3, .34, rr)[..., None]
-    ic = ic * pup + np.array([.01, .01, .01]) * (1 - pup)
+    # 또렷한 홍채: 동공 둘레 누런 회색 → 청회색 → 짙은 바깥, 섬유는 날카롭게, 가장자리 고리는 거의 검게
+    # 동공 원판(반지름 비 RP/RI ≈ .31)이 안쪽을 가리므로, 보이는 고리(.53~1)에 무늬 전체가 오게 반지름을 다시 잰다
+    rr = np.where(rr > .456, .345 + (rr - .456) / .544 * .655, rr * .345 / .456)
+    fib2 = np.tanh(2.6 * (fib + .5 * np.sin(TH * 37 + rr * 11))) * .5 + .5
+    streak = smooth(.82, .97, np.abs(np.sin(TH * 70 + 3 * np.sin(TH * 5) + rr * 4)))     # 가는 어두운 방사선
+    c_in = np.array([.05, .06, .08]); c_mid = np.array([.1, .14, .2]); c_out = np.array([.05, .08, .12])
+    t1 = smooth(.38, .55, rr + wav)[..., None]; t2 = smooth(.6, .9, rr)[..., None]
+    ic = c_in * (1 - t1) + c_mid * t1
+    ic = ic * (1 - t2) + c_out * t2
+    ic = ic * (.8 + .4 * fib2[..., None])
+    fibn = fbm(N, N, 3, 900, 41, 3)   # 세로(반지름)로 길고 가로(각)로 촘촘한 줄무늬 = 가는 방사 섬유
+    fibw = smooth(.58, .8, fibn)[..., None] * smooth(.36, .5, rr)[..., None] * (1 - smooth(.85, .95, rr)[..., None])   # 흰·하늘색 가는 섬유
+    ic = ic * (1 - fibw * .8) + np.array([.62, .74, .84]) * fibw * .8
+    # 시안 홍채처럼 도드라진 방사 주름 44개(밝은 능선·어두운 골)
+    ridge = .5 + .5 * np.sin(TH * 44 + .35 * np.sin(TH * 7 + rr * 6))
+    ridge = ridge * smooth(.36, .45, rr) * (1 - smooth(.86, .94, rr))
+    ic = ic * (.9 + .15 * ridge[..., None])
+    coll = np.exp(-((rr - .52 - wav * 1.5) / .028) ** 2)[..., None]
+    ic = ic * (1 - coll * .8) + np.array([.85, .55, .22]) * coll * .8   # 주황 물결 고리
+    crypt = smooth(.66, .76, fbm(N, N, 40, 160, 21, 3))[..., None] * smooth(.45, .55, rr)[..., None] * (1 - smooth(.8, .9, rr)[..., None])
+    ic = ic * (1 - crypt * .75)
+    # 동공 테 주름(짙은 갈색 톱니 테), 수축 고랑(바깥쪽 동심원), 주근깨 점
+    ruff_r = .345 + .012 * np.sin(TH * 48 + 2 * np.sin(TH * 7))
+    ruff = smooth(.0, .012, rr - ruff_r + .012) * (1 - smooth(.0, .01, rr - ruff_r - .016))
+    ic = ic * (1 - ruff[..., None] * .5) + np.array([.22, .14, .08]) * ruff[..., None] * .5
+    furrow = sum(np.exp(-((rr - r0 - .006 * np.sin(TH * 13 + i)) / .006) ** 2) for i, r0 in enumerate((.66, .74, .82)))
+    ic = ic * (1 - .35 * furrow[..., None])
+    frk = smooth(.83, .9, fbm(N, N, 60, 300, 33, 2))[..., None] * smooth(.5, .6, rr)[..., None] * (1 - smooth(.84, .9, rr)[..., None])
+    ic = ic * (1 - frk) + np.array([.28, .17, .09]) * frk
+    limb = smooth(.86, .96, rr)[..., None]
+    ic = ic * (1 - limb * .93)
+    pup = smooth(.33, .345, rr)[..., None]
+    ic = ic * pup + np.array([.004, .004, .004]) * (1 - pup)
     col = np.where(iris[..., None], ic, col)
     # 흰자 쪽 가장자리 고리(홍채 바로 바깥 그림자)
     rim = np.exp(-((v - PHI_I / math.pi) / .008) ** 2)[:, None, None]
     col = col * (1 - rim * .45)
     rough = np.where(iris, .22, .1 + .06 * n2 + mask * .04)
     # 노멀: 핏줄 볼록 + 홍채 섬유
-    h = hgt * .35 + np.where(iris, fibr * .00035 * smooth(.25, .4, rr), 0) + n2 * .00008
+    h = hgt * .35 + np.where(iris, (ridge * .0016 + fib2 * .0005 - streak * .0002 - crypt[..., 0] * .0004 - furrow * .0002 + ruff * .0004) * smooth(.33, .4, rr), 0) + n2 * .00008
     du_m = (2 * math.pi * R_EYE * np.maximum(np.sin(phi), .05) / N)[:, None]
     dv_m = math.pi * R_EYE / N
     gx = (np.roll(h, -1, 1) - np.roll(h, 1, 1)) / (2 * du_m)
@@ -140,6 +182,25 @@ def paint_eye():
     nn = np.stack([-gx, -gy, np.ones_like(h)], -1)
     nn /= np.linalg.norm(nn, axis=-1, keepdims=True)
     ao = (1 - .5 * smooth(.4, .75, v))[:, None] * np.ones((1, N)) * (1 - .25 * rim[..., 0])
+    A = ref_img()
+    if A is not None:
+        # 홍채(실제 반지름 비 rg = sin(phi)/sin(PHI_I)): 그림의 홍채를 극좌표로 펼쳐 그대로
+        rg = (np.sin(np.minimum(phi, math.pi / 2)) / math.sin(PHI_I))[:, None] * np.ones((1, N))
+        ct, st = np.cos(TH) * np.ones((N, 1)), np.sin(TH) * np.ones((N, 1))
+        iris_ref = ref_sample(A, REF_C[0] + np.minimum(rg, 1) * REF_R[0] * ct, REF_C[1] - np.minimum(rg, 1) * REF_R[1] * st)
+        # 흰자: 홍채 밖은 그림의 흰자 띠에서(오른쪽 넓은 쪽으로 접어서), 반사광은 눌러 줌
+        tt = np.clip((phi[:, None] - PHI_I) / (math.radians(72) - PHI_I), 0, 1) * np.ones((1, N))
+        d = 1.04 + tt * 1.75
+        xs = REF_C[0] + d * REF_R[0] * np.abs(ct); ys = REF_C[1] - np.clip(d * REF_R[1] * st, -330, 330)
+        scl_ref = ref_sample(A, np.clip(xs, REF_C[0], 1400), np.clip(ys, 150, 830))
+        lum = scl_ref @ np.array([.3, .59, .11])
+        hi = smooth(.78, .95, lum)[..., None]
+        scl_ref = scl_ref * (1 - hi) + np.array([.86, .74, .68]) * hi
+        blend = smooth(.99, 1.03, rg)[..., None]
+        col = iris_ref * (1 - blend) + col * blend      # 흰자는 절차(분홍 흰자 + 핏줄 그물), 홍채·동공만 그림에서
+        nn = nn * blend + np.array([0, 0, 1.0]) * (1 - blend)   # 홍채는 그림 그대로(울퉁불퉁 절차 노멀 끔)
+        rough = np.where(rg < 1, .2, .12)
+        print('EYE from reference image')
     save_img('eye_basecolor', col, False)
     save_img('eye_roughness', np.repeat(rough[..., None], 3, -1), True)
     save_img('eye_normal', nn * .5 + .5, True)
@@ -147,38 +208,27 @@ def paint_eye():
     print('EYE painted', len(stamps), 'stamps')
 
 
-# ============================================================ 동공 속 작은 얼굴
-def paint_pupil(N=512):
+# ============================================================ 동공
+def paint_pupil(N=1024):
+    """세로로 째진 동공: 가운데 검은 세로 틈 + 둘레 짙은 남색(홍채 안쪽과 이어짐). 동공 뼈 X 스케일로 틈이 벌어진다."""
     y, x = np.mgrid[0:N, 0:N]
     X = (x + .5) / N * 2 - 1; Y = (y + .5) / N * 2 - 1
     R = np.sqrt(X * X + Y * Y)
-
-    def ell(cx, cy, rx, ry, soft=.03):
-        d = np.sqrt(((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2)
-        return 1 - smooth(1 - soft / min(rx, ry), 1 + soft / min(rx, ry), d)
-    face = ell(0, .04, .3, .4, .04)
-    face *= 1 - .45 * ell(.17, -.07, .09, .14, .06) - .45 * ell(-.17, -.07, .09, .14, .06)   # 꺼진 볼
-    sock = ell(.11, .14, .075, .055, .02) + ell(-.11, .14, .075, .055, .02)
-    face *= 1 - .92 * np.clip(sock, 0, 1)
-    face += .25 * (ell(.11, .14, .015, .015, .01) + ell(-.11, .14, .015, .015, .01))        # 눈 속 반짝
-    mouth = ell(0, -.19, .1, .12, .02)
-    teeth = np.zeros_like(X)
-    for k in range(8):
-        tx = -.075 + k * .0215
-        teeth = np.maximum(teeth, ell(tx, -.105, .0085, .02, .006) + ell(tx + .01, -.285, .0075, .016, .006))
-    face = face * (1 - mouth) + teeth * mouth * .7
-    face *= 1 - .3 * ell(0, .02, .02, .05, .03)
-    face = np.clip(face, 0, 1) * (.8 + .2 * fbm(N, N, 30, 30, 3, 3))
-    tint = np.array([.36, .4, .42])
-    col = np.full((N, N, 3), .006) + face[..., None] * tint * .55
-    edge = smooth(.86, 1.0, R)[..., None]
-    col = col * (1 - edge) + np.array([.05, .045, .03]) * edge
-    catch = ell(.42, .46, .09, .06, .03)[..., None]
-    col = col + catch * .5
-    emis = face[..., None] * np.array([.22, .26, .3]) * (1 - edge)
+    slit = np.sqrt((X / .14) ** 2 + (Y / .96) ** 2)
+    TH = np.arctan2(Y, X)
+    fib = sum(np.sin(TH * f + ph + R * k) for f, ph, k in ((61, .3, 2), (97, 1.1, 3), (143, 2.0, 1), (211, .7, 4), (317, 1.7, 2))) / 3
+    fn = np.clip(.5 + .5 * fib, 0, 1)
+    base = np.array([.1, .14, .2]) * (.7 + .6 * fn[..., None]) * (.55 + .45 * smooth(.0, .8, R)[..., None])   # 틈 둘레도 남색 홍채 결
+    base = base * (1 - smooth(.75, .98, fn)[..., None] * .0) + np.array([.55, .66, .78]) * smooth(.8, .98, fn)[..., None] * .5 * smooth(.25, .6, R)[..., None]
+    col = base * smooth(.9, 1.05, slit)[..., None] + np.array([.002, .002, .002]) * (1 - smooth(.9, 1.05, slit))[..., None]
+    edge = smooth(.9, 1.0, R)[..., None]
+    col = col * (1 - edge) + np.array([.05, .07, .1]) * edge
+    A = ref_img()
+    if A is not None:
+        k = float(os.environ.get('RP_RI', .456))       # 동공 원판 반지름 / 홍채 반지름
+        col = ref_sample(A, REF_C[0] + X * k * REF_R[0], REF_C[1] - Y * k * REF_R[1])
     save_img('pupil_basecolor', col, False)
-    save_img('pupil_emissive', emis, False)
-    save_img('pupil_roughness', np.full((N, N, 3), .06), True)
+    save_img('pupil_roughness', np.full((N, N, 3), .45), True)
     save_img('pupil_normal', np.tile(np.array([.5, .5, 1.0]), (N, N, 1)), True)
     save_img('pupil_ao', np.ones((N, N, 3)), True)
 

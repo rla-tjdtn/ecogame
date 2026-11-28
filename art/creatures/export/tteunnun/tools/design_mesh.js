@@ -13,7 +13,7 @@ const { MeshoptSimplifier: SIMP } = require(path.join(G, 'node_modules/meshoptim
 const META = Object.assign({}, require(path.join(SRC, 'set3/meta3.js')));
 const WORK = path.resolve(__dirname, '../work'); fs.mkdirSync(WORK, { recursive: true });
 const VOX_BODY = +(process.env.VOXB || .022), VOX_THIN = +(process.env.VOXT || .01);
-const LO = +(process.env.LO || 62000), HI = +(process.env.HI || 600000);
+const LO = +(process.env.LO || 34000), HI = +(process.env.HI || 600000);
 
 (async () => {
   await SIMP.ready;
@@ -35,7 +35,14 @@ const LO = +(process.env.LO || 62000), HI = +(process.env.HI || 600000);
   };
   const thin = g => { const ps = g.prims.filter(p => !p.op); return ps.length > 0 && ps.every(p => p.t === 0 && Math.max(p.ra, p.rb) < .12); };
   const sideOf = g => { let sx = 0, n = 0; for (const p of g.prims) if (!p.op) { sx += p.t === 0 ? (p.a[0] + p.b[0]) / 2 : p.a[0]; n++; } const x = n ? sx / n : 0; return x > .12 ? 'L' : x < -.12 ? 'R' : 'C'; };
-  const tag = gAll.map(g => isEye(g) ? 'EYE' : (thin(g) ? 'T' : '') + sideOf(g));
+  // 빼는 그룹(design_dump.js 번호): 관자 쇠틀 76·79, 갈고리 77·78·80·81, 눈 밑 눈물 관 114(사용자 요청: 눈 옆 촉수 같은 것 없앰),
+  // 시안 손(손바닥 84·92·100·108 + 손가락·엄지) — 사람 손으로 retex.py(hands.py)에서 새로 만든다
+  const DROP = new Set([76, 77, 78, 79, 80, 81, 114, 44, 45, 46, 60, 61, 62]);   // 44~46·60~62 = 눈 둘레 굵은 눈꺼풀 주름 관(사용자 요청으로 뺌, 속눈썹은 남김)
+  for (const h of [84, 92, 100, 108]) for (let k = 0; k < 6; k++) DROP.add(h + k);
+  for (const a of [82, 83, 90, 91, 98, 99, 106, 107]) DROP.add(a);   // 시안 팔 → limbs.py
+  for (let a = 47; a <= 59; a++) DROP.add(a);
+  for (let a = 63; a <= 75; a++) DROP.add(a);   // 시안 굵은 속눈썹(떠 있음) → lids.py 가 눈꺼풀 가장자리에 박은 속눈썹
+  const tag = gAll.map((g, i) => DROP.has(i) || isEye(g) ? 'EYE' : (thin(g) ? 'T' : '') + sideOf(g));
   const names = [...new Set(tag)].filter(t => t !== 'EYE');
   console.log('groups', gAll.length, 'eye groups', tag.filter(t => t === 'EYE').length, 'buckets', names.map(n => n + ':' + tag.filter(t => t === n).length).join(' '));
   const raws = [];

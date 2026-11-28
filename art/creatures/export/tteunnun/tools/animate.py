@@ -17,6 +17,9 @@ FWD = Vector((0, -1, 0)); E = Vector((0, -0.047, 1.99))
 SIDES = ('L', 'R')
 HANDS = ('F', 'B')
 FINGERS = ('Thumb', 'Index', 'Middle', 'Ring', 'Pinky')
+import json
+HOLD = json.load(open(os.path.join(WORK, 'limbs.json')))['hold']
+E = Vector(arm.data.bones['Eye'].head_local)
 
 # ------------------------------------------------------------ 조종 뼈 만들기
 for o in bpy.data.objects:
@@ -43,10 +46,12 @@ for s in SIDES:
     kn = eb['LowerLeg.' + s].head
     ctrl('Pole_Knee.' + s, kn + Vector((0, -.55, 0)), kn + Vector((0, -.65, 0)), None, 'Root', Vector((0, 0, 1)))
     for h in HANDS:
-        hb = eb['Hand_%s.%s' % (h, s)]
-        ctrl('IK_Hand_%s.%s' % (h, s), hb.head.copy(), hb.tail.copy(), 'Hand_%s.%s' % (h, s), 'Head')
-        sh = eb['UpperArm_%s.%s' % (h, s)].head; el = eb['LowerArm_%s.%s' % (h, s)].head; wr = hb.head
-        mid = (sh + wr) / 2; pd = (el - mid).normalized()
+        # 묶는 자세는 팔을 펼친 자세. 눈꺼풀을 붙잡는 자세는 IK 목표를 시안의 손목·손 방향·팔꿈치 자리에 둬서 만든다
+        hd = HOLD['_%s.%s' % (h, s)]
+        wr = Vector(hd['wrist']); dr = Vector(hd['dir']); pm = Vector(hd['palm'])
+        ctrl('IK_Hand_%s.%s' % (h, s), wr, wr + dr * .1, None, 'Head', pm)
+        el = Vector(hd['elbow']); sh = Vector(hd['shoulder'])
+        pd = (el - (sh + wr) / 2).normalized()
         ctrl('Pole_Elbow_%s.%s' % (h, s), el + pd * .4, el + pd * .5, None, 'Spine3', Vector((0, 0, 1)))
 ctrl('EyeTarget', E + FWD * 1.2, E + FWD * 1.3, None, 'Head', Vector((0, 0, 1)))
 bpy.ops.object.mode_set(mode='POSE')
@@ -79,6 +84,8 @@ dt = PB['Eye'].constraints.new('DAMPED_TRACK'); dt.target = arm; dt.subtarget = 
 # 극점 각도 맞추기: 쉬는 자세에서 IK 결과가 원래 팔꿈치·무릎 자리와 같도록
 def chain_err(c, first):
     vl.update()
+    if first.startswith('UpperArm'):          # 팔: 붙잡는 자세의 팔꿈치가 시안 팔꿈치 자리에 오게
+        return (PB[first].tail - Vector(HOLD[first[len('UpperArm'):]]['elbow'])).length
     second = [b.name for b in arm.data.bones if b.parent and b.parent.name == first and b.use_deform][0]
     return ((PB[first].tail - arm.data.bones[first].tail_local).length + (PB[second].tail - arm.data.bones[second].tail_local).length)
 
@@ -111,15 +118,27 @@ ROT_BONES += ['Shoulder_%s.%s' % (h, s) for h in HANDS for s in SIDES]
 ROT_BONES += ['%s%d_%s.%s' % (f, j, h, s) for f in FINGERS for j in (1, 2, 3) for h in HANDS for s in SIDES]
 ROT_BONES += ['Toes.' + s for s in SIDES] + ['IK_Foot.' + s for s in SIDES] + ['IK_Hand_%s.%s' % (h, s) for h in HANDS for s in SIDES]
 LOC_BONES = ['Root', 'Hips', 'EyeTarget'] + ['IK_Foot.' + s for s in SIDES] + ['IK_Hand_%s.%s' % (h, s) for h in HANDS for s in SIDES]
-for n in ROT_BONES + LOC_BONES + ['Pupil']:
+ROT_BONES = [n for n in ROT_BONES if n in PB]   # (갈고리 뼈처럼 없는 뼈는 건너뜀)
+for n in LOC_BONES + ['Pupil']:
     assert n in PB, n
 
 
 class Pose:
     def __init__(s):
         s.rot = {}; s.loc = {}; s.pupil = 1.0
+        # 기본 = 눈꺼풀을 움켜쥔 손가락(펼친 묶는 자세 위에 더하는 굽힘)
+        for h, tc in (('F', (14, 22, 18)), ('B', (16, 24, 20))):
+            cu = HOLD['_%s.L' % h]['grip']
+            for sd in SIDES:
+                for fn in FINGERS:
+                    for j in (1, 2, 3):
+                        b = '%s%d_%s.%s' % (fn, j, h, sd)
+                        if b in PB:
+                            s.rot[b] = np.array([(tc if fn == 'Thumb' else cu)[j - 1], 0, 0], float)
 
     def r(s, b, x=0, y=0, z=0):
+        if b not in PB:
+            return
         v = s.rot.get(b, np.zeros(3)); s.rot[b] = v + np.array([x, y, z], float)
 
     def l(s, b, d):
@@ -179,7 +198,31 @@ def saccades(t, period, pts, move=3):
 
 def gaze(p, yaw, pitch):
     """눈 시선(도): yaw + 는 괴물의 왼쪽(+X), pitch + 는 위."""
+    yaw = max(-32.0, min(32.0, yaw * 1.5)); pitch = max(-20.0, min(20.0, pitch * 1.5))   # 눈알이 크게 굴러가게
     p.l('EyeTarget', (1.2 * math.tan(math.radians(yaw)), 0, 1.2 * math.tan(math.radians(pitch))))
+
+
+def blink_amt(t, times, close=2.0, hold=1.0, opn=3.5):
+    """깜빡임 0(뜸)~1(감음): times 의 각 시각에 close 프레임 동안 감고 hold 유지, opn 프레임 동안 뜸."""
+    v = 0.0
+    for t0 in times:
+        d = t - t0
+        if 0 <= d < close:
+            v = max(v, ease(d / close))
+        elif close <= d < close + hold:
+            v = 1.0
+        elif close + hold <= d < close + hold + opn:
+            v = max(v, 1 - ease((d - close - hold) / opn))
+    return v
+
+
+def blink(p, t, times):
+    b = blink_amt(t, times)
+    p.r('EyelidUpper', 56 * b); p.r('EyelidLower', -20 * b)     # 위 꺼풀이 내려와 덮고 아래 꺼풀이 조금 올라옴
+    return b
+
+
+BLINK = {}
 
 
 def alive(p, t, period, k=1.0, grip=0.0, lid_strain=0.0, tremor=1.0, seed=0):
@@ -203,6 +246,8 @@ def alive(p, t, period, k=1.0, grip=0.0, lid_strain=0.0, tremor=1.0, seed=0):
             p.r('Hook_%s.%s' % (u, s), pn(t, P / 10 if P < 500 else 7, seed + hash(u + s) % 97, 2) * .7 * tremor, 0,
                 pn(t, P / 8 if P < 500 else 9, seed + 31 + hash(s + u) % 89, 2) * .5 * tremor)
     p.pupil *= 1 + .04 * pn(t, P, seed + 21, 3)
+    times = BLINK.get('times') or ([round(P * .28), round(P * .74)] if P < 500 else [])
+    blink(p, t, times)
 
 
 def hold_hands(p, t, P, seed, amp=.004):
@@ -252,6 +297,7 @@ def clip(name, N, loop):
 
 @clip('Idle', 90, True)
 def a_idle(t):
+    BLINK.clear()
     p = Pose(); N = 90
     br = math.sin(2 * math.pi * 2 * t / N)
     p.r('Spine2', 1.2 * br); p.r('Spine3', .8 * br, 0, 0); p.r('Spine1', 2.5)
@@ -270,6 +316,7 @@ def a_idle(t):
 
 @clip('Walk', 36, True)
 def a_walk(t):
+    BLINK.clear()
     p = Pose(); N = 36
     gait(p, t, N, .5, .62, .085, .022, .045, 2)
     ph = 2 * math.pi * t / N
@@ -288,6 +335,7 @@ def a_walk(t):
 
 @clip('Run', 22, True)
 def a_run(t):
+    BLINK.clear()
     p = Pose(); N = 22
     gait(p, t, N, .8, .38, .2, .05, .12, 5)
     ph = 2 * math.pi * t / N
@@ -306,6 +354,7 @@ def a_run(t):
 
 @clip('Attack', 45, False)
 def a_attack(t):
+    BLINK.clear(); BLINK['times'] = [4, 38]
     p = Pose(); P = 1000
     sp = kf(t, [(0, 0), (11, -9), (17, 26), (24, 30), (34, 8), (45, 0)])
     p.r('Spine1', sp * .35); p.r('Spine2', sp * .35); p.r('Spine3', sp * .3)
@@ -345,6 +394,7 @@ def a_attack(t):
 
 @clip('LookAround', 120, True)
 def a_look(t):
+    BLINK.clear()
     p = Pose(); N = 120
     yaw = kf(t, [(0, 0), (8, 0), (28, 34), (48, 34), (72, -36), (94, -36), (114, 0), (120, 0)])
     pit = kf(t, [(0, 0), (28, 4), (48, -3), (72, 5), (94, -2), (120, 0)])
@@ -363,6 +413,7 @@ def a_look(t):
 
 @clip('Hit', 20, False)
 def a_hit(t):
+    BLINK.clear(); BLINK['times'] = [1]
     p = Pose(); P = 1000
     j = kf(t, [(0, 0), (2.5, 1), (7, .55), (11, -.15), (15, .06), (20, 0)])
     p.r('Spine1', -8 * j); p.r('Spine2', -7 * j, 0, 4 * j); p.r('Spine3', -5 * j)
@@ -382,6 +433,7 @@ def a_hit(t):
 
 @clip('Death', 75, False)
 def a_death(t):
+    BLINK.clear(); BLINK['times'] = [10, 30]
     p = Pose(); P = 1000
     # 0~14 휘청 → 14~34 무릎 꺾임 → 34~56 뒤로 쓰러짐 → 56~75 경련 후 멎음
     p.l('Hips', kf(t, [(0, (0, 0, 0)), (8, (0, .06, -.02)), (14, (.03, .02, -.06)), (34, (.02, .1, -.42)),
@@ -421,6 +473,7 @@ def a_death(t):
 
 @clip('EyeDart', 60, True)
 def a_dart(t):
+    BLINK.clear()
     p = Pose(); N = 60
     r = random.Random(77); pts = []; f = 0
     while f < N - 6:
@@ -438,6 +491,7 @@ def a_dart(t):
 
 @clip('Stare', 90, False)
 def a_stare(t):
+    BLINK.clear(); BLINK['times'] = [6]
     p = Pose(); P = 1000
     lean = kf(t, [(0, 0), (18, 1), (90, 1)])
     p.r('Spine1', 3 + 4 * lean); p.r('Spine2', 3 * lean); p.r('Neck', 5 * lean); p.r('Head', -9 * lean)
@@ -448,6 +502,89 @@ def a_stare(t):
     strain = float(kf(t, [(0, 0), (20, -2), (70, -5), (90, -5.5)]))
     alive(p, t, P, k=.5, grip=float(4 * lean), lid_strain=strain, tremor=float(.5 + 1.2 * lean), seed=31)
     hold_hands(p, t, P, 32, .004 + .004 * float(lean))
+    return p
+
+
+@clip('Kill', 60, False)
+def a_kill(t):
+    """플레이어를 잡아 죽임: 앞손으로 움켜쥐어 눈앞까지 끌어올림 → 눈꺼풀 한껏 벌어지고 동공이 열림 → 쥐어짜며 떨다 떨어뜨림."""
+    BLINK.clear(); BLINK['times'] = [54]
+    p = Pose(); P = 1000
+    sp = kf(t, [(0, 0), (6, 22), (12, 16), (20, 6), (46, 8), (60, 0)])
+    shake = (math.sin(t * 2.7) * .6 + math.sin(t * 5.3) * .4) * kf(t, [(0, 0), (14, 0), (18, 1), (44, 1), (48, 0)])
+    p.r('Spine1', sp * .4 + 2 * shake); p.r('Spine2', sp * .35, 2 * shake); p.r('Spine3', sp * .25, 0, 2 * shake)
+    p.r('Neck', kf(t, [(0, 0), (6, -10), (16, 6), (44, 8), (60, 0)])); p.r('Head', kf(t, [(0, 0), (6, -8), (16, 12), (44, 10), (60, 0)]) + 2 * shake)
+    p.l('Hips', kf(t, [(0, (0, 0, 0)), (6, (0, -.22, -.08)), (14, (0, -.12, -.05)), (46, (0, -.1, -.04)), (60, (0, 0, 0))]))
+    p.l('IK_Foot.R', kf(t, [(0, (0, 0, 0)), (3, (0, -.15, .1)), (6, (0, -.3, 0)), (48, (0, -.3, 0)), (54, (0, -.15, .06)), (59, (0, 0, 0))]))
+    p.r('IK_Foot.R', kf(t, [(0, 0), (3, -15), (6, 0), (50, 0), (54, -12), (59, 0)]))
+    p.r('IK_Foot.L', kf(t, [(0, 0), (6, -14), (48, -12), (60, 0)])); p.r('Toes.L', kf(t, [(0, 0), (6, 20), (48, 18), (60, 0)]))
+    for s in SIDES:
+        m = 1 if s == 'L' else -1
+        # 앞손: 놓고 → 앞으로 뻗어 → 움켜쥐고 → 눈앞으로 끌어올림 → 놓고 제자리
+        d = kf(t, [(0, (0, 0, 0)), (5, (m * .2, -.5, -.1)), (9, (m * .12, -.58, -.12)), (16, (m * .06, -.3, -.02)),
+                   (44, (m * .06, -.28, -.01)), (50, (m * .14, -.35, -.15)), (58, (0, 0, 0))])
+        d = np.array(d) + np.array([0, 0, .012 * shake])
+        p.l('IK_Hand_F.' + s, d)
+        p.r('IK_Hand_F.' + s, kf(t, [(0, 0), (5, -40), (9, -20), (16, 10), (44, 10), (58, 0)]))
+        op = kf(t, [(0, 0), (4, -30), (8, -30), (10, 70), (14, 75), (44, 78), (48, -25), (55, 0)])
+        sq = 6 * math.sin(t * 1.9) * kf(t, [(0, 0), (16, 1), (44, 1), (46, 0)])
+        for fn in FINGERS:
+            for j in (1, 2, 3):
+                p.r('%s%d_F.%s' % (fn, j, s), (op + sq) * (.7 + .15 * j) if fn != 'Thumb' else (op + sq) * .55)
+        p.r('Shoulder_F.' + s, kf(t, [(0, 0), (5, 14), (16, 6), (44, 6), (60, 0)]))
+        # 뒷손: 위 눈꺼풀을 더 위로 잡아당김(눈을 한껏 벌림)
+        p.l('IK_Hand_B.' + s, kf(t, [(0, (0, 0, 0)), (14, (0, 0, 0)), (20, (m * .02, .0, .045)), (44, (m * .02, 0, .05)), (54, (0, 0, 0))]))
+    p.r('EyelidUpper', kf(t, [(0, 0), (16, 0), (22, -12), (44, -13), (52, 0)])); p.r('EyelidLower', kf(t, [(0, 0), (16, 0), (22, 10), (44, 11), (52, 0)]))
+    g = saccades(t, P, [(0, 0, 0), (2, 0, -8), (16, 0, -16), (46, 0, -6), (54, 0, 0)], move=2)
+    gaze(p, g[0] + 1.2 * shake, g[1] + 1.2 * shake)
+    p.pupil = float(kf(t, [(0, 1), (5, .6), (18, .6), (26, 1.9), (44, 2.0), (56, 1.0)]))
+    alive(p, t, P, k=.4, tremor=2.2, seed=41)
+    return p
+
+
+@clip('Jumpscare', 30, False)
+def a_jumpscare(t):
+    """점프스케어: 카메라(정면)로 확 덮쳐 오며 팔 넷을 활짝 펼치고, 눈알이 화면을 똑바로 보며 동공이 확 열리고 미친 듯 떪."""
+    BLINK.clear(); BLINK['times'] = []
+    p = Pose(); P = 1000
+    hit = kf(t, [(0, 0), (4, 1), (30, 1)])
+    jit = (math.sin(t * 3.1) * .55 + math.sin(t * 7.7) * .45) * kf(t, [(0, 0), (5, 1), (30, 1)])
+    p.r('Spine1', 24 * hit + 2 * jit); p.r('Spine2', 14 * hit, 3 * jit); p.r('Spine3', 8 * hit, 0, 3 * jit)
+    p.r('Neck', -14 * hit + 3 * jit); p.r('Head', -12 * hit + 4 * jit, 3 * jit, 4 * jit)
+    p.l('Hips', np.array((0, -.34, -.12)) * hit)
+    p.l('IK_Foot.R', kf(t, [(0, (0, 0, 0)), (2, (0, -.2, .12)), (4, (0, -.42, 0)), (30, (0, -.42, 0))]))
+    p.r('IK_Foot.R', kf(t, [(0, 0), (2, -20), (4, 0)])); p.r('IK_Foot.L', -16 * hit); p.r('Toes.L', 22 * hit)
+    for s in SIDES:
+        m = 1 if s == 'L' else -1
+        p.l('IK_Hand_F.' + s, np.array((m * .42, -.28, .2)) * hit + np.array((0, 0, .015 * jit)))
+        p.l('IK_Hand_B.' + s, np.array((m * .32, -.1, .22)) * hit + np.array((.01 * jit, 0, 0)))
+        p.r('IK_Hand_F.' + s, -50 * hit); p.r('IK_Hand_B.' + s, -30 * hit)
+        p.r('Shoulder_F.' + s, 16 * hit); p.r('Shoulder_B.' + s, 12 * hit)
+        for h in HANDS:
+            for fn in FINGERS:
+                for j in (1, 2, 3):
+                    p.r('%s%d_%s.%s' % (fn, j, h, s), (-38 if fn != 'Thumb' else -20) * hit + 8 * math.sin(t * 4 + j + hash(fn) % 5) * hit)
+    p.r('EyelidUpper', -14 * hit); p.r('EyelidLower', 12 * hit)
+    gaze(p, .8 * jit, .8 * jit)
+    p.pupil = float(kf(t, [(0, 1), (3, .45), (6, 2.1), (30, 2.0)]) + .08 * jit)
+    alive(p, t, P, k=.3, tremor=3.0, seed=43)
+    return p
+
+
+@clip('Spot', 40, False)
+def a_spot(t):
+    """플레이어 발견: 얼어붙음 → 머리가 홱 돌아가고 눈이 고정, 동공이 좁아졌다 열림, 손가락에 힘."""
+    BLINK.clear(); BLINK['times'] = [2]
+    p = Pose(); P = 1000
+    turn = kf(t, [(0, 0), (6, 0), (9, 1), (40, 1)])
+    p.r('Head', -4 * turn, 22 * turn, -6 * turn); p.r('Neck', 0, 10 * turn); p.r('Spine3', 3 * turn, 6 * turn); p.r('Spine1', 6 * turn)
+    p.l('Hips', np.array((0, -.03, -.02)) * turn)
+    g = saccades(t, P, [(0, -6, 2), (5, 26, 0), (10, 30, -2)], move=2)
+    gaze(p, g[0], g[1])
+    p.pupil = float(kf(t, [(0, 1), (7, .55), (16, .6), (30, 1.4), (40, 1.4)]))
+    p.r('EyelidUpper', -6 * turn); p.r('EyelidLower', 5 * turn)
+    alive(p, t, P, k=.4, grip=float(10 * turn), tremor=float(.5 + 1.5 * turn), seed=47)
+    hold_hands(p, t, P, 48, .006)
     return p
 
 

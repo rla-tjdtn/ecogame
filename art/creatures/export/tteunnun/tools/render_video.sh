@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 mkdir -p renders
 cp /c/Windows/Fonts/arial.ttf work/arial.ttf; FONT=work/arial.ttf
 LIST=work/concat.txt; : > "$LIST"
-for c in Idle Walk Run Attack LookAround Hit Death EyeDart Stare; do
+for c in Idle Walk Run Attack LookAround Hit Death EyeDart Stare Kill Jumpscare Spot; do
   d=work/frames/$c; [ -d "$d" ] || continue
   loop=0; case $c in Idle|Walk|Run|LookAround|EyeDart) loop=1;; esac
   [ $c = Walk ] || [ $c = Run ] && loop=2
@@ -17,7 +17,7 @@ done
 ffmpeg -loglevel error -y -f concat -safe 0 -i "$LIST" -an -c copy renders/all_clips.mp4
 # 동작마다 가운데 프레임 하나씩 모은 한 장
 args=(); n=0
-for c in Idle Walk Run Attack LookAround Hit Death EyeDart Stare; do
+for c in Idle Walk Run Attack LookAround Hit Death EyeDart Stare Kill Jumpscare Spot; do
   d=work/frames/$c; [ -d "$d" ] || continue
   cnt=$(ls $d | wc -l); f=$(ls $d | sed -n "$(( cnt*6/10 + 1 ))p")
   args+=(-i "$d/$f"); n=$((n+1))

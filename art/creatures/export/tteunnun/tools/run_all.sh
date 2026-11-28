@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # 전체 다시 만들기(소리·업로드 없음). 원본(source/**)은 읽기만 한다.
 #  1) design_mesh.js : e10h.js 시안 → 고해상도 메시(work/design_*.bin)   2) design_dump.js : 시안 도형 → 관절 자리(work/design_prims.json)
-#  3) retex.py : 따로 된 눈알 + UV + 절차 재질 굽기(textures/)            4) rig.py : 이름 붙인 뼈 99개 + 웨이트
+#  3) retex.py : 팔 펼친 묶는 자세의 팔·사람 손(limbs.py) + 눈꺼풀(lids.py) + 따로 된 눈알 + UV + 절차 재질 굽기(textures/)
+#  4) rig.py : 이름 붙인 뼈 95개 + 웨이트
 #  5) animate.py : IK·시선 조종 + 동작 9개 → tteunnun.blend/.glb/.fbx    6) verify.py · stress.py · render.py · render_video.sh
 set -e
 cd "$(dirname "$0")/.."
 B="${BLENDER:-/c/Program Files/Blender Foundation/Blender 5.2/blender.exe}"
 X="--factory-startup -noaudio --python-exit-code 1"
-node tools/design_mesh.js
 node tools/design_dump.js > /dev/null
+node tools/design_mesh.js
 "$B" -b $X -P tools/retex.py
 "$B" -b work/retexA.blend $X -P tools/rig.py
 "$B" -b work/stageB.blend $X -P tools/animate.py

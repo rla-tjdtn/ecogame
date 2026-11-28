@@ -34,6 +34,8 @@ def reset():
 
 
 def R(b, x=0, y=0, z=0):
+    if b not in PB:
+        return
     PB[b].rotation_euler = Euler([math.radians(v) for v in (x, y, z)])
 
 
