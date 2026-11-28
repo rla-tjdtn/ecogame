@@ -114,7 +114,7 @@ _H = float(_P[:, 2].max())
 _eo = bpy.data.objects.get('Eyeball')
 _ez = float(_np.array([v.co for v in _eo.data.vertices]).mean(0)[2]) if _eo else 1.99
 views = [('front', (0, -5.6, _H * .55), (0, 0, _H * .5), 50), ('side', (5.6, 0, _H * .55), (0, 0, _H * .5), 50),
-         ('34', (3.4, -4.3, _H * .7), (0, 0, _H * .52), 50), ('back', (-2.6, 3.4, _H * .8), (0, 0, _H * .6), 50), ('head', (.75, -1.55, _ez + .1), (0, -.08, _ez - .02), 50)]
+         ('34', (3.4, -4.3, _H * .7), (0, 0, _H * .52), 50), ('back', (-2.6, 3.4, _H * .8), (0, 0, _H * .6), 50), ('head', (.75, -1.55, _ez + .1), (0, -.08, _ez - .02), 50), ('headside', (1.7, -.1, _ez + .15), (0, -.05, _ez - .02), 50)]
 for nm, loc, tgt, lens in views:
     cam.location = loc; look(cam, tgt); cam.data.lens = lens
     sc.render.filepath = pref + '_' + nm + '.png'

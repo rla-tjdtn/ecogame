@@ -302,3 +302,16 @@ def setup_gpu():
         print('gpu setup fail', ex)
     bpy.context.scene.cycles.device = 'CPU'
     return 'CPU'
+
+
+# 목 늘이기(사용자 요청): 시안 높이 7.05~7.62(목) 구간을 서서히 늘려 그 위(머리·눈·눈꺼풀)를 NECK_DZ 만큼 올린다.
+# 시안 좌표를 미터로 바꾸는 모든 곳(retex 몸 정점·눈 중심, rig/limbs 의 W)에 똑같이 적용해 뼈·손 목표가 어긋나지 않게 한다.
+NECK_DZ = .14
+NECK_Z0, NECK_Z1 = 7.05 * .235, 7.62 * .235
+
+
+def neck(P):
+    P = np.array(P, float)
+    z = P[..., 2]
+    P[..., 2] = z + NECK_DZ * smooth(NECK_Z0, NECK_Z1, z)
+    return P

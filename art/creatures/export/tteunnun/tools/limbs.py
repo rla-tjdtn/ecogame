@@ -4,7 +4,7 @@
 # 돌려주는 것: Geo 목록(정점 속성 armpart = 뼈 묶음 번호), joints(뼈 머리·꼬리·위 방향), hold(IK 목표), parts(번호 → 뼈 목록)
 import math
 import numpy as np
-from tt_common import Geo, tube, nrm, smooth, rot
+from tt_common import Geo, tube, nrm, smooth, rot, neck
 
 S = 0.235
 HS = 1.3                          # 시안 손 크기에 맞춘 배율(시안 손가락이 길다)
@@ -12,8 +12,9 @@ FINGERS = [('Index', .027 * HS, tuple(x * 1.35 for x in (.06, .036, .029)), .008
            ('Ring', -.009 * HS, tuple(x * 1.35 for x in (.063, .038, .029)), .0085 * 1.18, -4), ('Pinky', -.026 * HS, tuple(x * 1.35 for x in (.05, .031, .025)), .0074 * 1.18, -10)]
 PALM = .1 * 1.15
 REST_CURL = (8, 10, 8)            # 펼친 손의 살짝 굽은 손가락(도)
-ARM_LEN = {'F': (.52, .50), 'B': (.70, .64)}     # 위팔, 아래팔(m)
-GRIP = {'F': (28, 38, 30), 'B': (32, 42, 34)}     # 눈꺼풀을 움켜쥘 때 더하는 굽힘(animate.py 기본 자세)
+HAND_LIFT = .006                  # 손목(손등 쪽 뼈)이 눈꺼풀 바깥 살 위로 뜨는 높이 — 손이 머리 표면에 붙게
+ARM_LEN = {'F': (.42, .40), 'B': (.58, .53)}     # 위팔, 아래팔(m)
+GRIP = {'F': (30, 44, 36), 'B': (30, 44, 36)}     # 눈꺼풀을 움켜쥘 때 더하는 굽힘(animate.py 기본 자세)
 
 
 def tip_local(extra):
@@ -30,7 +31,7 @@ def tip_local(extra):
 
 def W(p):
     p = np.asarray(p, float)
-    return np.array([p[0], -p[2], p[1]]) * S
+    return neck(np.array([p[0], -p[2], p[1]]) * S)
 
 
 def _segs(g):
@@ -146,12 +147,27 @@ def build_limbs(G):
         # 붙잡는 자세의 손목: 굽힌 손가락 끝(새 손 크기)이 시안 손가락 끝 자리에 오도록
         Xh = nrm(np.cross(Ph, Dh)); Mh = np.stack([Xh, Dh, Ph], 1)
         # 손가락 끝 목표 = 새 눈알 머리(head.py)의 눈꺼풀 가장자리 바로 바깥
-        Td = lid_grab(_E, 1.12 * S - .003, -62 if hk == 'F' else 62)
-        Wh = Td - Mh @ tip_local(GRIP[hk])
+        Td = lid_grab(_E, 1.12 * S - .003, -62 if hk == 'F' else 62, out=-.002)
+        # 손 4개가 눈꺼풀을 잡아 벌리는 자세: 손은 머리 표면에 눕고(손바닥이 머리 쪽), 손가락은 눈 앞쪽(눈구멍)을 향해
+        # 굽은 손가락 끝이 눈꺼풀 가장자리에 걸린다. 손목이 머리 표면(+손 두께) 높이에 오도록 손 기울기를 찾는다.
+        nT = nrm(Td - _E); front = _E + np.array([0, -1.0, 0]) * np.linalg.norm(Td - _E)
+        D0 = nrm((front - Td) - nT * np.dot(front - Td, nT)); X0 = nrm(np.cross(-nT, D0))
+        Rw = np.linalg.norm(Td - _E) + HAND_LIFT
+        best = None
+        for al in np.radians(np.linspace(-60, 60, 241)):
+            Dh = nrm(D0 * math.cos(al) - nT * math.sin(al)); Ph = nrm(np.cross(Dh, X0))
+            if np.dot(Ph, nT) > 0:
+                Ph = -Ph
+            Xh = nrm(np.cross(Ph, Dh)); Mh = np.stack([Xh, Dh, Ph], 1)
+            Wt = Td - Mh @ tip_local(GRIP[hk]); err = abs(np.linalg.norm(Wt - _E) - Rw)
+            if best is None or err < best[0]:
+                best = (err, Dh, Ph, Mh, Wt)
+        _, Dh, Ph, Mh, Wh = best
         # 손으로 눈꺼풀을 벌릴 만큼 긴 팔(사용자 요청): 위팔·아래팔 길이
         L1, L2 = ARM_LEN[hk]
         # 붙잡는 자세의 팔꿈치: 이 길이로 두 뼈 IK 를 풀되, 시안 팔꿈치가 있던 쪽으로 꺾음
         Ed = W(e_); dv = Wh - S_; dist = min(np.linalg.norm(dv), (L1 + L2) * .995); dn = nrm(dv)
+        print("REACH", hk, round(float(np.linalg.norm(dv)), 3), "of", round(L1 + L2, 3))
         aa = (L1 * L1 - L2 * L2 + dist * dist) / (2 * dist); hh = math.sqrt(max(L1 * L1 - aa * aa, 0))
         pole = Ed - (S_ + Wh) / 2; pole = nrm(pole - dn * np.dot(pole, dn))
         El_hold = S_ + dn * aa + pole * hh

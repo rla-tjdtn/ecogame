@@ -27,7 +27,7 @@ P = np.frombuffer(raw, np.float32, nv * 3, 0).reshape(-1, 3).astype(float)
 T = np.frombuffer(raw, np.uint32, nt * 3, nv * 12).reshape(-1, 3)
 MATV = np.frombuffer(raw, np.uint8, nv, nv * 12 + nt * 12).astype(float)
 BKV = np.frombuffer(raw, np.uint8, nv, nv * 13 + nt * 12).astype(float)
-V = np.c_[P[:, 0], -P[:, 2], P[:, 1]] * S
+V = neck(np.c_[P[:, 0], -P[:, 2], P[:, 1]] * S)
 # 면 방향: 껍질(연결 조각)마다 부호 있는 부피를 재서 안쪽을 보는 껍질만 뒤집는다(recalc 는 겹친 껍질에서 틀림)
 par = np.arange(nv)
 def _find(x):
@@ -58,7 +58,7 @@ me.update(); me.validate()
 body = bpy.data.objects.new('Tteunnun', me); sc.collection.objects.link(body)
 V = np.array([v.co for v in me.vertices])
 print('BODY', len(V), 'verts', len(me.polygons), 'tris', 'min', V.min(0).round(3), 'max', V.max(0).round(3), 'buckets', hdr['buckets'])
-EC = np.array([hdr['eye']['c'][0], -hdr['eye']['c'][2], hdr['eye']['c'][1]]) * S; ER = hdr['eye']['r'] * S
+EC = neck(np.array([hdr["eye"]["c"][0], -hdr["eye"]["c"][2], hdr["eye"]["c"][1]]) * S); ER = hdr['eye']['r'] * S
 FWD3 = np.array([0, -1.0, 0])
 for nm, arr in (('dmat', MATV), ('bucket', BKV)):
     a = me.attributes.new(nm, 'FLOAT', 'POINT'); a.data.foreach_set('value', arr.astype(np.float32))

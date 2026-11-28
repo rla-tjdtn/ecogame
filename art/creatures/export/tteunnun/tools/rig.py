@@ -18,7 +18,7 @@ G = json.load(open(os.path.join(WORK, 'design_prims.json')))
 def W(p):
     """시안 좌표 → Blender 미터."""
     p = np.asarray(p, float)
-    return np.array([p[0], -p[2], p[1]]) * S
+    return neck(np.array([p[0], -p[2], p[1]]) * S)
 
 
 def segs(g):
