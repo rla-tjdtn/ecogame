@@ -169,7 +169,10 @@ def build_limbs(G):
         Ed = W(e_); dv = Wh - S_; dist = min(np.linalg.norm(dv), (L1 + L2) * .995); dn = nrm(dv)
         print("REACH", hk, round(float(np.linalg.norm(dv)), 3), "of", round(L1 + L2, 3))
         aa = (L1 * L1 - L2 * L2 + dist * dist) / (2 * dist); hh = math.sqrt(max(L1 * L1 - aa * aa, 0))
-        pole = Ed - (S_ + Wh) / 2; pole = nrm(pole - dn * np.dot(pole, dn))
+        pole = Ed - (S_ + Wh) / 2
+        if hk == 'F':
+            pole = (S_ + np.array([.16, -.10, -.38])) - (S_ + dn * aa)   # 아래 팔: 팔꿈치를 어깨 아래(조금 바깥·앞)에 가장 가깝게 — 아래팔이 밑에서 올라와 손목이 덜 꺾이게
+        pole = nrm(pole - dn * np.dot(pole, dn))
         El_hold = S_ + dn * aa + pole * hh
         if hk == 'F':
             A = nrm((1, 0, -.18)); fdir = nrm((1, -.12, -.18))     # 옆으로, 아래팔은 살짝 앞으로(굽는 면 정함)
