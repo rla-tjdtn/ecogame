@@ -13,7 +13,7 @@ FINGERS = [('Index', .027 * HS, tuple(x * 1.35 for x in (.06, .036, .029)), .008
 PALM = .1 * 1.15
 REST_CURL = (8, 10, 8)            # 펼친 손의 살짝 굽은 손가락(도)
 HAND_LIFT = .006                  # 손목(손등 쪽 뼈)이 눈꺼풀 바깥 살 위로 뜨는 높이 — 손이 머리 표면에 붙게
-ARM_LEN = {'F': (.42, .40), 'B': (.58, .53)}     # 위팔, 아래팔(m)
+ARM_LEN = {'F': (.40, .52), 'B': (.58, .53)}     # 위팔, 아래팔(m)
 GRIP = {'F': (30, 44, 36), 'B': (30, 44, 36)}     # 눈꺼풀을 움켜쥘 때 더하는 굽힘(animate.py 기본 자세)
 
 
@@ -171,7 +171,7 @@ def build_limbs(G):
         aa = (L1 * L1 - L2 * L2 + dist * dist) / (2 * dist); hh = math.sqrt(max(L1 * L1 - aa * aa, 0))
         pole = Ed - (S_ + Wh) / 2
         if hk == 'F':
-            pole = (S_ + np.array([.16, -.10, -.38])) - (S_ + dn * aa)   # 아래 팔: 팔꿈치를 어깨 아래(조금 바깥·앞)에 가장 가깝게 — 아래팔이 밑에서 올라와 손목이 덜 꺾이게
+            pole = (S_ + np.array([.12, -.30, -.35])) - (S_ + dn * aa)   # 아래 팔: 팔꿈치를 어깨 아래(조금 바깥·앞)에 가장 가깝게 — 아래팔이 밑에서 올라와 손목이 덜 꺾이게
         pole = nrm(pole - dn * np.dot(pole, dn))
         El_hold = S_ + dn * aa + pole * hh
         if hk == 'F':
