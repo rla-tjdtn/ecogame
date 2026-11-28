@@ -214,7 +214,7 @@ def build(P):
     pose.L['Hips'] = qmul(*[rq('Hips', a, d) for a, d in P.get('hips_rot', [])])
     for bn in ('Spine1', 'Spine2', 'Spine3', 'Neck', 'Head'):
         pose.L[bn] = qmul(*[rq(bn, a, d) for a, d in P.get(bn, [])])
-    pose.L['Jaw'] = rq('Jaw', (1, 0, 0), P.get('jaw', 0))
+    pose.L['Jaw'] = Quaternion()  # 관절인형: 입은 벌리지 않는다(동작 함수의 jaw 값은 무시)
     for s in SIDES:
         ey, ep = P.get('eye', (0, 0)) if not isinstance(P.get('eye'), dict) else P['eye'][s]
         ey = max(-14, min(14, ey)); ep = max(-4, min(4, ep))  # 눈알은 눈꺼풀 안에서 조금만 굴린다(위로 치켜뜨지 않게)
