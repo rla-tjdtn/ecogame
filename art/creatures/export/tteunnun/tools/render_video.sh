@@ -7,7 +7,7 @@ cp /c/Windows/Fonts/arial.ttf work/arial.ttf; FONT=work/arial.ttf
 LIST=work/concat.txt; : > "$LIST"
 for c in Idle Walk Run Attack LookAround Hit Death EyeDart Stare Kill Jumpscare Spot; do
   d=work/frames/$c; [ -d "$d" ] || continue
-  loop=0; case $c in Idle|Walk|Run|LookAround|EyeDart) loop=1;; esac
+  loop=0; case $c in Idle|Walk|Run|LookAround|EyeDart|EyeOpen|LookLR|LookUD) loop=1;; esac
   [ $c = Walk ] || [ $c = Run ] && loop=2
   ffmpeg -loglevel error -y -stream_loop $loop -framerate 30 -start_number 0 -i "$d/%04d.png" -an \
     -vf "drawtext=fontfile=$FONT:text='$c':x=16:y=16:fontsize=28:fontcolor=white@0.85" \

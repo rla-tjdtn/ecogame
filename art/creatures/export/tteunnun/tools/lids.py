@@ -52,7 +52,7 @@ def build_lids(E, R_EYE, _only_frame=False):
     g = Geo('Eyelids', 'Body')
     n = 96
     ths = np.arange(n) / n * 2 * math.pi
-    PB = math.radians(112)                    # 뒤 끝(머리 살 속으로 파묻힘 — 껍데기·헬멧처럼 보이지 않게)
+    PB = math.radians(150)                    # 뒤 끝(머리 살 속으로 파묻힘 — 껍데기·헬멧처럼 보이지 않게)
     rows = [('o', t) for t in np.linspace(0, 1, 26)] + [('r', t) for t in np.linspace(0, 1, 12)[1:-1]] + [('i', t) for t in np.linspace(0, 1, 9)]
     rings, dmv, inn, thv = [], [], [], []
     for kind, t in rows:
@@ -89,13 +89,15 @@ def build_lids(E, R_EYE, _only_frame=False):
     _connect(g, rings, vco, 2 * math.pi * .26)
     dm = np.array(dmv); inn = np.array(inn); th = np.array(thv)
     nband = g.nv()
-    wl = np.where(inn, 1 - smooth(.015, .06, dm), 1 - smooth(.025, .1, dm))
+    wl = 1 - smooth(.02, .3, dm)          # 눈꺼풀 띠 거의 전체가 꺼풀 뼈를 따라가다 뒤쪽에서 서서히 머리로(깜빡일 때 찢어지지 않게)
     up = smooth(-.3, .3, np.sin(th))
     rng_ = range(g.nv())
     g.setattr_('lidshell', rng_, np.ones(g.nv()))
     g.setattr_('w_up', rng_, wl * up)
     g.setattr_('w_lo', rng_, wl * (1 - up))
     corner = np.abs(np.cos(th)) ** 8                          # 눈 양 구석: 위·아래 꺼풀이 만나는 세모 자리는 넓게 점막
+    g.setattr_('lid_th', rng_, np.mod(th, 2 * math.pi) + 1e-6)     # 뼈 격자 웨이트용(rig.py)
+    g.setattr_('lid_dm', rng_, dm + 1e-6)
     g.setattr_('lidm', rng_, np.clip(1 - dm / (.01 + .06 * corner), 0, 1) * inn + np.clip(1 - dm / (.004 + .05 * corner), 0, 1) * corner * (~inn))
     g.setattr_('lip', rng_, np.clip(1 - dm / (.012 + .05 * corner), 0, 1) * (~inn) + inn * 1.0)   # 눈꺼풀 입술(분홍빛 갈색)      # 가장자리(충혈·젖음)
     # (눈 구석 분홍 살은 뺐다 — 참고 그림처럼 구석은 위·아래 눈꺼풀 가장자리가 뾰족하게 만나기만 한다)
@@ -123,4 +125,6 @@ def build_lids(E, R_EYE, _only_frame=False):
             lash.setattr_('lidshell', r2, np.ones(k))
             lash.setattr_('w_up' if u > 0 else 'w_lo', r2, np.ones(k))
             lash.setattr_('thin', r2, np.ones(k))
+            lash.setattr_('lid_th', r2, np.full(k, (th % (2 * math.pi)) + 1e-6))   # 속눈썹은 뿌리 자리의 가장자리 뼈를 그대로 따름
+            lash.setattr_('lid_dm', r2, np.full(k, 1e-6))
     return g, lash

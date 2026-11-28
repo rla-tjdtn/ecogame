@@ -67,6 +67,22 @@ pc = E + FWD * (R_EYE * math.cos(PHI_I) + .0012)
 bone('Pupil', pc, pc + FWD * .03, UP, 'Eye')
 bone('EyelidUpper', E, E + nrm((0, -.48, .88)) * .2, (0, -1, 0), 'Head')
 bone('EyelidLower', E, E + nrm((0, -.48, -.88)) * .2, (0, 1, 0), 'Head')
+# ---- 눈꺼풀 전용 뼈 격자(Roblox 호환: 뼈 스키닝만, 셰이프 키 없음)
+# 위·아래 눈꺼풀마다 행 4(가장자리→뒤) × 열 5(눈 폭)의 뼈. 모두 눈 중심이 축이라 눈알 곡면을 따라 돈다.
+# 각 뼈는 조종 뼈(EyelidUpper/Lower)의 회전을 f(행)×g(열) 만큼만 따라간다(Copy Rotation 영향력).
+# 가장자리 가운데 = 100%, 뒤쪽·양 구석으로 갈수록 0 → 구석과 뒤 끝은 머리에 붙어 갈라지지 않는다.
+LID_R = [0.0, .05, .12, .22, .38]            # 행 자리(가장자리에서 띠를 따라 잰 거리, m). 마지막 행은 머리(고정)
+LID_F = [1.0, .87, .68, .42, 0.0]     # 줄 사이 회전 차이를 고르게(가장자리 쪽만 몰려 늘어나지 않게)
+LID_C = 9                                    # 열: 0..8 이 구석→가운데→구석(0·8 은 머리 고정)
+LID_G = [math.sin(math.pi * c / (LID_C - 1)) ** .8 for c in range(LID_C)]   # 구석 가까이도 충분히 따라가 구석까지 감김
+LIDGRID = []
+for tag, ctrl in (('U', 'EyelidUpper'), ('L', 'EyelidLower')):
+    h_, t_, u_, p_, d_ = BONES[ctrl]
+    for r in range(4):
+        for c in range(1, LID_C - 1):
+            nm = 'Lid%s_r%d_c%d' % (tag, r, c)
+            bone(nm, h_, h_ + (t_ - h_) * (.35 + .1 * r), u_, 'Head')
+            LIDGRID.append((nm, ctrl, LID_F[r] * LID_G[c]))
 for gi in (16,):
     GB[gi] = ['Hips', 'Spine1', 'UpperLeg.L', 'UpperLeg.R']
 GB[17] = ['Hips', 'Spine1', 'Spine2']; GB[19] = ['Spine1', 'Spine2', 'Spine3']
@@ -118,6 +134,12 @@ for n in done:
     if par: b.parent = arm_d.edit_bones[par]
     b.use_deform = de
 bpy.ops.object.mode_set(mode='OBJECT')
+for nm in ('EyelidUpper', 'EyelidLower'):
+    arm_d.bones[nm].use_deform = False          # 조종 뼈(키를 넣는 뼈). 실제 변형은 격자 뼈가 한다
+for nm, ctrl, infl in LIDGRID:
+    c_ = arm.pose.bones[nm].constraints.new('COPY_ROTATION')
+    c_.target = arm; c_.subtarget = ctrl; c_.target_space = 'LOCAL'; c_.owner_space = 'LOCAL'; c_.influence = infl
+print('LIDGRID bones', len(LIDGRID))
 
 # ---- 정점마다 가장 가까운 시안 그룹(눈 겉 그룹 23~43 제외)
 body = bpy.data.objects['Tteunnun']; me = body.data
@@ -145,11 +167,13 @@ for a, b_ in E_:
     ra, rb = find(a), find(b_)
     if ra != rb: par[rb] = ra
 comp = np.array([find(i) for i in range(nv)])
-LIDS = None
+LIDS = None; THIN_ = None
 ARMP = np.array([a.value for a in me.attributes['armpart'].data]) if 'armpart' in me.attributes else None
 if 'lidshell' in me.attributes:
     _ga = lambda n: np.array([a.value for a in me.attributes[n].data])
-    LIDS = (_ga('lidshell'), _ga('w_up'), _ga('w_lo'))
+    LIDS = (_ga('lidshell'), _ga('w_up'), _ga('w_lo'), _ga('lid_th'), _ga('lid_dm'))
+    THIN_ = _ga('thin') > .5
+    BAND_ = np.nonzero((LIDS[0] > .5) & ~THIN_ & (LIDS[4] < .03))[0]   # 가장자리 근처 눈꺼풀 피부 정점(속눈썹 뿌리 후보)
 deform_all = {b.name: b.use_deform for b in arm_d.bones}
 W_all = {}                       # 뼈 → 정점별 웨이트
 def addw(bn, idx, w):
@@ -162,7 +186,29 @@ for c in np.unique(comp):
         bones = sorted(ARMG[code])
     elif LIDS is not None and LIDS[0][idx].mean() > .5:          # 눈꺼풀 살 띠: 만들 때 넣은 위/아래 웨이트 그대로
         up_, lo_ = LIDS[1][idx], LIDS[2][idx]
-        addw('EyelidUpper', idx, up_); addw('EyelidLower', idx, lo_); addw('Head', idx, np.clip(1 - up_ - lo_, 0, 1)); continue
+        th_ = LIDS[3][idx]; dm_ = np.clip(LIDS[4][idx], 0, None)
+        if (THIN_ is not None) and THIN_[idx].mean() > .5:      # 속눈썹 조각: 뿌리가 박힌 눈꺼풀 피부 정점과 똑같은 웨이트(뿌리가 절대 안 벌어짐)
+            dd_ = np.linalg.norm(V[idx][:, None, :] - V[BAND_][None, :, :], axis=2)
+            k_ = np.unravel_index(np.argmin(dd_), dd_.shape)
+            bv = BAND_[k_[1]]
+            th_ = np.full(len(idx), LIDS[3][bv]); dm_ = np.full(len(idx), max(LIDS[4][bv], 0.0))
+        for k_, i_ in enumerate(idx):
+            th0 = th_[k_]; up_lid = math.sin(th0) >= 0
+            tloc = th0 if up_lid else th0 - math.pi
+            cf = min(max(tloc / math.pi * (LID_C - 1), 0.0), LID_C - 1 - 1e-6)
+            rf = float(np.interp(dm_[k_], LID_R, range(len(LID_R)))); rf = min(rf, len(LID_R) - 1 - 1e-6)
+            c0, r0 = int(cf), int(rf); fc, fr = cf - c0, rf - r0
+            for rr_, wr in ((r0, 1 - fr), (r0 + 1, fr)):
+                for cc_, wc in ((c0, 1 - fc), (c0 + 1, fc)):
+                    w = wr * wc
+                    if w < 1e-5:
+                        continue
+                    if rr_ >= 4 or cc_ <= 0 or cc_ >= LID_C - 1:
+                        nm = 'Head'
+                    else:
+                        nm = 'Lid%s_r%d_c%d' % ('U' if up_lid else 'L', rr_, cc_)
+                    W_all.setdefault(nm, np.zeros(nv))[i_] += w
+        continue
     labs, cnt = np.unique(lab[idx], return_counts=True)
     main = labs[np.argmax(cnt)]
     # 손 조각(사람 손으로 새로 만든 것)은 머리·눈꺼풀 그룹이 가까워도 팔·손 뼈만 쓴다
@@ -226,13 +272,21 @@ print('HEAT_FALLBACK', fails)
 dEv = np.linalg.norm(V - E, axis=1); dirv = (V - E) / np.maximum(dEv, 1e-9)[:, None]
 front = smooth(.25, .6, dirv @ FWD)
 headish = (W_all.get('Head', np.zeros(nv)) > .5) & ((LIDS[0] < .5) if LIDS is not None else True)
-wl = (1 - smooth(R0 + .008, R0 + .055, dEv)) * front * headish
+wl = (1 - smooth(R0 + .008, R0 + .055, dEv)) * front * headish * 0.0   # (머리 살은 눈꺼풀 뼈에 섞지 않음 — 깜빡임은 셰이프 키)
 upv = smooth(-.25, .25, dirv[:, 2])
 for b in list(W_all):
     W_all[b] = W_all[b] * (1 - wl)
 W_all['EyelidUpper'] = W_all.get('EyelidUpper', np.zeros(nv)) + wl * upv
 W_all['EyelidLower'] = W_all.get('EyelidLower', np.zeros(nv)) + wl * (1 - upv)
 print('LID rim verts', int((wl > .05).sum()))
+# 웨이트 수동 검수 결과 반영: 몸 가운데(목 앞·가슴 가운데)는 어깨 뼈를 따르면 안 된다 — 어깨 웨이트를 가운데선에서 0 으로
+_ax = np.abs(V[:, 0])
+_keep = smooth(.06, .14, _ax)
+for _b in list(W_all):
+    if _b.startswith('Shoulder_'):
+        _rm = W_all[_b] * (1 - _keep)
+        W_all[_b] = W_all[_b] * _keep
+        W_all['Spine3'] = W_all.get('Spine3', np.zeros(nv)) + _rm      # 뺀 만큼은 척추가 받음(웨이트 합 유지)
 # 정점당 4개, 정규화
 names = list(W_all); M_ = np.stack([W_all[n] for n in names], 1)
 order = np.argsort(-M_, 1)
@@ -249,6 +303,7 @@ for k, n in enumerate(names):
         vg.add([int(i)], float(M2[i, k]), 'REPLACE')
 print('unweighted verts', int((M2.sum(1) < .5).sum()))
 mod = body.modifiers.new('Armature', 'ARMATURE'); mod.object = arm; body.parent = arm
+# (깜빡임은 위의 눈꺼풀 뼈 격자로 — 셰이프 키는 쓰지 않는다: Roblox 는 뼈 스키닝만)
 # 눈알 부품
 for on, grp in (('Eyeball', 'Eye'), ('Cornea', 'Eye'), ('Pupil', 'Pupil')):
     o = bpy.data.objects[on]

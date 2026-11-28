@@ -47,7 +47,7 @@ POSES['elbow_wrist'] = lambda: ([R('LowerArm_%s.%s' % (h, s), 75) for h in H for
 POSES['crouch'] = lambda: ([R('UpperLeg.' + s, 100) for s in S] + [R('LowerLeg.' + s, -125) for s in S] + [R('Foot.' + s, 35) for s in S]
                            + [R('Toes.' + s, 45) for s in S])
 POSES['spine_twist'] = lambda: ([R(b, 22, 18, 10) for b in ('Spine1', 'Spine2', 'Spine3')] + [R('Neck', 25, 35, 10), R('Head', 20, 35, -15)])
-POSES['eye_lids'] = lambda: [R('Eye', 30, 0, 32), R('EyelidUpper', 22), R('EyelidLower', -20), R('Hook_Up.L', 10), R('Hook_Lo.R', -10)]
+POSES['eye_lids'] = lambda: [R('Eye', 30, 0, 32), R('EyelidUpper', 56), R('EyelidLower', -20), R('Hook_Up.L', 10), R('Hook_Lo.R', -10)]
 out = []
 for name, fn in POSES.items():
     reset(); fn(); vl.update()

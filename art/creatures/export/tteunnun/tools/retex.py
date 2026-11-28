@@ -255,7 +255,8 @@ setup_gpu()
 sc.render.bake.margin = 16
 sc.world = bpy.data.worlds.new('World'); sc.world.light_settings.distance = .12
 # 눈 텍스처: 회색 흰자, 짙은 청회색 홍채, 큰 동공(홍채 반지름 대비)
-paint_eye(); paint_pupil()
+if not os.environ.get("SKIP_EYE"):
+    paint_eye(); paint_pupil()
 baked = bake(body, mat_body, body_shader, BODY_TEX)
 for k in ('basecolor', 'roughness', 'normal', 'ao'):
     os.replace(os.path.join(TEXD, 'body_' + k + '.png'), os.path.join(TEXD, 'body_' + k + '.png')) if os.path.exists(os.path.join(TEXD, 'body_' + k + '.png')) else None

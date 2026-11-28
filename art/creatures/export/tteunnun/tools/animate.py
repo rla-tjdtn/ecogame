@@ -147,6 +147,11 @@ class Pose:
 
 
 def apply_key(p, f):
+    # 눈꺼풀 조종 뼈 한계: 완전히 감음(위 78°, 아래 -32°) ~ 크게 뜸(위 -15°, 아래 +12°) — 넘으면 피부가 찢어진다(QA)
+    if 'EyelidUpper' in p.rot:
+        p.rot['EyelidUpper'][0] = min(max(p.rot['EyelidUpper'][0], -15.0), 78.0)
+    if 'EyelidLower' in p.rot:
+        p.rot['EyelidLower'][0] = min(max(p.rot['EyelidLower'][0], -40.0), 12.0)
     for b in ROT_BONES:
         PB[b].rotation_euler = Euler([math.radians(x) for x in p.rot.get(b, (0, 0, 0))], 'XYZ')
         PB[b].keyframe_insert('rotation_euler', frame=f, group=b)
@@ -218,7 +223,7 @@ def blink_amt(t, times, close=2.0, hold=1.0, opn=3.5):
 
 def blink(p, t, times):
     b = blink_amt(t, times)
-    p.r('EyelidUpper', 56 * b); p.r('EyelidLower', -20 * b)     # 위 꺼풀이 내려와 덮고 아래 꺼풀이 조금 올라옴
+    p.r('EyelidUpper', 78 * b); p.r('EyelidLower', -40 * b)     # 위 꺼풀이 내려와 덮고 아래 꺼풀이 조금 올라옴
     return b
 
 
@@ -278,7 +283,7 @@ def gait(p, t, N, S, beta, lift, bob, crouch, seed):
             pitch = kf(w, [(0, -18), (.25, -30), (.7, 5), (1, 12)])
             heel = kf(w, [(0, .035), (.3, .02), (1, 0)])
             toes = kf(w, [(0, 22), (.3, 5), (1, 0)])
-        p.l('IK_Foot.' + s, (m * .008 * math.sin(2 * math.pi * ph), -y, z + heel))
+        p.l('IK_Foot.' + s, (m * .008 * math.sin(2 * math.pi * ph), y, z + heel))   # 디딤 동안 발이 앞(-Y)에서 뒤로 → 앞으로 걷는다
         p.r('IK_Foot.' + s, float(pitch))
         p.r('Toes.' + s, float(toes))
     p.l('Hips', (.022 * math.sin(2 * math.pi * ph), 0, -crouch - bob * (.5 + .5 * math.cos(4 * math.pi * ph))))
@@ -592,13 +597,30 @@ def a_spot(t):
 arm.animation_data_create()
 ad = arm.animation_data
 acts = {}
+EYE_CLIPS = set()
+EYE_BONES = ['EyelidUpper', 'EyelidLower']
+
+
+def apply_key_eye(p, f):
+    """눈 전용 동작: 눈꺼풀 조종 뼈·시선 표적·동공만 키(몸·팔·다리 트랙 없음 → 다른 동작과 겹쳐 재생해도 덮어쓰지 않음)."""
+    for b in ('EyelidUpper', 'EyelidLower'):
+        v = p.rot.get(b, np.zeros(3)).copy()
+        v[0] = min(max(v[0], -15.0 if b == 'EyelidUpper' else -40.0), 78.0 if b == 'EyelidUpper' else 12.0)
+        PB[b].rotation_euler = Euler([math.radians(x) for x in v], 'XYZ'); PB[b].keyframe_insert('rotation_euler', frame=f, group=b)
+    PB['EyeTarget'].location = to_local('EyeTarget', p.loc.get('EyeTarget', (0, 0, 0))); PB['EyeTarget'].keyframe_insert('location', frame=f, group='EyeTarget')
+    PB['Pupil'].scale = (p.pupil, 1.0, p.pupil); PB['Pupil'].keyframe_insert('scale', frame=f, group='Pupil')
+
+
 for name, (N, loop, fn) in CLIPS.items():
     act = bpy.data.actions.new(name); act.use_fake_user = True
     ad.action = act
     for f in range(0, N + 1):
         tt = f % N if loop else f
         p = fn(float(tt))
-        apply_key(p, f)
+        if name in EYE_CLIPS:
+            apply_key_eye(p, f)
+        else:
+            apply_key(p, f)
     act.use_frame_range = True; act.frame_start = 0; act.frame_end = N
     act.use_cyclic = loop
     acts[name] = act
@@ -621,7 +643,7 @@ for o in bpy.data.objects:
     o.select_set(False)
 for o in meshes:
     o.select_set(True)
-vl.objects.active = meshes[0]
+vl.objects.active = next((o for o in meshes if o.name == "M_Body"), meshes[0])   # 셰이프 키(깜빡임)가 있는 몸을 기준으로 합침
 bpy.ops.object.join()
 body = vl.objects.active; body.name = 'Tteunnun'; body.data.name = 'Tteunnun'
 for m in list(body.modifiers):
@@ -647,6 +669,6 @@ bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, 'tteunnun.glb'), export_for
 print('GLB done')
 bpy.ops.export_scene.fbx(filepath=os.path.join(OUT, 'tteunnun.fbx'), use_selection=True, object_types={'ARMATURE', 'MESH'},
                          add_leaf_bones=False, use_armature_deform_only=True, bake_anim=True, bake_anim_use_all_actions=True,
-                         bake_anim_use_nla_strips=False, bake_anim_force_startend_keying=True, bake_anim_simplify_factor=0.0,
+                         bake_anim_use_nla_strips=False, bake_anim_force_startend_keying=True, bake_anim_simplify_factor=0.5,   # 안 움직이는 눈꺼풀 격자 뼈 키를 줄여 20MB 아래로
                          apply_scale_options='FBX_SCALE_ALL', path_mode='RELATIVE', mesh_smooth_type='FACE', use_tspace=True)
 print('FBX done')

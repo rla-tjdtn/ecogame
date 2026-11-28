@@ -24,9 +24,13 @@ FULL = ((2.7, -4.3, 1.75), (0, -.05, 1.15), 46)
 CAMS = {'EyeDart': ((.55, -1.75, 2.05), (0, -.08, 1.96), 55), 'Stare': ((.45, -1.9, 2.0), (0, -.08, 1.93), 50),
         'Death': ((3.2, -4.4, 1.6), (0, .25, .8), 40), 'Attack': ((3.0, -4.4, 1.7), (0, -.2, 1.15), 42), 'Kill': ((2.6, -4.4, 1.8), (0, -.25, 1.3), 40),
         'Jumpscare': ((0, -2.6, 1.95), (0, -.2, 1.75), 30), 'Spot': ((2.7, -4.3, 1.75), (0, -.05, 1.15), 46)}
+for _n in ('EyeOpen', 'Blink', 'BlinkFast', 'BlinkSlow', 'EyeSmile', 'EyeClose', 'EyeWide', 'LookLR', 'LookUD', 'EyeClosedHold', 'EyeReopen'):
+    CAMS[_n] = ((.55, -1.75, 2.05), (0, -.08, 1.96), 55)   # 눈 동작은 머리 가까이
 clips = [a for a in argv if a in ('Idle','Walk','Run','Attack','LookAround','Hit','Death','EyeDart','Stare','Kill','Jumpscare','Spot')] or ['Idle', 'Walk', 'Run', 'Attack', 'LookAround', 'Hit', 'Death', 'EyeDart', 'Stare', 'Kill', 'Jumpscare', 'Spot']
 for name in clips:
     act = bpy.data.actions[name]
+    for _pb in arm.pose.bones:
+        _pb.location = (0, 0, 0); _pb.rotation_euler = (0, 0, 0); _pb.rotation_quaternion = (1, 0, 0, 0); _pb.scale = (1, 1, 1)
     ad.action = act
     n0, n1 = int(act.frame_range[0]), int(act.frame_range[1])
     if act.use_cyclic:
