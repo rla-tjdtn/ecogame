@@ -23,6 +23,48 @@ plist = SD.prims()
 SK = SD.skeleton()
 
 
+def despike(me, thr=.00045, rounds=4, region=None):
+    """굽기 원본의 튀는 정점(이웃 평균에서 thr 넘게 벗어난 점)을 이웃 평균으로 편다 — 노멀맵의 작은 검은 점 제거"""
+    n = len(me.vertices)
+    E = np.empty(len(me.edges) * 2, np.int64); me.edges.foreach_get('vertices', E); E = E.reshape(-1, 2)
+    co = np.empty(n * 3); me.vertices.foreach_get('co', co); co = co.reshape(-1, 3)
+    deg = np.bincount(E.ravel(), minlength=n).astype(float)
+    for r in range(rounds):
+        acc = np.zeros_like(co)
+        np.add.at(acc, E[:, 0], co[E[:, 1]]); np.add.at(acc, E[:, 1], co[E[:, 0]])
+        mean = acc / np.maximum(deg, 1)[:, None]
+        dev = np.linalg.norm(co - mean, axis=1)
+        bad = dev > thr
+        if region is not None: bad &= region(co)
+        print('  despike', r, int(bad.sum()), flush=True)
+        if not bad.any(): break
+        co[bad] = mean[bad]
+    me.vertices.foreach_set('co', co.ravel()); me.update()
+
+
+HC_ = np.array(SD.HEAD_C[:])
+despike(HI.data, region=lambda P: (P[:, 2] > 1.70) & (np.linalg.norm(P - HC_, axis=1) < .40))  # 머리만(몸의 이음새 홈은 건드리지 않는다)
+# 게임 메시를 새로 만든다: 2.5mm 리메시 → 형태 표면에 투영 → 대칭 없이 데시메이트 → 다시 투영
+# (대칭 데시메이트가 머리 가운데 줄에 남기던 접힌 삼각형·점 무늬 제거)
+_tmp = bpy.data.objects.new('lowtmp', BODY.data.copy()); col.objects.link(_tmp)
+_md = _tmp.modifiers.new('rm', 'REMESH'); _md.mode = 'VOXEL'; _md.voxel_size = .0025; _md.adaptivity = 0
+_dg = bpy.context.evaluated_depsgraph_get(); _m = bpy.data.meshes.new_from_object(_tmp.evaluated_get(_dg)); _tmp.modifiers.clear()
+_old = _tmp.data; _tmp.data = _m; bpy.data.meshes.remove(_old)
+def _proj(me_, it):
+    c_ = np.empty(len(me_.vertices) * 3); me_.vertices.foreach_get('co', c_); c_ = c_.reshape(-1, 3)
+    c_ = SD.project(c_, plist, iters=it); me_.vertices.foreach_set('co', c_.ravel()); me_.update()
+_proj(_tmp.data, 3)
+_nt = len(_tmp.data.polygons) * 2
+_dc = _tmp.modifiers.new('dec', 'DECIMATE'); _dc.decimate_type = 'COLLAPSE'; _dc.ratio = 38000 / _nt; _dc.use_symmetry = False
+_dg = bpy.context.evaluated_depsgraph_get(); _m2 = bpy.data.meshes.new_from_object(_tmp.evaluated_get(_dg))
+_bm = bmesh.new(); _bm.from_mesh(_m2); bmesh.ops.triangulate(_bm, faces=_bm.faces[:]); _bm.to_mesh(_m2); _bm.free()
+_proj(_m2, 2)
+_oldb = BODY.data; BODY.data = _m2; _m2.name = 'SullaeBody'; bpy.data.meshes.remove(_oldb)
+_tm = _tmp.data; bpy.data.objects.remove(_tmp); bpy.data.meshes.remove(_tm)
+BODY.data.polygons.foreach_set('use_smooth', [True] * len(BODY.data.polygons))
+print('  low rebuilt tris', len(BODY.data.polygons), flush=True)
+
+
 def link(ob):
     col.objects.link(ob); return ob
 
@@ -366,7 +408,7 @@ def skin_material():
     scm = ramp(N, L, sc_.outputs['Fac'], [(.0, (1, 1, 1, 1)), (.03, (0, 0, 0, 1))])
     scmask = noise_n(N, L, P, 4, 2, .5)
     scmm = ramp(N, L, scmask.outputs['Fac'], [(.6, (0, 0, 0, 1)), (.7, (.6, .6, .6, 1))])
-    c = mix(N, L, c, C(.86, .85, .80), math_n(N, L, 'MULTIPLY', scm.outputs[0], scmm.outputs[0]), 'MIX')
+    # (긁힘 자국은 이마에 어두운 점처럼 보여 넣지 않는다)
     L.new(c, bs.inputs['Base Color'])
     # 반무광 레진: .42 안팎, 손때 묻은 곳은 조금 더 번들
     rr = noise_n(N, L, P, 5, 3, .5)
@@ -374,7 +416,7 @@ def skin_material():
     L.new(rough.outputs[0], bs.inputs['Roughness'])
     # 범프: 아주 고운 레진 결 + 긁힘
     fine = noise_n(N, L, P, 900, 2, .5)
-    h = math_n(N, L, 'ADD', math_n(N, L, 'MULTIPLY', fine.outputs['Fac'], .25), math_n(N, L, 'MULTIPLY', math_n(N, L, 'MULTIPLY', scm.outputs[0], scmm.outputs[0]), -.6))
+    h = math_n(N, L, 'MULTIPLY', fine.outputs['Fac'], .25)
     bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .12; bump.inputs['Distance'].default_value = .0004
     L.new(h, bump.inputs['Height']); L.new(bump.outputs[0], bs.inputs['Normal'])
     return mt

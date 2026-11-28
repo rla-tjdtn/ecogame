@@ -172,11 +172,11 @@ for s, m in SIDES.items():
     # 앞 손: 손바닥을 볼에 대고 손가락이 얼굴 앞을 가로질러 눈을 덮는다(왼손이 조금 위·바깥)
     wr = HL(m * 1.00, -.50 + (.035 if m > 0 else -.035), .22 + (.02 if m > 0 else 0))
     f = Vector((-m * .12, -.92, .36)).normalized(); n = Vector((-m, .10, 0)); n = (n - f * f.dot(n)).normalized()
-    WRAP[('F', s)] = dict(wr=wr, f=f, n=n, pole=V(m * .42, -.32, 1.28), spread=[.15, .10, .02, -.06, -.14])
+    WRAP[('F', s)] = dict(wr=wr, f=f, n=n, pole=V(m * .42, -.32, 1.28), spread=[.55, .10, .02, -.06, -.14])
     # 뒤 손: 머리 옆을 잡고 손가락이 정수리를 덮는다
     wr = HL(m * 1.13, -.12, -.12)
     f = Vector((-m * .25, -.02, 1)).normalized(); n = Vector((-m, 0, -.25)); n = (n - f * f.dot(n)).normalized()
-    WRAP[('B', s)] = dict(wr=wr, f=f, n=n, pole=V(m * .55, .32, 1.52), spread=[.1, .16, .05, -.05, -.16])
+    WRAP[('B', s)] = dict(wr=wr, f=f, n=n, pole=V(m * .55, .32, 1.52), spread=[.45, .16, .05, -.05, -.16])
     # 펼친 자세(추격): 앞 팔은 앞옆으로, 뒤 팔은 위로 벌리고 손가락을 쫙 편다
     FREE[('F', s)] = dict(wr=V(m * .60, -.36, 1.30), f=Vector((m * .45, -.88, .02)).normalized(), n=V(0, -.1, -1), pole=V(m * .5, .15, 1.1))
     FREE[('B', s)] = dict(wr=V(m * .50, -.16, 1.98), f=Vector((m * .35, -.55, .75)).normalized(), n=V(0, -.85, .55), pole=V(m * .65, .35, 1.55))
@@ -186,7 +186,7 @@ for s, m in SIDES.items():
 for key, spec in WRAP.items():
     tag, s = key
     Wh = hand_mat(spec['wr'], spec['f'], spec['n'])
-    CONTACT[key] = [contact_curls(Wh, fn, tag, s, spec['spread'][fi]) for fi, fn in enumerate(FING)]
+    CONTACT[key] = [contact_curls(Wh, fn, tag, s, spec['spread'][fi]) if fi else [-.15, .25, .2] for fi, fn in enumerate(FING)]  # 엄지는 얼굴에 파고들지 않게 밖으로 편히 둔다
     log('contact', key, [[round(math.degrees(c)) for c in cc] for cc in CONTACT[key]])
 
 

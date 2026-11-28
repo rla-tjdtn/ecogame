@@ -1,6 +1,6 @@
 {
  "file": "sullae.glb",
- "bytes": 8698276,
+ "bytes": 7635256,
  "fps": 24.0,
  "bones": [
   "Root",
@@ -108,8 +108,8 @@
    "textures": []
   },
   "Sullae_Body": {
-   "tris": 37975,
-   "verts": 30607,
+   "tris": 37998,
+   "verts": 27875,
    "groups": 94,
    "skinned": true,
    "textures": [
@@ -179,5 +179,5 @@
    "seconds": 1.333
   }
  },
- "total_tris": 44855
+ "total_tris": 44878
 }
