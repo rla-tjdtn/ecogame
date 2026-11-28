@@ -1,6 +1,6 @@
 {
  "file": "sullae.fbx",
- "bytes": 13550828,
+ "bytes": 13635036,
  "fps": 30.0,
  "bones": [
   "Root",
@@ -101,8 +101,8 @@
  "bone_count": 94,
  "meshes": {
   "Sullae_Body": {
-   "tris": 37993,
-   "verts": 18986,
+   "tris": 37996,
+   "verts": 18988,
    "groups": 91,
    "skinned": true,
    "textures": [
@@ -112,8 +112,8 @@
    ]
   },
   "Sullae_Cloth": {
-   "tris": 10997,
-   "verts": 6928,
+   "tris": 10998,
+   "verts": 6944,
    "groups": 33,
    "skinned": true,
    "textures": [
@@ -123,8 +123,8 @@
    ]
   },
   "Sullae_Eyes": {
-   "tris": 1680,
-   "verts": 844,
+   "tris": 3680,
+   "verts": 1844,
    "groups": 2,
    "skinned": true,
    "textures": [
@@ -183,5 +183,5 @@
    "seconds": 1.333
   }
  },
- "total_tris": 53790
+ "total_tris": 55794
 }

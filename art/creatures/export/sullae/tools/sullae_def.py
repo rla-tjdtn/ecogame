@@ -19,6 +19,8 @@ def nrm(v):
 
 
 HEAD_C = D(0, 8.05, .25)  # 머리 중심(쉬는 자세)
+EYE_L = (.35, -.09, .73)  # 눈알 중심(머리 로컬, 디자인 단위). 오른쪽은 x 부호만 바꾼다
+EYE_RAD = .15 * .235 * .97  # 눈알 반지름(m)
 
 
 def HL(x, y, z):
@@ -108,16 +110,16 @@ def skeleton():
     add('Head', 'Neck', (0, -.050, 1.680), (0, -.062, 2.120), fwd)
     add('Jaw', 'Head', HL(0, -.12, .02), HL(0, -.80, .55), up)
     for s, m in SIDES.items():
-        add(f'Eye.{s}', 'Head', HL(m * .35, -.08, .76), HL(m * .35, -.08, 1.10), up)
+        add(f'Eye.{s}', 'Head', HL(m * EYE_L[0], EYE_L[1], EYE_L[2]), HL(m * EYE_L[0], EYE_L[1], EYE_L[2] + .34), up)
     # 다리
     for s, m in SIDES.items():
-        hip = Vector((m * .072, .004, .885)); kn = Vector((m * .084, -.026, .482)); an = Vector((m * .050, .010, .072))
+        hip = Vector((m * .072, .004, .885)); kn = Vector((m * .084, -.026, .482)); an = Vector((m * .074, .010, .072))
         h = (kn - hip).cross(an - kn).normalized()
         add(f'Thigh.{s}', 'Hips', hip, kn, h.cross((kn - hip).normalized()))
         add(f'Shin.{s}', f'Thigh.{s}', kn, an, h.cross((an - kn).normalized()))
-        fd = nrm((-m * .12, -1, -.38)); ball = an + fd * .150; ball.z = .022
+        fd = nrm((-m * .05, -1, -.38)); ball = an + fd * .150; ball.z = .022
         add(f'Foot.{s}', f'Shin.{s}', an, ball, up)
-        toe = ball + nrm((-m * .1, -1, -.05)) * .065; toe.z = .016
+        toe = ball + nrm((-m * .04, -1, -.05)) * .065; toe.z = .016
         add(f'Toe.{s}', f'Foot.{s}', ball, toe, up)
         # IK 컨트롤(변형 안 함)
         add(f'IK_Foot.{s}', 'Root', an + Vector((0, .0, -.0)), an + Vector((0, -.12, 0)), up, False)
@@ -166,6 +168,8 @@ class Prim:
         elif self.kind == 'torus':
             c = np.array(self.a); r = self.r1 + self.r2
             self.lo = c - r; self.hi = c + r
+        elif self.kind == 'cap':
+            c = np.array(self.a); self.lo = c - self.r1; self.hi = c + self.r1
 
 
 def cone(a, b, r1, r2=None, **kw):
@@ -179,6 +183,25 @@ def ball(c, r, **kw):
 def ell(c, rad, rot=None, **kw):
     R = np.eye(3) if rot is None else np.array(rot)  # 열 = 로컬 축(월드)
     return Prim('ell', a=tuple(c), rad=tuple(rad), R=R, **kw)
+
+
+def cap(c, R, normal, h, round_=.003, **kw):
+    """구(c, R) 중 평면 dot(p-c, n) >= h 쪽만 남긴 뚜껑(눈꺼풀). 모서리를 round_ 만큼 둥글린다"""
+    return Prim('cap', a=tuple(c), r1=R, R=np.array(nrm(normal)[:]), r2=h, b=round_, **kw)
+
+
+def prim_points(p, U):
+    """복셀 리메시용 볼록 껍질 점들"""
+    if p.kind == 'cone':
+        return np.vstack([np.array(p.a) + U * p.r1, np.array(p.b) + U * p.r2])
+    if p.kind == 'cap':
+        c = np.array(p.a); n = p.R; Q = c + U * p.r1
+        keep = (Q - c) @ n >= p.r2
+        t = np.cross(n, [0, 0, 1] if abs(n[2]) < .9 else [1, 0, 0]); t /= np.linalg.norm(t); u = np.cross(n, t)
+        rr = math.sqrt(max(p.r1 ** 2 - p.r2 ** 2, 1e-9))
+        ring = np.array([c + n * p.r2 + (t * math.cos(a) + u * math.sin(a)) * rr for a in np.linspace(0, math.tau, 48, endpoint=False)])
+        return np.vstack([Q[keep], ring])
+    return np.array(p.a) + (U * np.array(p.rad)) @ np.array(p.R).T
 
 
 def torus(c, axis, R, r, **kw):
@@ -207,7 +230,7 @@ def prims():
     s = S
     # --- 다리 · 발
     for sd, m in SIDES.items():
-        hip = Vector((m * .072, .004, .885)); kn = Vector((m * .084, -.026, .482)); an = Vector((m * .050, .010, .072))
+        hip = Vector((m * .072, .004, .885)); kn = Vector((m * .084, -.026, .482)); an = Vector((m * .074, .010, .072))
         P += [cone(hip + Vector((m * .006, 0, .02)), kn + Vector((0, .004, .03)), .056, .036, k=.03)]
         P += [ell(hip.lerp(kn, .35) + Vector((m * .008, -.010, 0)), (.040, .042, .11), k=.03)]  # 허벅지 살
         P += [ball(kn + Vector((0, -.008, 0)), .038, k=.016), ball(kn + Vector((0, -.030, .005)), .022, k=.012)]  # 무릎·슬개골
@@ -215,13 +238,13 @@ def prims():
         P += [ell(kn.lerp(an, .28) + Vector((0, .018, 0)), (.030, .030, .085), k=.022)]  # 종아리(말랐다)
         P += [cone(kn.lerp(an, .15) + Vector((0, -.022, 0)), an + Vector((0, -.012, .02)), .011, .008, k=.01)]  # 정강이뼈
         P += [ball(an + Vector((m * .014, 0, 0)), .015, k=.012), ball(an + Vector((-m * .012, 0, .006)), .014, k=.012)]  # 복사뼈
-        fd = nrm((-m * .12, -1, -.38)); ball_p = an + fd * .150; ball_p.z = .022
+        fd = nrm((-m * .05, -1, -.38)); ball_p = an + fd * .150; ball_p.z = .022
         P += [ell(Vector((an.x, an.y + .022, .030)), (.028, .036, .030), k=.012)]  # 발꿈치
         P += [cone(Vector((an.x, an.y + .02, .028)), ball_p + Vector((0, 0, .004)), .027, .020, k=.015)]
         P += [ell(an.lerp(ball_p, .55) + Vector((0, 0, .012)), (.028, .06, .014), rot=frame_rot((1, 0, 0), fd, (0, 0, 1)), k=.015)]
-        td = nrm((-m * .1, -1, -.05))
+        td = nrm((-m * .04, -1, -.05))
         for t in range(5):
-            o = (t - 2) * .0150 * m * -1 + (t == 0) * -.003 * m * -1; ln = (.050, .040, .036, .032, .026)[t]; rr = (.0092, .0066, .0062, .0058, .0054)[t]
+            o = (t - 2) * .0150 * m + (t == 0) * -.004 * m; ln = (.050, .040, .036, .032, .026)[t]; rr = (.0092, .0066, .0062, .0058, .0054)[t]  # 엄지발가락이 안쪽(몸 가운데 쪽)
             b0 = ball_p + Vector((o, .010, .000)) - td * .006 * (abs(t - 1))
             b1 = b0 + td * ln * .55 + Vector((0, 0, .003)); b2 = b0 + td * ln + Vector((0, 0, -.006))
             P += tube([b0, b1, b2], [rr * 1.05, rr, rr * .85], k=.003)
@@ -259,16 +282,36 @@ def prims():
     for m in (-1, 1):
         P += [ell(HL(m * .09, -.33, .96), (.035 * s, .035 * s, .04 * s), op='sub', k=.01)]  # 콧구멍
         P += [ell(HL(m * .36, -.08, .86), (.21 * s, .19 * s, .20 * s), op='sub', k=.03)]  # 눈구멍
-    for m in (-1, 1):  # 눈꺼풀: 눈알을 덮는 껍질 + 가는 눈 틈
-        P += [ball(HL(m * .35, -.08, .76), .168 * s, k=.02)]
     for m in (-1, 1):
-        P += [ell(HL(m * .35, -.10, .90), (.135 * s, .20 * s, .068 * s), rot=frame_rot(None, (m * .25, -1, 0), (-m * .08, 0, 1)), op='sub', k=.012)]
+        # 눈꺼풀: 눈알보다 4.5mm 큰 구의 위·아래 뚜껑. 윗눈꺼풀이 동공 위까지 반쯤 내려오고 바깥 끝이 처진다
+        ec = HL(m * EYE_L[0], EYE_L[1], EYE_L[2]); lr = EYE_RAD + .0045
+        P += [cap(ec, lr, (-m * .16, .10, 1), .0055, round_=.0035, k=.010)]  # 윗눈꺼풀
+        P += [cap(ec, lr, (m * .10, .18, -1), .0150, round_=.0035, k=.010)]  # 아랫눈꺼풀
+        P += [cap(ec, lr + .0035, (-m * .10, .20, 1), .0150, round_=.004, k=.012)]  # 쌍꺼풀 위 두툼한 살
     P += [ell(HL(0, -.535, .84), (.15 * s, .045 * s, .045 * s), k=.02)]  # 윗입술
     P += [ell(HL(0, -.655, .80), (.13 * s, .05 * s, .045 * s), k=.02)]  # 아랫입술
     P += tube([HL(-.28, -.60, .80), HL(0, -.585, .93), HL(.28, -.60, .80)], .022 * s, op='sub', k=.012)  # 입 틈
+    # 머리 디테일: 앞이마 두 혹, 관자놀이 꺼짐, 숫구멍(정수리 오목), 이마 주름, 눈 밑 주름, 두피 핏줄
+    cc = Vector((0, .22, -.08)); cr = Vector((.98, .95, 1.02))
+    def on_skull(x, y, lift=0.0):
+        """머리 로컬 방향(x,y,앞) → 두개 타원 표면 위 점(m)"""
+        u = Vector((x, y - cc.y, 0)); z2 = 1 - (u.x / cr.x) ** 2 - (u.y / cr.y) ** 2
+        z = cc.z + cr.z * math.sqrt(max(z2, 0))
+        p = Vector((x, y, z)); dirv = (p - cc); nrm_ = Vector((dirv.x / cr.x ** 2, dirv.y / cr.y ** 2, dirv.z / cr.z ** 2)).normalized()
+        q = p + nrm_ * lift
+        return HL(q.x, q.y, q.z)
+    def on_skull_dir(dx, dy, dz, lift=0.0):
+        d_ = Vector((dx, dy, dz)).normalized(); t = 1 / math.sqrt((d_.x / cr.x) ** 2 + (d_.y / cr.y) ** 2 + (d_.z / cr.z) ** 2)
+        p = cc + d_ * t; nrm_ = Vector(((p - cc).x / cr.x ** 2, (p - cc).y / cr.y ** 2, (p - cc).z / cr.z ** 2)).normalized()
+        q = p + nrm_ * lift
+        return HL(q.x, q.y, q.z)
+    for m in (-1, 1):
+        P += [ell(on_skull(m * .36, .62, -.10), (.17 * s, .15 * s, .14 * s), k=.03)]  # 앞이마 혹
+        P += [ell(on_skull_dir(m * 1, -.05, .45, .05), (.10 * s, .22 * s, .22 * s), op='sub', k=.05)]  # 관자놀이 꺼짐
+    # 이마 주름 홈·두피 핏줄 돌기는 넣지 않는다(깔끔한 이마). 핏줄은 피부 텍스처로만 비친다
     for m in (-1, 1):  # 귀
         P += [ell(HL(m * .95, -.22, -.12), (.12 * s, .19 * s, .05 * s), rot=frame_rot(None, (m * .25, .35, 1), (m, 0, 0)), k=.016)]  # 귀(뒤로 누운 작은 귀)
-        P += [ell(HL(m * .99, -.24, -.08), (.07 * s, .12 * s, .03 * s), rot=frame_rot(None, (m * .25, .35, 1), (m, 0, 0)), op='sub', k=.012)]
+        P += [ell(HL(m * .99, -.24, -.08), (.06 * s, .11 * s, .02 * s), rot=frame_rot(None, (m * .25, .35, 1), (m, 0, 0)), op='sub', k=.014)]
     # --- 팔 넷
     for (tag, sd), (c0, sh, el, wr, f, n) in ARM_INFO.items():
         m = SIDES[sd]
@@ -304,12 +347,19 @@ def prims():
             for j in range(3):
                 P += [cone(pts[j], pts[j + 1], rr[j], rr[j + 1], k=.0035, grp='finger')]
                 if j:
-                    P += [ball(pts[j] - nn * rr[j] * .18, rr[j] * 1.12, k=.003, grp='finger')]  # 마디 혹
-                    d = (pts[j + 1] - pts[j - 1]).normalized()
-                    for o in (-.0032, .0032):  # 마디 주름
-                        P += [torus(pts[j] + d * o - nn * rr[j] * .25, d, rr[j] * 1.02, .0011, op='sub', k=.0008, grp='finger')]
+                    d = (pts[j + 1] - pts[j - 1]).normalized(); sd_ = d.cross(nn).normalized()
+                    P += [ell(pts[j] - nn * rr[j] * .22, (rr[j] * 1.06, rr[j] * 1.25, rr[j] * 1.0), rot=frame_rot(None, d, nn), k=.004, grp='finger')]  # 마디(살짝 굵다)
+                    # 손등 쪽 마디 주름: 짧게 휜 가로 골 여러 줄
+                    for o in (-.0042, -.0021, 0, .0021, .0040):
+                        w = rr[j] * (.55 + .2 * (o == 0))
+                        P += [ell(pts[j] + d * (o + .001) - nn * (rr[j] * 1.02 + .0004), (w, .0010, .0011), rot=frame_rot(None, d, nn), op='sub', k=.0007, grp='finger')]
+                    # 손바닥 쪽 굽힘 주름 두 줄
+                    for o in (-.0016, .0016):
+                        P += [ell(pts[j] + d * o + nn * (rr[j] * 1.02 + .0004), (rr[j] * .8, .0010, .0011), rot=frame_rot(None, d, nn), op='sub', k=.0007, grp='finger')]
             P += [ell(pts[3] - (pts[3] - pts[2]).normalized() * .006 + nn * rr[3] * .25, (rr[3] * 1.05, rr[3] * 1.6, rr[3] * .9),
                       rot=frame_rot((pts[3] - pts[2]).cross(nn), (pts[3] - pts[2]), nn), k=.003, grp='finger')]  # 손가락 끝 살
+            dd3 = (pts[3] - pts[2]).normalized()
+            P += [ell(pts[2].lerp(pts[3], .62) - nn * rr[3] * 1.05, (rr[3] * .95, (pts[3] - pts[2]).length * .30, .0006), rot=frame_rot(None, dd3, nn), op='sub', k=.0008, grp='finger')]  # 손톱 바닥 홈
     return P
 
 
@@ -345,6 +395,10 @@ def prim_d(p, P):
         return _rcone(P, p.a, p.b, p.r1, p.r2)
     if p.kind == 'ell':
         return _ell(P, p.a, p.rad, p.R)
+    if p.kind == 'cap':
+        q = P - np.asarray(p.a)
+        ds = np.linalg.norm(q, axis=1) - p.r1; dp = p.r2 - q @ p.R
+        return -smin(-ds, -dp, p.b)  # 부드러운 교집합
     return _torus(P, p.a, p.r1, p.r2, p.R)
 
 

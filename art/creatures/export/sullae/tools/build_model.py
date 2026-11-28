@@ -176,14 +176,20 @@ join_into(CL, BDL); join_into(CL_HI, BD_HI)
 log('cloth tris', len(CL.data.polygons))
 
 # ---------------------------------------------------------------- 눈알
-EYE_R = .15 * SD.S * .97
+EYE_R = SD.EYE_RAD
+def eye_c(m): return SD.HL(m * SD.EYE_L[0], SD.EYE_L[1], SD.EYE_L[2])
 bm = bmesh.new()
 for sd, m in SD.SIDES.items():
-    c = SD.HL(m * .35, -.08, .76)
-    r = bmesh.ops.create_uvsphere(bm, u_segments=28, v_segments=16, radius=EYE_R)
+    c = eye_c(m)
+    r = bmesh.ops.create_uvsphere(bm, u_segments=40, v_segments=24, radius=EYE_R)
     vs = r['verts']
     rot = Matrix.Rotation(math.radians(90), 4, 'X')  # 극(+Z)을 앞(-Y)으로
     bmesh.ops.transform(bm, matrix=Matrix.Translation(c) @ rot, verts=vs)
+    # 각막: 홍채 위가 투명한 돔처럼 살짝 솟는다(빛이 작은 점으로 맺힌다)
+    for v in vs:
+        d = (v.co - c).normalized(); th = math.degrees(math.acos(max(-1, min(1, -d.y))))
+        if th < 34:
+            v.co = v.co + d * EYE_R * .085 * math.cos(math.radians(th / 34 * 90)) ** 1.5
 em = bpy.data.meshes.new('SullaeEyes'); bm.to_mesh(em); bm.free()
 EYES = link(bpy.data.objects.new('SullaeEyes', em)); em.polygons.foreach_set('use_smooth', [True] * len(em.polygons))
 # 눈알 UV: 앞 극을 중심으로 한 원형 투영(홍채가 가운데)
@@ -192,7 +198,7 @@ for poly in em.polygons:
     for li in poly.loop_indices:
         v = em.vertices[em.loops[li].vertex_index].co
         m = 1 if v.x > 0 else -1
-        c = SD.HL(m * .35, -.08, .76)
+        c = eye_c(m)
         d = (v - c).normalized()
         th = math.acos(max(-1, min(1, -d.y)))  # 앞에서 잰 각
         ph = math.atan2(d.z, d.x)
@@ -276,6 +282,9 @@ def smart_uv(ob, margin=.003):
     bpy.ops.object.select_all(action='DESELECT'); ob.select_set(True); bpy.context.view_layer.objects.active = ob
     bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=margin, area_weight=0.0, scale_to_bounds=True)
+    bpy.ops.uv.select_all(action='SELECT')
+    bpy.ops.uv.average_islands_scale()  # 섬 크기를 실제 넓이에 맞추고
+    bpy.ops.uv.pack_islands(rotate=True, margin=margin)  # 빈틈 없이 다시 배치(텍스처 해상도 낭비 줄이기)
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
@@ -335,52 +344,62 @@ def C(r, g, b):
 
 
 def skin_material():
+    """핏기 없는 시체 같은 피부: 누르스름한 회녹색 바탕 + 넓은 얼룩 + 잔 얼룩 + 군데군데 비치는 가는 정맥
+    + 관절·손끝·발의 때 + 기름진 젖은 광택 얼룩. 범프: 모공·잔주름·피부결·정맥 돌기"""
     mt = bpy.data.materials.new('SkinProc'); nt, N, L = nodes_new(mt)
     out = N.new('ShaderNodeOutputMaterial'); bs = N.new('ShaderNodeBsdfPrincipled'); L.new(bs.outputs[0], out.inputs[0])
     tc = N.new('ShaderNodeTexCoord'); P = tc.outputs['Object']
-    # 정맥: 왜곡된 보로노이 경계선
-    warp = noise_n(N, L, P, 3.0, 3, .5)
-    wv = N.new('ShaderNodeMix'); wv.data_type = 'VECTOR'; wv.inputs['Factor'].default_value = .18
-    L.new(P, wv.inputs[4]); L.new(warp.outputs['Color'], wv.inputs[5])
-    vor = N.new('ShaderNodeTexVoronoi'); vor.feature = 'DISTANCE_TO_EDGE'; vor.inputs['Scale'].default_value = 16
-    L.new(wv.outputs[1], vor.inputs['Vector'])
-    vein = ramp(N, L, vor.outputs['Distance'], [(0, (1, 1, 1, 1)), (.045, (0, 0, 0, 1))])
-    vor2 = N.new('ShaderNodeTexVoronoi'); vor2.feature = 'DISTANCE_TO_EDGE'; vor2.inputs['Scale'].default_value = 41
-    L.new(wv.outputs[1], vor2.inputs['Vector'])
-    vein2 = ramp(N, L, vor2.outputs['Distance'], [(0, (.55, .55, .55, 1)), (.04, (0, 0, 0, 1))])
-    vmask_n = noise_n(N, L, P, 2.2, 2, .5)
-    vmask = ramp(N, L, vmask_n.outputs['Fac'], [(.42, (0, 0, 0, 1)), (.6, (1, 1, 1, 1))])
-    veins = mix(N, L, vein2.outputs[0], vein.outputs[0], .5, 'LIGHTEN')
-    veins = mix(N, L, (0, 0, 0, 1), veins, vmask.outputs[0], 'MIX')
-    # 피부 색: 창백한 회녹색 + 얼룩 + 멍
-    big = noise_n(N, L, P, 4.5, 5, .6)
-    base = ramp(N, L, big.outputs['Fac'], [(.25, C(.42, .47, .41)), (.5, C(.55, .59, .51)), (.78, C(.64, .66, .58))])
-    mott = noise_n(N, L, P, 28, 6, .7)
-    mottc = ramp(N, L, mott.outputs['Fac'], [(.3, (.62, .70, .68, 1)), (.7, (1.10, 1.06, 1.0, 1))])
-    c = mix(N, L, base.outputs[0], mottc.outputs[0], 1.0, 'MULTIPLY')
-    bru = noise_n(N, L, P, 2.6, 3, .5, 0.6)
-    brum = ramp(N, L, bru.outputs['Fac'], [(.58, (0, 0, 0, 1)), (.7, (1, 1, 1, 1))])
-    c = mix(N, L, c, C(.42, .36, .42), brum.outputs[0], 'MIX')
-    c = mix(N, L, c, C(.27, .35, .43), math_n(N, L, 'MULTIPLY', veins, .85), 'MIX')
-    # 발 쪽·손끝 때(높이·말단)
     sep = N.new('ShaderNodeSeparateXYZ'); L.new(P, sep.inputs[0])
-    dirt = ramp(N, L, sep.outputs['Z'], [(.0, (1, 1, 1, 1)), (.22, (0, 0, 0, 1))])
-    dn = noise_n(N, L, P, 12, 4, .6)
-    dirtm = math_n(N, L, 'MULTIPLY', dirt.outputs[0], dn.outputs['Fac'])
-    c = mix(N, L, c, C(.30, .27, .21), dirtm, 'MIX')
+    # 정맥: 두 크기의 '능선' 잡음(|n-0.5| 가 0 근처인 가는 선), 피부가 얇은 곳(머리·목·손·팔 안쪽)에서 진하다
+    def ridge(scale, width, dist, seed):
+        n = N.new('ShaderNodeTexNoise'); n.noise_dimensions = '4D'; n.inputs['Scale'].default_value = scale; n.inputs['Detail'].default_value = 3
+        n.inputs['Roughness'].default_value = .45; n.inputs['Distortion'].default_value = dist; n.inputs['W'].default_value = seed
+        L.new(P, n.inputs['Vector'])
+        a = math_n(N, L, 'ABSOLUTE', math_n(N, L, 'SUBTRACT', n.outputs['Fac'], .5))
+        return ramp(N, L, a, [(0, (1, 1, 1, 1)), (width, (0, 0, 0, 1))]).outputs[0]
+    v1 = ridge(6.0, .010, .35, 1.7); v2 = ridge(15.0, .008, .5, 4.2)
+    vm = noise_n(N, L, P, 2.0, 2, .5)
+    vmask = ramp(N, L, vm.outputs['Fac'], [(.45, (.15, .15, .15, 1)), (.62, (1, 1, 1, 1))])
+    head = ramp(N, L, sep.outputs['Z'], [(1.55, (.55, .55, .55, 1)), (1.75, (1, 1, 1, 1))])
+    veins = math_n(N, L, 'MULTIPLY', math_n(N, L, 'MAXIMUM', v1, math_n(N, L, 'MULTIPLY', v2, .6)), math_n(N, L, 'MULTIPLY', vmask.outputs[0], head.outputs[0]))
+    # 바탕 피부색
+    big = noise_n(N, L, P, 3.0, 4, .55)
+    base = ramp(N, L, big.outputs['Fac'], [(.25, C(.50, .52, .45)), (.5, C(.60, .61, .53)), (.75, C(.66, .65, .57))])
+    mott = noise_n(N, L, P, 22, 6, .65)
+    mottc = ramp(N, L, mott.outputs['Fac'], [(.25, (.80, .82, .80, 1)), (.75, (1.06, 1.05, 1.02, 1))])
+    c = mix(N, L, base.outputs[0], mottc.outputs[0], 1.0, 'MULTIPLY')
+    fine = noise_n(N, L, P, 140, 3, .6)
+    finec = ramp(N, L, fine.outputs['Fac'], [(.3, (.92, .92, .92, 1)), (.7, (1.04, 1.04, 1.04, 1))])
+    c = mix(N, L, c, finec.outputs[0], 1.0, 'MULTIPLY')
+    # 시반처럼 탁한 회갈색·녹회색 얼룩(보라색 없이)
+    blo = noise_n(N, L, P, 2.4, 4, .55, .5)
+    blom = ramp(N, L, blo.outputs['Fac'], [(.57, (0, 0, 0, 1)), (.72, (.75, .75, .75, 1))])
+    c = mix(N, L, c, C(.44, .44, .38), blom.outputs[0], 'MIX')
+    blo2 = noise_n(N, L, P, 5.0, 4, .55, .3)
+    blom2 = ramp(N, L, blo2.outputs['Fac'], [(.6, (0, 0, 0, 1)), (.75, (.5, .5, .5, 1))])
+    c = mix(N, L, c, C(.52, .50, .40), blom2.outputs[0], 'MIX')
+    # 정맥 색: 피부 아래 비치는 탁한 청회색
+    c = mix(N, L, c, C(.36, .42, .46), math_n(N, L, 'MULTIPLY', veins, .75), 'MIX')
+    # 발·손끝 때
+    dirt = ramp(N, L, sep.outputs['Z'], [(.0, (1, 1, 1, 1)), (.25, (0, 0, 0, 1))])
+    dn = noise_n(N, L, P, 10, 4, .6)
+    c = mix(N, L, c, C(.30, .28, .22), math_n(N, L, 'MULTIPLY', dirt.outputs[0], dn.outputs['Fac']), 'MIX')
     L.new(c, bs.inputs['Base Color'])
-    # 젖은 광택: 거칠기
-    wet = noise_n(N, L, P, 7, 4, .6)
-    rough = ramp(N, L, wet.outputs['Fac'], [(.3, (.30, .30, .30, 1)), (.7, (.62, .62, .62, 1))])
-    L.new(rough.outputs[0], bs.inputs['Roughness'])
-    bs.inputs['Subsurface Weight'].default_value = .0
-    # 범프: 모공 + 잔주름 + 정맥 돌기
-    pore = noise_n(N, L, P, 520, 2, .5)
-    wr = N.new('ShaderNodeTexWave'); wr.wave_type = 'BANDS'; wr.inputs['Scale'].default_value = 90; wr.inputs['Distortion'].default_value = 9; wr.inputs['Detail'].default_value = 3
-    L.new(P, wr.inputs['Vector'])
-    h = math_n(N, L, 'ADD', math_n(N, L, 'MULTIPLY', pore.outputs['Fac'], .35), math_n(N, L, 'MULTIPLY', wr.outputs['Fac'], .25))
-    h = math_n(N, L, 'ADD', h, math_n(N, L, 'MULTIPLY', veins, .9))
-    bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .35; bump.inputs['Distance'].default_value = .0008
+    # 거칠기: 대체로 무광(.55), 기름진 젖은 얼룩만 .28
+    wet = noise_n(N, L, P, 6, 4, .6)
+    rough = ramp(N, L, wet.outputs['Fac'], [(.40, (.30, .30, .30, 1)), (.55, (.52, .52, .52, 1)), (.75, (.62, .62, .62, 1))])
+    rfine = noise_n(N, L, P, 300, 2, .5)
+    L.new(math_n(N, L, 'ADD', rough.outputs[0], math_n(N, L, 'MULTIPLY', math_n(N, L, 'SUBTRACT', rfine.outputs['Fac'], .5), .12)), bs.inputs['Roughness'])
+    # 범프: 모공 + 피부결(세포 무늬) + 잔주름 + 정맥 돌기
+    pore = noise_n(N, L, P, 700, 2, .5)
+    cell = N.new('ShaderNodeTexVoronoi'); cell.inputs['Scale'].default_value = 260; cell.feature = 'DISTANCE_TO_EDGE'; L.new(P, cell.inputs['Vector'])
+    cellh = ramp(N, L, cell.outputs['Distance'], [(0, (0, 0, 0, 1)), (.12, (1, 1, 1, 1))])
+    wr = N.new('ShaderNodeTexWave'); wr.wave_type = 'BANDS'; wr.inputs['Scale'].default_value = 140; wr.inputs['Distortion'].default_value = 14; wr.inputs['Detail'].default_value = 4
+    wr.inputs['Detail Scale'].default_value = 2.5; L.new(P, wr.inputs['Vector'])
+    h = math_n(N, L, 'ADD', math_n(N, L, 'MULTIPLY', pore.outputs['Fac'], .35), math_n(N, L, 'MULTIPLY', cellh.outputs[0], .25))
+    h = math_n(N, L, 'ADD', h, math_n(N, L, 'MULTIPLY', wr.outputs['Fac'], .30))
+    h = math_n(N, L, 'ADD', h, math_n(N, L, 'MULTIPLY', veins, .8))
+    bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .30; bump.inputs['Distance'].default_value = .0006
     L.new(h, bump.inputs['Height']); L.new(bump.outputs[0], bs.inputs['Normal'])
     return mt
 
@@ -413,21 +432,39 @@ def cloth_material():
 
 
 def eye_material():
+    """사람 눈처럼: 누렇게 탁한 흰자 + 가는 실핏줄 + 결이 보이는 흐린 회녹색 홍채 + 어두운 테 + 뿌옇게 낀 동공(백내장 막)"""
     mt = bpy.data.materials.new('EyeProc'); nt, N, L = nodes_new(mt)
     out = N.new('ShaderNodeOutputMaterial'); bs = N.new('ShaderNodeBsdfPrincipled'); L.new(bs.outputs[0], out.inputs[0])
     tc = N.new('ShaderNodeTexCoord'); uv = tc.outputs['UV']
     sep = N.new('ShaderNodeSeparateXYZ'); L.new(uv, sep.inputs[0])
     dx = math_n(N, L, 'SUBTRACT', sep.outputs['X'], .5); dy = math_n(N, L, 'SUBTRACT', sep.outputs['Y'], .5)
     r = math_n(N, L, 'SQRT', math_n(N, L, 'ADD', math_n(N, L, 'MULTIPLY', dx, dx), math_n(N, L, 'MULTIPLY', dy, dy)))
-    col = ramp(N, L, r, [(0, C(.05, .05, .06)), (.03, C(.10, .11, .12)), (.045, C(.42, .46, .47)), (.10, C(.55, .59, .58)),
-                         (.12, C(.24, .26, .27)), (.135, C(.60, .57, .49)), (.5, C(.50, .45, .38))])
-    vor = N.new('ShaderNodeTexVoronoi'); vor.feature = 'DISTANCE_TO_EDGE'; vor.inputs['Scale'].default_value = 14; L.new(uv, vor.inputs['Vector'])
-    vv = ramp(N, L, vor.outputs['Distance'], [(0, (1, 1, 1, 1)), (.03, (0, 0, 0, 1))])
-    far = ramp(N, L, r, [(.14, (0, 0, 0, 1)), (.25, (1, 1, 1, 1))])
-    c = mix(N, L, col.outputs[0], C(.40, .28, .30), math_n(N, L, 'MULTIPLY', vv.outputs[0], far.outputs[0]), 'MIX')
-    film = noise_n(N, L, uv, 18, 3, .5)
-    c = mix(N, L, c, C(.70, .73, .74), math_n(N, L, 'MULTIPLY', film.outputs['Fac'], .35), 'MIX')  # 뿌연 막
-    L.new(c, bs.inputs['Base Color']); bs.inputs['Roughness'].default_value = .06
+    ang = math_n(N, L, 'ARCTAN2', dy, dx)
+    # 홍채 결: 반지름 방향으로 늘어진 잡음
+    cv = N.new('ShaderNodeCombineXYZ'); L.new(math_n(N, L, 'MULTIPLY', ang, 9.0), cv.inputs[0]); L.new(math_n(N, L, 'MULTIPLY', r, 90.0), cv.inputs[1])
+    fib = N.new('ShaderNodeTexNoise'); fib.inputs['Scale'].default_value = 1.3; fib.inputs['Detail'].default_value = 8; fib.inputs['Roughness'].default_value = .65
+    L.new(cv.outputs[0], fib.inputs['Vector'])
+    fibc = ramp(N, L, fib.outputs['Fac'], [(.3, (.55, .55, .55, 1)), (.5, (1, 1, 1, 1)), (.7, (1.45, 1.45, 1.45, 1))])
+    # 반지름별 기본 색: 동공 → 홍채(안쪽 갈색 고리, 바깥 회녹) → 어두운 테 → 흰자 → 뒤쪽 누런 흰자
+    col = ramp(N, L, r, [(0, C(.03, .03, .035)), (.036, C(.05, .05, .055)), (.044, C(.30, .27, .20)), (.055, C(.40, .44, .40)),
+                         (.074, C(.46, .50, .47)), (.083, C(.20, .22, .22)), (.092, C(.16, .17, .17)), (.100, C(.74, .71, .62)),
+                         (.2, C(.71, .67, .57)), (.5, C(.60, .52, .44))])
+    iris_m = ramp(N, L, r, [(.038, (0, 0, 0, 1)), (.046, (1, 1, 1, 1)), (.080, (1, 1, 1, 1)), (.09, (0, 0, 0, 1))])
+    c = mix(N, L, col.outputs[0], mix(N, L, col.outputs[0], fibc.outputs[0], 1.0, 'MULTIPLY'), iris_m.outputs[0], 'MIX')
+    # 흰자 실핏줄: 가장자리에서 홍채 쪽으로 가늘어진다
+    vn = N.new('ShaderNodeTexNoise'); vn.inputs['Scale'].default_value = 7; vn.inputs['Detail'].default_value = 6; vn.inputs['Distortion'].default_value = 1.2
+    L.new(uv, vn.inputs['Vector'])
+    vline = ramp(N, L, math_n(N, L, 'ABSOLUTE', math_n(N, L, 'SUBTRACT', vn.outputs['Fac'], .5)), [(0, (1, 1, 1, 1)), (.012, (0, 0, 0, 1))])
+    far = ramp(N, L, r, [(.11, (0, 0, 0, 1)), (.30, (1, 1, 1, 1))])
+    c = mix(N, L, c, C(.52, .36, .34), math_n(N, L, 'MULTIPLY', vline.outputs[0], far.outputs[0]), 'MIX')
+    # 백내장처럼 뿌연 막(동공·홍채 안쪽)
+    film = noise_n(N, L, uv, 40, 4, .6)
+    fm = ramp(N, L, r, [(0, (.55, .55, .55, 1)), (.06, (.25, .25, .25, 1)), (.09, (0, 0, 0, 1))])
+    c = mix(N, L, c, C(.62, .66, .66), math_n(N, L, 'MULTIPLY', fm.outputs[0], film.outputs['Fac']), 'MIX')
+    L.new(c, bs.inputs['Base Color'])
+    # 각막(가운데)은 젖어 매끈, 흰자는 덜 반짝
+    rg = ramp(N, L, r, [(.08, (.05, .05, .05, 1)), (.11, (.22, .22, .22, 1)), (.5, (.30, .30, .30, 1))])
+    L.new(rg.outputs[0], bs.inputs['Roughness'])
     return mt
 
 
@@ -436,7 +473,7 @@ def nail_material():
     out = N.new('ShaderNodeOutputMaterial'); bs = N.new('ShaderNodeBsdfPrincipled'); L.new(bs.outputs[0], out.inputs[0])
     tc = N.new('ShaderNodeTexCoord'); P = tc.outputs['Object']
     n1 = noise_n(N, L, P, 160, 5, .6)
-    c = ramp(N, L, n1.outputs['Fac'], [(.3, C(.30, .27, .19)), (.55, C(.48, .44, .33)), (.75, C(.58, .54, .43))])
+    c = ramp(N, L, n1.outputs['Fac'], [(.2, C(.20, .18, .13)), (.5, C(.38, .34, .25)), (.8, C(.50, .46, .35))])
     L.new(c.outputs[0], bs.inputs['Base Color'])
     bs.inputs['Roughness'].default_value = .38
     w = N.new('ShaderNodeTexWave'); w.inputs['Scale'].default_value = 600; w.inputs['Distortion'].default_value = 4; L.new(P, w.inputs['Vector'])
@@ -531,10 +568,11 @@ def final_material(key, double=False):
     ao = img('ao', False); g = N.new('ShaderNodeGroup'); g.node_tree = gltf_out_group(); L.new(ao.outputs[0], g.inputs['Occlusion'])
     bs.inputs['Metallic'].default_value = 0
     if key == 'skin':
-        bs.inputs['Subsurface Weight'].default_value = .05; bs.inputs['Subsurface Radius'].default_value = (.6, .7, .6)
-        bs.inputs['Specular IOR Level'].default_value = .55
+        bs.inputs['Subsurface Weight'].default_value = .18; bs.inputs['Subsurface Radius'].default_value = (.75, .62, .5); bs.inputs['Subsurface Scale'].default_value = .005
+        bs.inputs['Specular IOR Level'].default_value = .42
     if key == 'eye':
-        bs.inputs['Coat Weight'].default_value = .6; bs.inputs['Coat Roughness'].default_value = .02
+        bs.inputs['Specular IOR Level'].default_value = .45
+        bs.inputs['Subsurface Weight'].default_value = .15; bs.inputs['Subsurface Radius'].default_value = (.9, .7, .6); bs.inputs['Subsurface Scale'].default_value = .004
     mt.use_backface_culling = not double
     return mt
 

@@ -3,7 +3,7 @@ import bpy, math
 from mathutils import Vector
 
 
-def setup(res=(720, 960), clay=None, bg=(0.035, 0.038, 0.045)):
+def setup(res=(720, 960), clay=None, bg=(0.012, 0.013, 0.016)):
     sc = bpy.context.scene
     sc.render.engine = 'BLENDER_EEVEE'
     sc.render.resolution_x, sc.render.resolution_y = res
@@ -20,8 +20,8 @@ def setup(res=(720, 960), clay=None, bg=(0.035, 0.038, 0.045)):
     sc.world.use_nodes = True
     sc.world.node_tree.nodes['Background'].inputs[0].default_value = (*bg, 1)
     sc.world.node_tree.nodes['Background'].inputs[1].default_value = 1.0
-    for nm, loc, en, col, size in (('Key', (2.2, -3.0, 3.4), 900, (1, .93, .84), 1.6), ('Rim', (-2.4, 3.0, 2.8), 1100, (.62, .78, 1.0), 1.2),
-                                   ('Fill', (-3.2, -2.2, 1.2), 220, (.75, .85, 1.0), 2.5), ('Under', (0, -2.5, -.3), 60, (.6, .8, .7), 2.0)):
+    for nm, loc, en, col, size in (('Key', (2.0, -2.6, 3.6), 700, (1, .92, .82), 1.0), ('Rim', (-2.4, 3.0, 2.8), 1300, (.55, .72, 1.0), 1.0),
+                                   ('Fill', (-3.2, -2.2, 1.2), 90, (.7, .8, 1.0), 2.5), ('Under', (0, -2.5, -.3), 15, (.6, .8, .7), 2.0)):
         if nm in bpy.data.objects:
             continue
         ld = bpy.data.lights.new(nm, 'AREA'); ld.energy = en; ld.color = col; ld.size = size
@@ -32,7 +32,7 @@ def setup(res=(720, 960), clay=None, bg=(0.035, 0.038, 0.045)):
         me = bpy.data.meshes.new('Floor'); me.from_pydata([(-6, -6, 0), (6, -6, 0), (6, 6, 0), (-6, 6, 0)], [], [(0, 1, 2, 3)])
         fl = bpy.data.objects.new('Floor', me); sc.collection.objects.link(fl)
         mt = bpy.data.materials.new('FloorMat'); mt.use_nodes = True
-        b = mt.node_tree.nodes['Principled BSDF']; b.inputs['Base Color'].default_value = (.045, .045, .048, 1); b.inputs['Roughness'].default_value = .6
+        b = mt.node_tree.nodes['Principled BSDF']; b.inputs['Base Color'].default_value = (.018, .018, .02, 1); b.inputs['Roughness'].default_value = .6
         me.materials.append(mt)
     if 'Cam' not in bpy.data.objects:
         cam = bpy.data.objects.new('Cam', bpy.data.cameras.new('Cam')); sc.collection.objects.link(cam); sc.camera = cam
