@@ -217,6 +217,7 @@ def build(P):
     pose.L['Jaw'] = rq('Jaw', (1, 0, 0), P.get('jaw', 0))
     for s in SIDES:
         ey, ep = P.get('eye', (0, 0)) if not isinstance(P.get('eye'), dict) else P['eye'][s]
+        ey = max(-14, min(14, ey)); ep = max(-4, min(4, ep))  # 눈알은 눈꺼풀 안에서 조금만 굴린다(위로 치켜뜨지 않게)
         pose.L[f'Eye.{s}'] = qmul(rq(f'Eye.{s}', (0, 0, 1), ey), rq(f'Eye.{s}', (1, 0, 0), -ep))
     pose.solve([n for n in ORDER if not any(k in n for k in ('Arm', 'Hand', 'Thigh', 'Shin', 'Foot', 'Toe', 'Shoulder_')) and n not in FINGER_BONES])
     # 다리(IK)

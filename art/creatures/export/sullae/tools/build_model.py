@@ -720,6 +720,33 @@ for vg in BODY.vertex_groups:
 log('side-fixed weights', nfix)
 limit_normalize(BODY); W_BODY = weights_of(BODY)
 
+# 눈 고정: 눈 둘레 피부(눈꺼풀)는 머리 뼈에만 붙인다 — 턱을 벌리거나 목이 움직여도 눈꺼풀이 눈알에서 미끄러지지 않게
+# 또 턱(Jaw)은 입 아래쪽만 움직이게 한다
+_eyes = [SD.HL(m * SD.EYE_L[0], SD.EYE_L[1], SD.EYE_L[2]) for m in (1, -1)]
+_mouth_z = SD.HL(0, -.585, .9).z  # 입 틈 높이
+_vg = {g.name: g for g in BODY.vertex_groups}
+_head = _vg.get('Head') or BODY.vertex_groups.new(name='Head')
+_nfix = 0
+for v in BODY.data.vertices:
+    d = min((v.co - e).length for e in _eyes) - SD.EYE_RAD
+    lock = 1.0 if d < .016 else max(0.0, 1 - (d - .016) / .012)  # 눈에서 1.6cm 안은 완전히, 2.8cm 까지 서서히
+    w = {BODY.vertex_groups[g.group].name: g.weight for g in v.groups}
+    jf = max(0.0, min(1.0, (_mouth_z + .022 - v.co.z) / .040))  # 턱 영향: 입꼬리 아래는 그대로, 위로 4cm 에 걸쳐 서서히 0
+    if w.get('Jaw', 0) > 0 and jf < 1:
+        w['Jaw'] *= jf
+        if w['Jaw'] < 1e-4: w.pop('Jaw')
+    if True:
+        tot = sum(w.values()) or 1
+        w = {g: x / tot * (1 - lock) for g, x in w.items()}
+        w['Head'] = w.get('Head', 0) + lock
+        for g in list(_vg):
+            if g in w: _vg[g].add([v.index], w[g], 'REPLACE')
+            elif any(gg.group == _vg[g].index for gg in v.groups): _vg[g].remove([v.index])
+        if 'Head' in w and 'Head' not in _vg: _head.add([v.index], w['Head'], 'REPLACE')
+        _nfix += lock > 0
+log('eye-locked verts', _nfix)
+limit_normalize(BODY); W_BODY = weights_of(BODY)
+
 
 def attach(ob, weights):
     ob.parent = ARM
