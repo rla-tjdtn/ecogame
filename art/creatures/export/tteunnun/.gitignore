@@ -1,0 +1,5 @@
+work/
+# 20MB 넘는 텍스처(커밋 안 함, run_all.sh 로 다시 만든다. glb 안에는 JPEG 로 들어 있다)
+textures/body_normal.png
+__pycache__/
+*.blend1
