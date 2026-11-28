@@ -347,9 +347,9 @@ def clip_count(t):
     rock = sn(t, 2)
     A = arms_wrap(t, .6, 2)
     for k, (tag, s) in enumerate([('F', 'L'), ('F', 'R'), ('B', 'L'), ('B', 'R')]):
-        for fi in range(1, 5):
-            # 박자마다 손가락 하나가 들렸다가 탁 붙는다
-            tap = bump(ph, .05 + fi * .12, .32 + fi * .12) * (1.0 if (bi + fi + k) % 2 == 0 else .55)
+        for fi in range(0, 5):
+            # 박자마다 손가락이 엄지부터 새끼까지 하나씩 들렸다가 탁 붙는다(다섯 손가락이 따로)
+            tap = bump(ph, .02 + fi * .12, .26 + fi * .12) * (1.0 if (bi + fi + k) % 2 == 0 else .55)
             cur = A[(tag, s)]['fadd'].get(fi, (0, 0, 0, 0))
             A[(tag, s)]['fadd'][fi] = (cur[0] - .35 * tap, cur[1] - .25 * tap, cur[2] - .15 * tap, cur[3])
     return dict(hips=V(0, .008 * rock, -.018 - .006 * nod), Spine1=[((1, 0, 0), 5 + 3 * rock)], Spine2=[((1, 0, 0), 6 + 2 * rock)], Spine3=[((1, 0, 0), 4 + 4 * nod)],
@@ -366,6 +366,8 @@ def clip_peek(t):
     fl[2] = merge({0: fl[2]}, {0: (-.55 * o, -.5 * o, -.3 * o, .32 * o)})[0]
     fl[3] = merge({0: fl[3]}, {0: (-.25 * o, -.2 * o, -.1 * o, -.30 * o)})[0]
     fl[1] = merge({0: fl[1]}, {0: (-.15 * o, -.1 * o, 0, .1 * o)})[0]
+    fl[0] = merge({0: fl[0]}, {0: (.10 * o, .25 * o, .2 * o, -.15 * o)})[0]  # 엄지는 꾹 눌러 손을 버틴다
+    fl[4] = merge({0: fl[4]}, {0: (.12 * o, .1 * o, .05 * o, -.08 * o)})[0]
     A[('F', 'L')]['wrap_off'] = V(.015 * o, -.012 * o, .004 * o)
     A[('F', 'R')]['fadd'][1] = merge({0: A[('F', 'R')]['fadd'][1]}, {0: (-.2 * o, -.2 * o, -.1 * o, .12 * o)})[0]
     return dict(hips=V(0, 0, -.015), Spine1=[((1, 0, 0), 4)], Spine2=[((1, 0, 0), 5), ((0, 1, 0), 6 * o)], Spine3=[((1, 0, 0), 3)],

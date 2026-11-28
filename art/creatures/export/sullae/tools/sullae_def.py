@@ -58,9 +58,10 @@ def _arm_layout(tag, m):
 
 
 # 손가락: (마디 길이 3개, 뿌리 반지름, 끝 반지름)
-FING_LEN = {'Thumb': (.058, .045, .038), 'Index': (.100, .086, .072), 'Middle': (.110, .094, .078),
+FING_LEN = {'Thumb': (.052, .050, .042),  # 엄지: 중수골(Thumb1) + 첫마디(Thumb2) + 끝마디(Thumb3)
+            'Index': (.100, .086, .072), 'Middle': (.110, .094, .078),
             'Ring': (.104, .088, .074), 'Pinky': (.090, .076, .064)}
-FING_R = {'Thumb': (.0118, .0068), 'Index': (.0102, .0056), 'Middle': (.0106, .0058), 'Ring': (.0100, .0055), 'Pinky': (.0092, .0050)}
+FING_R = {'Thumb': (.0128, .0066), 'Index': (.0102, .0056), 'Middle': (.0106, .0058), 'Ring': (.0100, .0055), 'Pinky': (.0092, .0050)}
 
 
 def finger_rest(f, n, wr, m, fi):
@@ -69,9 +70,11 @@ def finger_rest(f, n, wr, m, fi):
     th = -side * m  # 엄지 쪽
     name = FINGERS[fi]
     if fi == 0:
-        base = wr + f * .030 + th * .030 + n * .010
-        d = (f * .62 + th * .74 + n * .16).normalized()
-        nn = (n + th * .5).normalized()
+        # 엄지: 손목 가까이 손바닥 안(엄지두덩)에서 중수골이 시작해 손바닥 앞쪽으로 비스듬히 나온다.
+        # 굽힘 방향(nn)이 손바닥을 가로질러 새끼 쪽을 향해서 다른 손가락과 마주 본다(맞섬).
+        base = wr + f * .014 + th * .015 + n * .006
+        d = (f * .72 + th * .60 + n * .36).normalized()
+        nn = (n * .62 - th * .78).normalized()
     else:
         off = (2.5 - fi) * .0195  # 검지가 엄지 쪽
         base = wr + f * .088 + th * off
@@ -83,7 +86,7 @@ def finger_rest(f, n, wr, m, fi):
     cur = base.copy(); dd = d.copy()
     ax = dd.cross(nn).normalized()
     for k, L in enumerate(FING_LEN[name]):
-        dd = (Quaternion(ax, math.radians(6 if fi else 4)) @ dd).normalized()  # 살짝 굽은 쉬는 자세
+        dd = (Quaternion(ax, math.radians(6 if fi else (3, 10, 8)[k])) @ dd).normalized()  # 살짝 굽은 쉬는 자세
         cur = cur + dd * L
         pts.append(cur.copy())
     return pts, nn
@@ -282,7 +285,15 @@ def prims():
         P += [ball(wr + th * .012, .017, k=.008), ball(wr - th * .012, .016, k=.008)]  # 손목뼈
         # 손바닥(평평한 타원)
         P += [ell(wr + f * .046 + n * .002, (.040, .050, .0135), rot=frame_rot(th, f, n), k=.012)]
-        P += [ell(wr + f * .030 + th * .026 + n * .010, (.016, .03, .013), rot=frame_rot(th, (f + th).normalized(), n), k=.01)]  # 엄지두덩
+        tp, tnn = finger_rest(f, n, wr, m, 0)
+        P += [ell(tp[0].lerp(tp[1], .45) + n * .002 - tnn * .002, (.017, .032, .0135), rot=frame_rot(None, tp[1] - tp[0], n), k=.012)]  # 엄지두덩(중수골을 감싼다)
+        P += [ell(wr + f * .040 - th * .029 + n * .008, (.012, .034, .0095), rot=frame_rot(None, f, n), k=.01)]  # 새끼두덩
+        # 손바닥 주름 세 줄(손바닥 표면 높이에 얕게 판다)
+        def palm_pt(u, v):
+            h = .0135 * math.sqrt(max(0, 1 - (u / .040) ** 2 - ((v - .046) / .050) ** 2)) + .002
+            return wr + th * u + f * v + n * (h - .0002)
+        for line in (((-.036, .074), (-.008, .071), (.016, .064)), ((.030, .060), (.004, .056), (-.028, .050)), ((.022, .062), (.012, .040), (.009, .016))):
+            P += tube([palm_pt(u, v) for u, v in line], .0013, op='sub', k=.001, grp='finger')
         for fi, fn in enumerate(FINGERS):
             pts, nn = finger_rest(f, n, wr, m, fi)
             r0, r3 = FING_R[fn]

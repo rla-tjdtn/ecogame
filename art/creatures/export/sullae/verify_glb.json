@@ -1,6 +1,6 @@
 {
  "file": "sullae.glb",
- "bytes": 11252676,
+ "bytes": 11870796,
  "fps": 24.0,
  "bones": [
   "Root",
@@ -108,8 +108,8 @@
    "textures": []
   },
   "Sullae_Body": {
-   "tris": 37992,
-   "verts": 29737,
+   "tris": 37993,
+   "verts": 30786,
    "groups": 94,
    "skinned": true,
    "textures": [
@@ -119,8 +119,8 @@
    ]
   },
   "Sullae_Cloth": {
-   "tris": 10998,
-   "verts": 11757,
+   "tris": 10997,
+   "verts": 11772,
    "groups": 94,
    "skinned": true,
    "textures": [
@@ -142,7 +142,7 @@
   },
   "Sullae_Nails": {
    "tris": 3120,
-   "verts": 8807,
+   "verts": 8767,
    "groups": 94,
    "skinned": true,
    "textures": [
