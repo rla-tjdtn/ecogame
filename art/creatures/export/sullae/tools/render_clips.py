@@ -17,8 +17,8 @@ sc.eevee.taa_render_samples = 24
 names = [a.name for a in bpy.data.actions] if clips == 'all' else clips.split(',')
 VIEW = {  # 목표점, 방향(도), 거리, 높이
     'full': {'_': ((0, -.05, 1.05), 28, 4.3, .45), 'Death': ((0, -.35, .7), 40, 4.6, .9), 'Attack': ((0, -.25, 1.1), 35, 4.6, .5), 'Run': ((0, -.05, 1.0), 60, 4.4, .4),
-             'Walk': ((0, -.05, 1.05), 50, 4.3, .4)},
-    'face': {'_': ((0, -.12, 1.84), 12, 1.05, -.05), 'Peek': ((0, -.12, 1.84), 18, 1.0, -.05)},
+             'Walk': ((0, -.05, 1.05), 50, 4.3, .4), 'Kill': ((0, -.35, 1.2), 55, 3.8, .3), 'Jumpscare': ((0, -.2, 1.45), 0, 2.6, .0)},
+    'face': {'_': ((0, -.12, 1.84), 12, 1.05, -.05), 'Peek': ((0, -.12, 1.84), 18, 1.0, -.05), 'Jumpscare': ((0, -.25, 1.75), 0, 1.5, -.05)},
 }[mode]
 for c in names:
     act = bpy.data.actions[c]; ARM.animation_data.action = act; ARM.animation_data.action_slot = act.slots[0]

@@ -1,6 +1,6 @@
 {
  "file": "sullae.glb",
- "bytes": 7635256,
+ "bytes": 8236332,
  "fps": 24.0,
  "bones": [
   "Root",
@@ -159,6 +159,14 @@
    "seconds": 0.667
   },
   "Idle": {
+   "frames": 72.0,
+   "seconds": 3.0
+  },
+  "Jumpscare": {
+   "frames": 28.8,
+   "seconds": 1.2
+  },
+  "Kill": {
    "frames": 72.0,
    "seconds": 3.0
   },

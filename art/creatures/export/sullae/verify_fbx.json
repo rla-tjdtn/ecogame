@@ -1,6 +1,6 @@
 {
  "file": "sullae.fbx",
- "bytes": 12321916,
+ "bytes": 14093532,
  "fps": 30.0,
  "bones": [
   "Root",
@@ -152,6 +152,14 @@
    "seconds": 0.667
   },
   "Sullae|Sullae|Idle": {
+   "frames": 90.0,
+   "seconds": 3.0
+  },
+  "Sullae|Sullae|Jumpscare": {
+   "frames": 36.0,
+   "seconds": 1.2
+  },
+  "Sullae|Sullae|Kill": {
    "frames": 90.0,
    "seconds": 3.0
   },

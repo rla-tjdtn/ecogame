@@ -148,6 +148,7 @@ def fix_spikes(me, rounds=3):
 
 pieces = []
 for name, region, vox in [] if os.environ.get('DETAIL', '1') == '0' else (('hands', in_hand, float(os.environ.get('VOX_HAND', '0.0008'))), ('head', in_head, float(os.environ.get('VOX_HEAD', '0.0012')))):
+    if os.environ.get('DETAIL_ONLY') and name != os.environ['DETAIL_ONLY']: continue
     C_ = np.array([prim_center(p) for p in plist])
     sel = [p for p, c in zip(plist, C_) if p.op == 'add' and p.kind != 'torus' and region(c[None, :], .09)[0]]
     def remesh(me_):

@@ -512,9 +512,71 @@ def clip_death(t):
                 eye=(0, -20 * fall), jaw=2 + 20 * seg(t, .3, .6) + 8 * twitch, legs=legs, arms=A)
 
 
+def _orth(f, n):
+    f = f.normalized(); n = (n - f * f.dot(n)).normalized(); return f, n
+
+
+def clip_kill(t):
+    """잡아 죽이기(3초): 덮쳐 잡고(0~.18) 끌어당겨 들어 올린 뒤(.18~.42) 얼굴을 들이밀어 턱을 벌리고 물어뜯으며 흔들고(.42~.78)
+    손을 풀어 떨어뜨린다(.82~1). 플레이어 머리는 앞 0.55m, 높이 1.45m 에서 시작한다고 본다"""
+    lunge = seg(t, 0, .14); grab = seg(t, .10, .20); pull = seg(t, .18, .32); lift = seg(t, .28, .42)
+    bite = seg(t, .42, .52) * (1 - seg(t, .76, .86)); drop = seg(t, .82, .95)
+    shake = math.sin(TAU * 7 * t) * bite
+    tgt = V(0, -.78, 1.42).lerp(V(0, -.66, 1.52), pull).lerp(V(0, -.64, 1.74), lift)
+    tgt = tgt + V(.03 * shake, 0, .015 * math.sin(TAU * 14 * t) * bite)
+    tgt = tgt.lerp(V(0, -.55, .55), drop)
+    st = chase_stance(t, .4 * lunge * (1 - lift))
+    A = arms_free(t, .5, 3)
+    for tag in SD.ARMS:
+        for s, m in SIDES.items():
+            base = FREE[(tag, s)]
+            off = V(m * (.15 if tag == 'F' else .12), (.03 if tag == 'F' else .08), (-.10 if tag == 'F' else .10))  # 앞 손은 몸통·어깨, 뒤 손은 머리 옆을 잡는다
+            wr = base['wr'].lerp(tgt + off + V(m * .05, .06, 0), lunge)
+            wr = wr.lerp(base['wr'] + V(0, -.1, -.35), drop)
+            f, n = _orth(Vector((-m * .55, -.75, (.0 if tag == 'F' else .35))), V(-m, 0, 0))
+            f2, n2 = base['f'], base['n']
+            k = lunge * (1 - drop)
+            ff = f2.lerp(f, k).normalized(); nn_ = n2.lerp(n, k); ff, nn_ = _orth(ff, nn_)
+            A[(tag, s)]['free'] = dict(wr=wr, f=ff, n=nn_, pole=base['pole'] + V(0, .15, -.05))
+            sq = .12 * math.sin(TAU * 5 * t + m + (tag == 'B')) * bite  # 꽉 쥐었다 풀었다
+            c = lerp(-.2, 1.05 + sq, grab * (1 - drop))
+            A[(tag, s)]['free_curl'] = [(c * .8, c, c * .9)] * 5
+    st.update(Spine1=[((1, 0, 0), 6 + 10 * lunge - 14 * lift + 8 * bite)], Spine2=[((1, 0, 0), 5 + 8 * lunge - 10 * lift + 10 * bite), ((0, 1, 0), 4 * shake)],
+              Spine3=[((1, 0, 0), 4 + 6 * lunge - 6 * lift + 8 * bite)],
+              Neck=[((1, 0, 0), -4 - 8 * lunge + 6 * lift + 18 * bite), ((0, 0, 1), 10 * shake)],
+              Head=[((1, 0, 0), -6 - 10 * lunge - 8 * lift + 12 * bite), ((0, 0, 1), 14 * shake), ((0, 1, 0), 8 * shake)],
+              eye=(6 * shake, -10 * lunge + 6 * lift), jaw=4 + 10 * lunge + 32 * bite + 4 * math.sin(TAU * 9 * t) * bite, arms=A)
+    st['hips'] = st['hips'] + V(0, -.10 * lunge + .04 * lift - .06 * bite, -.03 * lunge + .02 * lift)
+    return st
+
+
+def clip_jumpscare(t):
+    """점프스케어(1.2초): 얼굴을 가리고 웅크린 채 가만히(0~.12) → 순간 네 팔을 확 펼치며 얼굴을 화면(앞)으로 들이밀고 입을 찢어지게 벌린다(.12~.24)
+    → 그 자세로 덜덜 떤다(.24~1). 카메라는 괴물 정면(-Y) 가까이에 있다고 본다"""
+    snap = seg(t, .10, .22)
+    trem = math.sin(TAU * 23 * t) * (1 - seg(t, .9, 1.0)) * snap; trem2 = math.sin(TAU * 31 * t + 1.3) * snap
+    A = arms_wrap(t, .4, 2)
+    for tag in SD.ARMS:
+        for s, m in SIDES.items():
+            A[(tag, s)]['w'] = 1 - snap
+            wr = V(m * .34, -.72, 1.62) if tag == 'F' else V(m * .70, -.25, 2.02)  # 앞 손은 화면으로 뻗고 뒤 손은 위로 크게 벌린다
+            f, n = _orth(Vector((m * .25, -1, .15)) if tag == 'F' else Vector((m * .7, -.55, .55)), V(0, .2, -1) if tag == 'F' else V(0, -1, 0))
+            A[(tag, s)]['free'] = dict(wr=wr + V(.01 * trem, 0, .01 * trem2), f=f, n=n, pole=FREE[(tag, s)]['pole'])
+            A[(tag, s)]['free_curl'] = [(-.25 + .3 * snap + .06 * trem, .55 * snap + .08 * trem2, .7 * snap)] * 5
+            A[(tag, s)]['fadd'] = merge(A[(tag, s)]['fadd'], {fi: (0, 0, 0, (fi - 2) * .12 * snap) for fi in range(5)})
+    crouch = 1 - snap
+    return dict(hips=V(0, -.18 * snap, -.10 * crouch - .04 * snap), hips_rot=[((1, 0, 0), 12 * crouch + 14 * snap)],
+                Spine1=[((1, 0, 0), 10 * crouch + 8 * snap)], Spine2=[((1, 0, 0), 10 * crouch + 6 * snap), ((0, 1, 0), 2 * trem)],
+                Spine3=[((1, 0, 0), 8 * crouch + 4 * snap)],
+                Neck=[((1, 0, 0), 20 * crouch + 8 * snap + 2 * trem)], Head=[((1, 0, 0), 12 * crouch - 22 * snap + 3 * trem2), ((0, 0, 1), 4 * trem), ((0, 1, 0), 24 * snap + 3 * trem2)],
+                eye=(2 * trem, 0), jaw=2 + 38 * snap + 3 * trem2,
+                legs={s: dict(ankle=ANK[s] + V(SIDES[s] * .05 * snap, -.08 * snap * (s == 'L'), 0)) for s in SIDES}, arms=A)
+
+
 CLIPS = [('Idle', clip_idle, 90, True), ('Walk', clip_walk, 40, True), ('Run', clip_run, 20, True), ('Attack', clip_attack, 40, False),
          ('LookAround', clip_look, 120, True), ('Hit', clip_hit, 20, False), ('Death', clip_death, 75, False),
-         ('Count', clip_count, 120, True), ('Peek', clip_peek, 90, True)]
+         ('Count', clip_count, 120, True), ('Peek', clip_peek, 90, True),
+         ('Kill', clip_kill, 90, False), ('Jumpscare', clip_jumpscare, 36, False)]
 ONLY = os.environ.get('ONLY')
 
 # ---------------------------------------------------------------- 키 굽기
