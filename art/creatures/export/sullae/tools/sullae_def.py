@@ -168,6 +168,8 @@ class Prim:
         elif self.kind == 'torus':
             c = np.array(self.a); r = self.r1 + self.r2
             self.lo = c - r; self.hi = c + r
+        elif self.kind == 'seam':
+            c = np.array(self.a); self.lo = c - self.r1; self.hi = c + self.r1
         elif self.kind == 'cap':
             c = np.array(self.a); self.lo = c - self.r1; self.hi = c + self.r1
 
@@ -248,29 +250,25 @@ def prims():
             b0 = ball_p + Vector((o, .010, .000)) - td * .006 * (abs(t - 1))
             b1 = b0 + td * ln * .55 + Vector((0, 0, .003)); b2 = b0 + td * ln + Vector((0, 0, -.006))
             P += tube([b0, b1, b2], [rr * 1.05, rr, rr * .85], k=.003)
-    # --- 골반 · 배 · 가슴(천으로 덮이지만 형태는 있다)
+    # --- 골반 · 배 · 가슴: 구체관절인형 조각. 갈비뼈·등뼈는 조각해 두고 쇄골·배꼽은 없다
     P += [ell((0, .006, .925), (.118, .082, .085), k=.03)]
     P += [ell((0, -.030, 1.075), (.104, .088, .112), k=.04)]  # 볼록한 배
     P += [cone((0, .004, .98), (0, .012, 1.30), .085, .080, k=.04)]
-    P += [ell((0, .012, 1.330), (.128, .080, .150), k=.035)]  # 갈비뼈 통
+    P += [ell((0, .012, 1.330), (.128, .080, .150), k=.035)]  # 가슴 통
     P += [ell((0, .020, 1.420), (.150, .066, .052), k=.03)]  # 어깨 윤곽
-    for i in range(5):  # 갈비뼈가 비친다(몸통 윤곽 안쪽에 붙인다)
+    for m in (-1, 1):
+        P += [ell((m * .065, .060, 1.37), (.06, .025, .07), k=.025)]  # 견갑
+    for i in range(5):  # 조각한 갈비뼈(몸통 윤곽 안쪽에 붙인다)
         z = 1.40 - i * .038
         w = max(.080, .128 * math.sqrt(max(0, 1 - ((z - 1.33) / .15) ** 2))) - .006
         for m in (-1, 1):
             a = Vector((m * .022, -.066 + i * .002, z + .006)); b = Vector((m * (w - .008), -.030, z - .016)); c = Vector((m * (w - .020), .030, z - .006))
             P += tube([a, b, c], .0055, k=.014)
-    for i in range(9):  # 등뼈
+    for i in range(9):  # 등뼈 마디
         z = 1.44 - i * .055
         P += [ball((0, .078 - (i > 5) * .01, z), .013, k=.01)]
-    for m in (-1, 1):  # 쇄골
-        P += [cone((m * .020, -.050, 1.440), (m * .140, -.010, 1.470), .010, .012, k=.012)]
-        P += [ell((m * .065, .060, 1.37), (.06, .025, .07), k=.025)]  # 견갑
-    P += [ball((0, -.094, 1.075), .007, op='sub', k=.006)]  # 배꼽
     # --- 목 · 머리
     P += [cone((0, .014, 1.43), (0, -.040, 1.72), .040, .036, k=.03)]
-    for m in (-1, 1):
-        P += [cone((m * .016, -.034, 1.458), (m * .040, -.004, 1.690), .0095, .0085, k=.022)]  # 목빗근
     P += [cone((0, .050, 1.47), HL(0, -.35, -.65), .022, .018, k=.02)]  # 목덜미
     P += [ell(HL(0, .22, -.08), (.98 * s, 1.02 * s, .95 * s), k=.038)]  # 커다란 두개
     P += [ell(HL(0, -.42, .22), (.72 * s, .66 * s, .56 * s), k=.038)]  # 얼굴 아래
@@ -360,7 +358,52 @@ def prims():
                       rot=frame_rot((pts[3] - pts[2]).cross(nn), (pts[3] - pts[2]), nn), k=.003, grp='finger')]  # 손가락 끝 살
             dd3 = (pts[3] - pts[2]).normalized()
             P += [ell(pts[2].lerp(pts[3], .62) - nn * rr[3] * 1.05, (rr[3] * .95, (pts[3] - pts[2]).length * .30, .0006), rot=frame_rot(None, dd3, nn), op='sub', k=.0008, grp='finger')]  # 손톱 바닥 홈
-    return P
+    return P + doll_seams(P)
+
+
+SEAM_DEPTH, SEAM_HALF = .0026, .0016
+_SEAM_CACHE = {}
+
+
+def seam_specs():
+    """구체관절인형 이음새: (중심, 축) — 관절 공 양쪽과 허리·골반·목"""
+    out = []
+    for (tag, sd), (c0, sh, el, wr, f, n) in ARM_INFO.items():
+        ud = (el - sh).normalized(); fd = (wr - el).normalized()
+        out += [(sh + ud * (.066 if tag == 'F' else .115), ud), (el - ud * .030, ud), (el + fd * .028, fd), (wr - fd * .022, fd), (wr + f * .016, f)]
+    for sd, m in SIDES.items():
+        hip = Vector((m * .072, .004, .885)); kn = Vector((m * .084, -.026, .482)); an = Vector((m * .074, .010, .072))
+        td = (kn - hip).normalized(); sdir = (an - kn).normalized()
+        out += [(hip + td * .095, td), (kn - td * .036, td), (kn + sdir * .034, sdir), (an - sdir * .034, sdir)]
+    nd = (Vector((0, -.040, 1.72)) - Vector((0, .014, 1.43))).normalized()
+    out += [(Vector((0, .010, 1.468)), nd), (Vector((0, -.024, 1.628)), nd), (Vector((0, -.012, 1.175)), Vector((0, 0, 1))), (Vector((0, .004, .995)), Vector((0, 0, 1)))]
+    return out
+
+
+def doll_seams(base):
+    key = len(base)
+    if key in _SEAM_CACHE: return _SEAM_CACHE[key]
+    res = []
+    for c, ax in seam_specs():
+        ax = ax.normalized(); X = Vector((1, 0, 0)) if abs(ax.x) < .8 else Vector((0, 1, 0))
+        u = (X - ax * ax.dot(X)).normalized(); v = ax.cross(u)
+        def surf(dirv):
+            # 가운데서 2mm씩 밖으로 걸어 처음 표면을 지나는 곳을 찾은 뒤 좁힌다(옆의 다른 다리·팔로 건너뛰지 않게)
+            t = 0.0
+            while t < .25 and sdf(np.array([(c + dirv * (t + .002))[:]]), base)[0] < 0: t += .002
+            lo, hi = t, t + .002
+            for _ in range(12):
+                mid = (lo + hi) / 2
+                if sdf(np.array([(c + dirv * mid)[:]]), base)[0] < 0: lo = mid
+                else: hi = mid
+            return lo
+        ru = (surf(u), surf(-u)); rv = (surf(v), surf(-v))
+        cc = c + u * (ru[0] - ru[1]) / 2 + v * (rv[0] - rv[1]) / 2
+        a_ = max((ru[0] + ru[1]) / 2 - SEAM_DEPTH, .003); b_ = max((rv[0] + rv[1]) / 2 - SEAM_DEPTH, .003)
+        M = np.array([[u.x, ax.x, v.x], [u.y, ax.y, v.y], [u.z, ax.z, v.z]])
+        res.append(Prim('seam', a=tuple(cc), r1=max(a_, b_) + SEAM_DEPTH + .012, R=M, rad=(a_, b_), r2=SEAM_HALF, op='sub', k=.0009, grp='seam'))
+    _SEAM_CACHE[key] = res
+    return res
 
 
 # ---------------------------------------------------------------- numpy SDF
@@ -395,6 +438,12 @@ def prim_d(p, P):
         return _rcone(P, p.a, p.b, p.r1, p.r2)
     if p.kind == 'ell':
         return _ell(P, p.a, p.rad, p.R)
+    if p.kind == 'seam':
+        q = P - np.asarray(p.a); u, n, v = p.R[:, 0], p.R[:, 1], p.R[:, 2]
+        h = q @ n; qu = q @ u; qv = q @ v; a_, b_ = p.rad
+        e = (np.sqrt((qu / a_) ** 2 + (qv / b_) ** 2) - 1) * min(a_, b_)
+        d = np.maximum(np.abs(h) - p.r2, -e)
+        return np.maximum(d, np.linalg.norm(q, axis=1) - p.r1)
     if p.kind == 'cap':
         q = P - np.asarray(p.a)
         ds = np.linalg.norm(q, axis=1) - p.r1; dp = p.r2 - q @ p.R

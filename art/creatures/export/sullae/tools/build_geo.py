@@ -52,6 +52,16 @@ co = np.empty(len(hi.vertices) * 3); hi.vertices.foreach_get('co', co); co = co.
 co = SD.project(co, plist, iters=int(os.environ.get('ITERS', '4')))
 hi.vertices.foreach_set('co', co.ravel()); hi.update()
 print('projected', f'{time.time() - t0:.1f}s')
+# 이음새 홈이 위상에 들어가도록 리메시 → 투영을 두 번 더(늘어진 지느러미 삼각형 방지)
+for cyc in range(int(os.environ.get('CYCLES', '2'))):
+    ob = bpy.data.objects.new('cyc', hi); bpy.context.scene.collection.objects.link(ob)
+    md = ob.modifiers.new('rm', 'REMESH'); md.mode = 'VOXEL'; md.voxel_size = VOX; md.adaptivity = 0
+    dg = bpy.context.evaluated_depsgraph_get(); nh = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+    bpy.data.objects.remove(ob); bpy.data.meshes.remove(hi); hi = nh; hi.name = 'SullaeHi'
+    co = np.empty(len(hi.vertices) * 3); hi.vertices.foreach_get('co', co); co = co.reshape(-1, 3)
+    co = SD.project(co, plist, iters=3)
+    hi.vertices.foreach_set('co', co.ravel()); hi.update()
+    print('cycle', cyc, len(hi.polygons), f'{time.time() - t0:.1f}s', flush=True)
 
 ohi = bpy.data.objects.new('SullaeHi', hi); bpy.context.scene.collection.objects.link(ohi)
 for p in hi.polygons:
@@ -137,7 +147,7 @@ def fix_spikes(me, rounds=3):
 
 
 pieces = []
-for name, region, vox in (('hands', in_hand, float(os.environ.get('VOX_HAND', '0.0008'))), ('head', in_head, float(os.environ.get('VOX_HEAD', '0.0012')))):
+for name, region, vox in [] if os.environ.get('DETAIL', '1') == '0' else (('hands', in_hand, float(os.environ.get('VOX_HAND', '0.0008'))), ('head', in_head, float(os.environ.get('VOX_HEAD', '0.0012')))):
     C_ = np.array([prim_center(p) for p in plist])
     sel = [p for p, c in zip(plist, C_) if p.op == 'add' and p.kind != 'torus' and region(c[None, :], .09)[0]]
     def remesh(me_):
@@ -158,7 +168,7 @@ for name, region, vox in (('hands', in_hand, float(os.environ.get('VOX_HAND', '0
     pieces.append(dm)
 hib = ohi.data
 cP = centers(hib)
-keep_faces(hib, ~(in_hand(cP, -.004) | in_head(cP, -.004)))
+if pieces: keep_faces(hib, ~(in_hand(cP, -.004) | in_head(cP, -.004)))
 bm = bmesh.new(); bm.from_mesh(hib)
 for dm in pieces: bm.from_mesh(dm)
 bm.to_mesh(hib); bm.free()

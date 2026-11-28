@@ -164,16 +164,15 @@ def band_off(p):
 
 
 log('shells...')
-CL_HI, CL = make_shell('SullaeCloth', torso_mask, torso_off, 8000)
-BD_HI, BDL = make_shell('SullaeBandage', band_mask, band_off, 3000)
+# 구체관절인형판: 천·붕대 없음(make_shell 은 남겨 두지만 쓰지 않는다)
+CL_HI = CL = None
 # 천과 붕대를 하나로(재질 하나)
 def join_into(dst, src):
     bm = bmesh.new(); bm.from_mesh(dst.data); bm.from_mesh(src.data); bm.to_mesh(dst.data); bm.free()
     me = src.data; bpy.data.objects.remove(src); bpy.data.meshes.remove(me)
 
 
-join_into(CL, BDL); join_into(CL_HI, BD_HI)
-log('cloth tris', len(CL.data.polygons))
+
 
 # ---------------------------------------------------------------- 눈알
 EYE_R = SD.EYE_RAD
@@ -288,7 +287,7 @@ def smart_uv(ob, margin=.003):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
-for o in (BODY, CL, NAILS):
+for o in (BODY, NAILS):
     if not o.data.uv_layers:
         o.data.uv_layers.new(name='UVMap')
     smart_uv(o, .0025 if o is BODY else .004)
@@ -344,62 +343,39 @@ def C(r, g, b):
 
 
 def skin_material():
-    """핏기 없는 시체 같은 피부: 누르스름한 회녹색 바탕 + 넓은 얼룩 + 잔 얼룩 + 군데군데 비치는 가는 정맥
-    + 관절·손끝·발의 때 + 기름진 젖은 광택 얼룩. 범프: 모공·잔주름·피부결·정맥 돌기"""
+    """구체관절인형 레진: 오래돼 누렇게 바랜 상아빛 회색, 반무광. 손때·먼지 얼룩과 긁힌 자국이 옅게, 이음새 홈엔 때(AO)"""
     mt = bpy.data.materials.new('SkinProc'); nt, N, L = nodes_new(mt)
     out = N.new('ShaderNodeOutputMaterial'); bs = N.new('ShaderNodeBsdfPrincipled'); L.new(bs.outputs[0], out.inputs[0])
     tc = N.new('ShaderNodeTexCoord'); P = tc.outputs['Object']
     sep = N.new('ShaderNodeSeparateXYZ'); L.new(P, sep.inputs[0])
-    # 정맥: 두 크기의 '능선' 잡음(|n-0.5| 가 0 근처인 가는 선), 피부가 얇은 곳(머리·목·손·팔 안쪽)에서 진하다
-    def ridge(scale, width, dist, seed):
-        n = N.new('ShaderNodeTexNoise'); n.noise_dimensions = '4D'; n.inputs['Scale'].default_value = scale; n.inputs['Detail'].default_value = 3
-        n.inputs['Roughness'].default_value = .45; n.inputs['Distortion'].default_value = dist; n.inputs['W'].default_value = seed
-        L.new(P, n.inputs['Vector'])
-        a = math_n(N, L, 'ABSOLUTE', math_n(N, L, 'SUBTRACT', n.outputs['Fac'], .5))
-        return ramp(N, L, a, [(0, (1, 1, 1, 1)), (width, (0, 0, 0, 1))]).outputs[0]
-    v1 = ridge(6.0, .010, .35, 1.7); v2 = ridge(15.0, .008, .5, 4.2)
-    vm = noise_n(N, L, P, 2.0, 2, .5)
-    vmask = ramp(N, L, vm.outputs['Fac'], [(.45, (.15, .15, .15, 1)), (.62, (1, 1, 1, 1))])
-    head = ramp(N, L, sep.outputs['Z'], [(1.55, (.55, .55, .55, 1)), (1.75, (1, 1, 1, 1))])
-    veins = math_n(N, L, 'MULTIPLY', math_n(N, L, 'MAXIMUM', v1, math_n(N, L, 'MULTIPLY', v2, .6)), math_n(N, L, 'MULTIPLY', vmask.outputs[0], head.outputs[0]))
-    # 바탕 피부색
-    big = noise_n(N, L, P, 3.0, 4, .55)
-    base = ramp(N, L, big.outputs['Fac'], [(.25, C(.50, .52, .45)), (.5, C(.60, .61, .53)), (.75, C(.66, .65, .57))])
-    mott = noise_n(N, L, P, 22, 6, .65)
-    mottc = ramp(N, L, mott.outputs['Fac'], [(.25, (.80, .82, .80, 1)), (.75, (1.06, 1.05, 1.02, 1))])
-    c = mix(N, L, base.outputs[0], mottc.outputs[0], 1.0, 'MULTIPLY')
-    fine = noise_n(N, L, P, 140, 3, .6)
-    finec = ramp(N, L, fine.outputs['Fac'], [(.3, (.92, .92, .92, 1)), (.7, (1.04, 1.04, 1.04, 1))])
-    c = mix(N, L, c, finec.outputs[0], 1.0, 'MULTIPLY')
-    # 시반처럼 탁한 회갈색·녹회색 얼룩(보라색 없이)
-    blo = noise_n(N, L, P, 2.4, 4, .55, .5)
-    blom = ramp(N, L, blo.outputs['Fac'], [(.57, (0, 0, 0, 1)), (.72, (.75, .75, .75, 1))])
-    c = mix(N, L, c, C(.44, .44, .38), blom.outputs[0], 'MIX')
-    blo2 = noise_n(N, L, P, 5.0, 4, .55, .3)
-    blom2 = ramp(N, L, blo2.outputs['Fac'], [(.6, (0, 0, 0, 1)), (.75, (.5, .5, .5, 1))])
-    c = mix(N, L, c, C(.52, .50, .40), blom2.outputs[0], 'MIX')
-    # 정맥 색: 피부 아래 비치는 탁한 청회색
-    c = mix(N, L, c, C(.36, .42, .46), math_n(N, L, 'MULTIPLY', veins, .75), 'MIX')
-    # 발·손끝 때
-    dirt = ramp(N, L, sep.outputs['Z'], [(.0, (1, 1, 1, 1)), (.25, (0, 0, 0, 1))])
-    dn = noise_n(N, L, P, 10, 4, .6)
-    c = mix(N, L, c, C(.30, .28, .22), math_n(N, L, 'MULTIPLY', dirt.outputs[0], dn.outputs['Fac']), 'MIX')
+    big = noise_n(N, L, P, 2.2, 3, .5)
+    base = ramp(N, L, big.outputs['Fac'], [(.3, C(.70, .69, .63)), (.55, C(.76, .75, .69)), (.8, C(.79, .77, .71))])
+    c = base.outputs[0]
+    # 바랜 누런 얼룩(넓고 옅게)
+    yl = noise_n(N, L, P, 3.5, 4, .55, .4)
+    ylm = ramp(N, L, yl.outputs['Fac'], [(.58, (0, 0, 0, 1)), (.75, (.55, .55, .55, 1))])
+    c = mix(N, L, c, C(.68, .63, .50), ylm.outputs[0], 'MIX')
+    # 손때·먼지(회색, 아래쪽과 손끝에 조금 더)
+    gr = noise_n(N, L, P, 9, 5, .6)
+    grm = ramp(N, L, gr.outputs['Fac'], [(.6, (0, 0, 0, 1)), (.78, (.45, .45, .45, 1))])
+    low = ramp(N, L, sep.outputs['Z'], [(.0, (1, 1, 1, 1)), (.35, (.35, .35, .35, 1)), (.7, (0, 0, 0, 1))])
+    c = mix(N, L, c, C(.50, .49, .45), math_n(N, L, 'MAXIMUM', grm.outputs[0], math_n(N, L, 'MULTIPLY', low.outputs[0], .6)), 'MIX')
+    # 잔 긁힘(가늘고 밝은 선 — 레진 표면이 하얗게 긁힌 자국)
+    sc_ = N.new('ShaderNodeTexWave'); sc_.inputs['Scale'].default_value = 60; sc_.inputs['Distortion'].default_value = 25; sc_.inputs['Detail'].default_value = 2
+    L.new(P, sc_.inputs['Vector'])
+    scm = ramp(N, L, sc_.outputs['Fac'], [(.0, (1, 1, 1, 1)), (.03, (0, 0, 0, 1))])
+    scmask = noise_n(N, L, P, 4, 2, .5)
+    scmm = ramp(N, L, scmask.outputs['Fac'], [(.6, (0, 0, 0, 1)), (.7, (.6, .6, .6, 1))])
+    c = mix(N, L, c, C(.86, .85, .80), math_n(N, L, 'MULTIPLY', scm.outputs[0], scmm.outputs[0]), 'MIX')
     L.new(c, bs.inputs['Base Color'])
-    # 거칠기: 대체로 무광(.55), 기름진 젖은 얼룩만 .28
-    wet = noise_n(N, L, P, 6, 4, .6)
-    rough = ramp(N, L, wet.outputs['Fac'], [(.40, (.30, .30, .30, 1)), (.55, (.52, .52, .52, 1)), (.75, (.62, .62, .62, 1))])
-    rfine = noise_n(N, L, P, 300, 2, .5)
-    L.new(math_n(N, L, 'ADD', rough.outputs[0], math_n(N, L, 'MULTIPLY', math_n(N, L, 'SUBTRACT', rfine.outputs['Fac'], .5), .12)), bs.inputs['Roughness'])
-    # 범프: 모공 + 피부결(세포 무늬) + 잔주름 + 정맥 돌기
-    pore = noise_n(N, L, P, 700, 2, .5)
-    cell = N.new('ShaderNodeTexVoronoi'); cell.inputs['Scale'].default_value = 260; cell.feature = 'DISTANCE_TO_EDGE'; L.new(P, cell.inputs['Vector'])
-    cellh = ramp(N, L, cell.outputs['Distance'], [(0, (0, 0, 0, 1)), (.12, (1, 1, 1, 1))])
-    wr = N.new('ShaderNodeTexWave'); wr.wave_type = 'BANDS'; wr.inputs['Scale'].default_value = 140; wr.inputs['Distortion'].default_value = 14; wr.inputs['Detail'].default_value = 4
-    wr.inputs['Detail Scale'].default_value = 2.5; L.new(P, wr.inputs['Vector'])
-    h = math_n(N, L, 'ADD', math_n(N, L, 'MULTIPLY', pore.outputs['Fac'], .35), math_n(N, L, 'MULTIPLY', cellh.outputs[0], .25))
-    h = math_n(N, L, 'ADD', h, math_n(N, L, 'MULTIPLY', wr.outputs['Fac'], .30))
-    h = math_n(N, L, 'ADD', h, math_n(N, L, 'MULTIPLY', veins, .8))
-    bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .30; bump.inputs['Distance'].default_value = .0006
+    # 반무광 레진: .42 안팎, 손때 묻은 곳은 조금 더 번들
+    rr = noise_n(N, L, P, 5, 3, .5)
+    rough = ramp(N, L, rr.outputs['Fac'], [(.3, (.34, .34, .34, 1)), (.7, (.50, .50, .50, 1))])
+    L.new(rough.outputs[0], bs.inputs['Roughness'])
+    # 범프: 아주 고운 레진 결 + 긁힘
+    fine = noise_n(N, L, P, 900, 2, .5)
+    h = math_n(N, L, 'ADD', math_n(N, L, 'MULTIPLY', fine.outputs['Fac'], .25), math_n(N, L, 'MULTIPLY', math_n(N, L, 'MULTIPLY', scm.outputs[0], scmm.outputs[0]), -.6))
+    bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .12; bump.inputs['Distance'].default_value = .0004
     L.new(h, bump.inputs['Height']); L.new(bump.outputs[0], bs.inputs['Normal'])
     return mt
 
@@ -482,8 +458,8 @@ def nail_material():
     return mt
 
 
-M_SKIN, M_CLOTH, M_EYE, M_NAIL = skin_material(), cloth_material(), eye_material(), nail_material()
-for o, mt in ((HI, M_SKIN), (BODY, M_SKIN), (CL_HI, M_CLOTH), (CL, M_CLOTH), (EYES, M_EYE), (NAILS, M_NAIL)):
+M_SKIN, M_EYE, M_NAIL = skin_material(), eye_material(), nail_material()
+for o, mt in ((HI, M_SKIN), (BODY, M_SKIN), (EYES, M_EYE), (NAILS, M_NAIL)):
     o.data.materials.clear(); o.data.materials.append(mt)
 
 # ---------------------------------------------------------------- 굽기
@@ -525,17 +501,17 @@ def save_img(img, name):
     return p
 
 
-SETS = [('skin', BODY, HI, RES_BODY), ('cloth', CL, CL_HI, RES_CLOTH), ('eye', EYES, None, RES_SMALL), ('nail', NAILS, None, RES_SMALL)]
+SETS = [('skin', BODY, HI, RES_BODY), ('eye', EYES, None, RES_SMALL), ('nail', NAILS, None, RES_SMALL)]
 IMG = {}
 if BAKE:
     for key, tgt, src, res in SETS:
-        for kind, suf, colr, smp in (('DIFFUSE', 'baseColor', True, 1), ('ROUGHNESS', 'roughness', False, 1), ('NORMAL', 'normal', False, 4), ('AO', 'ao', False, 48)):
+        for kind, suf, colr, smp in (('DIFFUSE', 'baseColor', True, 1), ('ROUGHNESS', 'roughness', False, 1), ('NORMAL', 'normal', False, 4), ('AO', 'ao', False, int(os.environ.get('AO_SAMPLES', '48')))):
             img = new_img(f'sullae_{key}_{suf}', res, colr)
             if kind == 'AO':
                 # AO 는 게임 메시끼리만(고해상도 원본은 숨긴다)
-                for o in (HI, CL_HI): o.hide_render = True
+                HI.hide_render = True
                 bake(tgt, None, kind, img, smp)
-                for o in (HI, CL_HI): o.hide_render = False
+                HI.hide_render = False
             else:
                 bake(tgt, src, kind, img, smp)
             IMG[(key, suf)] = save_img(img, f'sullae_{key}_{suf}.png')
@@ -568,8 +544,8 @@ def final_material(key, double=False):
     ao = img('ao', False); g = N.new('ShaderNodeGroup'); g.node_tree = gltf_out_group(); L.new(ao.outputs[0], g.inputs['Occlusion'])
     bs.inputs['Metallic'].default_value = 0
     if key == 'skin':
-        bs.inputs['Subsurface Weight'].default_value = .18; bs.inputs['Subsurface Radius'].default_value = (.75, .62, .5); bs.inputs['Subsurface Scale'].default_value = .005
-        bs.inputs['Specular IOR Level'].default_value = .42
+        bs.inputs['Subsurface Weight'].default_value = .25; bs.inputs['Subsurface Radius'].default_value = (.8, .7, .55); bs.inputs['Subsurface Scale'].default_value = .004  # 레진 속으로 빛이 살짝 스민다
+        bs.inputs['Specular IOR Level'].default_value = .5
     if key == 'eye':
         bs.inputs['Specular IOR Level'].default_value = .45
         bs.inputs['Subsurface Weight'].default_value = .15; bs.inputs['Subsurface Radius'].default_value = (.9, .7, .6); bs.inputs['Subsurface Scale'].default_value = .004
@@ -577,13 +553,13 @@ def final_material(key, double=False):
     return mt
 
 
-FINAL = {k: final_material(k, double=(k == 'cloth')) for k in ('skin', 'cloth', 'eye', 'nail')}
-for o, k in ((BODY, 'skin'), (CL, 'cloth'), (EYES, 'eye'), (NAILS, 'nail')):
+FINAL = {k: final_material(k) for k in ('skin', 'eye', 'nail')}
+for o, k in ((BODY, 'skin'), (EYES, 'eye'), (NAILS, 'nail')):
     o.data.materials.clear(); o.data.materials.append(FINAL[k])
-for o in (HI, CL_HI):
+for o in (HI,):
     o.hide_render = True; o.hide_set(True)
 hc = bpy.data.collections.new('HighPoly_bake_source'); sc.collection.children.link(hc)
-for o in (HI, CL_HI):
+for o in (HI,):
     col.objects.unlink(o); hc.objects.link(o)
 hc.hide_render = True
 log('materials done')
@@ -629,9 +605,31 @@ for pb in ARM.pose.bones:
 # ---------------------------------------------------------------- 웨이트
 for bn in ('Eye.L', 'Eye.R', 'Root'):
     ad.bones[bn].use_deform = False
+# 자동 웨이트는 깨끗한 대리 메시(4mm 복셀, 이음새 홈이 메워진 한 덩어리)에서 계산해 몸으로 옮긴다
+# — 얕은 이음새 홈·작은 삼각형 때문에 bone heat 가 실패하는 것을 피한다
+proxy = BODY.copy(); proxy.data = BODY.data.copy(); col.objects.link(proxy); proxy.name = 'WeightProxy'
+proxy.modifiers.clear(); md = proxy.modifiers.new('rm', 'REMESH'); md.mode = 'VOXEL'; md.voxel_size = .004; md.adaptivity = 0
+dg = bpy.context.evaluated_depsgraph_get(); pm = bpy.data.meshes.new_from_object(proxy.evaluated_get(dg)); proxy.modifiers.clear()
+old_ = proxy.data; proxy.data = pm; bpy.data.meshes.remove(old_)
 bpy.ops.object.select_all(action='DESELECT')
-BODY.select_set(True); ARM.select_set(True); bpy.context.view_layer.objects.active = ARM
+proxy.select_set(True); ARM.select_set(True); bpy.context.view_layer.objects.active = ARM
 bpy.ops.object.parent_set(type='ARMATURE_AUTO')
+PW = [{proxy.vertex_groups[g.group].name: g.weight for g in v.groups if g.weight > 1e-4} for v in proxy.data.vertices]
+log('proxy weights: verts', len(PW), 'unweighted', sum(1 for w in PW if not w))
+kdp = KDTree(len(proxy.data.vertices))
+for i, v in enumerate(proxy.data.vertices):
+    if PW[i]: kdp.insert(v.co, i)
+kdp.balance()
+BODY.parent = ARM
+mdb = BODY.modifiers.new('Armature', 'ARMATURE'); mdb.object = ARM
+for i, v in enumerate(BODY.data.vertices):
+    acc = {}; tot = 0
+    for co, j, d in kdp.find_n(v.co, 4):
+        k = 1 / (d + 1e-4) ** 2; tot += k
+        for g, x in PW[j].items(): acc[g] = acc.get(g, 0) + x * k
+    for g, x in acc.items():
+        vg = BODY.vertex_groups.get(g) or BODY.vertex_groups.new(name=g); vg.add([i], x / tot, 'REPLACE')
+pme = proxy.data; bpy.data.objects.remove(proxy); bpy.data.meshes.remove(pme)
 for bn in ('Eye.L', 'Eye.R', 'Root'):
     ad.bones[bn].use_deform = True
 
@@ -689,29 +687,17 @@ def attach(ob, weights):
             vgp = ob.vertex_groups.get(g) or ob.vertex_groups.new(name=g); vgp.add([i], x, 'REPLACE')
 
 
-# 천: 가장 가까운 몸 정점 3개 가중 평균
-kd = KDTree(len(BODY.data.vertices))
-for i, v in enumerate(BODY.data.vertices): kd.insert(v.co, i)
-kd.balance()
-wc = []
-for v in CL.data.vertices:
-    acc = {}
-    hits = kd.find_n(v.co, 4); tot = 0
-    for co, j, d in hits:
-        k = 1 / (d + 1e-4); tot += k
-        for g, x in W_BODY[j].items(): acc[g] = acc.get(g, 0) + x * k
-    wc.append({g: x / tot for g, x in acc.items()})
-attach(CL, wc); limit_normalize(CL)
+
 attach(EYES, [{'Eye.L' if v.co.x > 0 else 'Eye.R': 1.0} for v in EYES.data.vertices])
 attach(NAILS, [{NAIL_OWNER[i]: 1.0} for i in range(len(NAILS.data.vertices))])
 log('weights attached')
 
 # ---------------------------------------------------------------- 정리 + 저장
-for o in (BODY, CL, EYES, NAILS):
+for o in (BODY, EYES, NAILS):
     o.data.name = o.name
-BODY.name = 'Sullae_Body'; CL.name = 'Sullae_Cloth'; EYES.name = 'Sullae_Eyes'; NAILS.name = 'Sullae_Nails'; ARM.name = 'Sullae'
-for o in (BODY, CL, EYES, NAILS): o.data.name = o.name
-tot = sum(len(o.data.polygons) for o in (BODY, CL, EYES, NAILS))
-log('TOTAL TRIS', tot, {o.name: len(o.data.polygons) for o in (BODY, CL, EYES, NAILS)})
+BODY.name = 'Sullae_Body'; EYES.name = 'Sullae_Eyes'; NAILS.name = 'Sullae_Nails'; ARM.name = 'Sullae'
+for o in (BODY, EYES, NAILS): o.data.name = o.name
+tot = sum(len(o.data.polygons) for o in (BODY, EYES, NAILS))
+log('TOTAL TRIS', tot, {o.name: len(o.data.polygons) for o in (BODY, EYES, NAILS)})
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(WORK, 'base.blend'))
 log('SAVED base.blend')

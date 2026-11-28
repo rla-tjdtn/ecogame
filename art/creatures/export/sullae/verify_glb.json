@@ -1,6 +1,6 @@
 {
  "file": "sullae.glb",
- "bytes": 12800708,
+ "bytes": 8698276,
  "fps": 24.0,
  "bones": [
   "Root",
@@ -108,25 +108,14 @@
    "textures": []
   },
   "Sullae_Body": {
-   "tris": 37996,
-   "verts": 29544,
+   "tris": 37975,
+   "verts": 30607,
    "groups": 94,
    "skinned": true,
    "textures": [
     "sullae_skin_ao-sullae_skin_roughness",
     "sullae_skin_baseColor",
     "sullae_skin_normal"
-   ]
-  },
-  "Sullae_Cloth": {
-   "tris": 10998,
-   "verts": 12313,
-   "groups": 94,
-   "skinned": true,
-   "textures": [
-    "sullae_cloth_ao-sullae_cloth_roughness",
-    "sullae_cloth_baseColor",
-    "sullae_cloth_normal"
    ]
   },
   "Sullae_Eyes": {
@@ -190,5 +179,5 @@
    "seconds": 1.333
   }
  },
- "total_tris": 55874
+ "total_tris": 44855
 }
